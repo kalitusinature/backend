@@ -118,7 +118,7 @@
                     }
                     function getCart(){try{return JSON.parse(localStorage.getItem(key))||[];}catch(e){return[];}}
                     function saveCart(cart){localStorage.setItem(key,JSON.stringify(cart));updateCount();}
-                    function updateCount(){var c=getCart().reduce(function(n,i){return n+(i.qty||1);},0);document.getElementById('cjCartCount').textContent=c;}
+                    function updateCount(){var c=getCart().reduce(function(n,i){return n+(i.qty||1);},0);var badge=document.getElementById('cjCartCount');if(badge)badge.textContent=c;}
                     function render(category){
                         activeCategory=category||activeCategory;
                         var grid=document.getElementById('cjProducts');

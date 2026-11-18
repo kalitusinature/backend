@@ -77,6 +77,8 @@ Successful response (`201`) contains the order number, status, server-calculated
 
 The Odoo menu and product pages load categories and available products from this API. Checkout posts orders to Render; the server validates product slugs and calculates prices from its catalog. New orders are stored in Render's database and appear in the GitHub Pages admin portal's Orders view, which refreshes every 30 seconds.
 
+The standalone Odoo page templates in this repository must also be copied into and published from the Odoo Website editor; pushing them to GitHub does not update Odoo pages automatically.
+
 ### Request a lodge reservation
 
 `POST /api/v1/reservations/`
