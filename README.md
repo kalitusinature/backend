@@ -26,6 +26,18 @@ Set `CLOUDINARY_NAME`, `CLOUDINARY_KEY`, and `CLOUDINARY_SECRET` in the local
 `.env` file to enable product image uploads. Keep the Cloudinary API secret out
 of source control.
 
+## Neon PostgreSQL
+
+Django reads `DATABASE_URL` from the root `.env` file or the deployment
+environment. Neon provides a pooled `DATABASE_URL` for app traffic and a direct
+`DATABASE_URL_UNPOOLED` for schema migrations. Keep both values secret and
+never commit `.env`.
+
+The Render Blueprint below still binds `DATABASE_URL` to its Render PostgreSQL
+resource. Before switching production to Neon, migrate the existing database
+data and then update the Render environment/Blueprint to use Neon; applying
+Django migrations creates tables but does not copy catalog or order data.
+
 ## Render deployment
 
 1. Push this project to a GitHub repository and create a Render Blueprint from `render.yaml`.
@@ -36,6 +48,8 @@ of source control.
 5. Open `/staff/` on the deployed service and add menu categories, products, and lodge/cottage inventory.
 6. Add the final Render service origin to `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` if it differs from the value in `render.yaml`.
 7. Configure the Odoo frontend to use the deployed service base URL as `window.CJ_API_BASE_URL`. Do not put database credentials or Django secrets in Odoo.
+
+Debug mode is always disabled on Render, even if its `DEBUG` environment variable is accidentally set to `true`.
 
 The Blueprint uses a Render PostgreSQL database and allows browser API calls from `https://kalitusi-nature-resort.odoo.com` and `https://kalitusinature.github.io`. Update these origins if either site domain changes.
 

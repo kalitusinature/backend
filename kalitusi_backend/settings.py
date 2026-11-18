@@ -2,13 +2,17 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-this-secret-key")
-DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
+DEBUG = (
+    os.environ.get("DEBUG", "true").lower() == "true"
+    and os.environ.get("RENDER") != "true"
+)
 CLOUDINARY_NAME = os.environ.get("CLOUDINARY_NAME", "").strip()
 CLOUDINARY_KEY = os.environ.get("CLOUDINARY_KEY", "").strip()
 CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_SECRET", "").strip()
@@ -61,14 +65,20 @@ ASGI_APPLICATION = "kalitusi_backend.asgi.application"
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
-    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
-else:
+    database_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+    database_config["CONN_HEALTH_CHECKS"] = True
+    if "-pooler" in (database_config.get("HOST") or ""):
+        database_config["DISABLE_SERVER_SIDE_CURSORS"] = True
+    DATABASES = {"default": database_config}
+elif DEBUG:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
+else:
+    raise ImproperlyConfigured("DATABASE_URL must be set when DEBUG is false.")
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
