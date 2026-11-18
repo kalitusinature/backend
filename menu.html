@@ -1,0 +1,179 @@
+<t t-name="website.menu">
+    <t t-call="website.layout">
+        <div id="wrap" class="oe_structure oe_empty">
+            <style>
+                :root { --cj-red:#008B92; --cj-dark:#151515; --cj-cream:#fffaf3; --cj-gray:#f4f3ef; }
+                * { box-sizing:border-box; }
+                body { background:var(--cj-cream); color:var(--cj-dark); }
+                .cj-menu { font-family:Arial, Helvetica, sans-serif; }
+                .cj-hero { background:#1c1c1c; color:#fff; overflow:hidden; }
+                .cj-hero-inner { width:min(1180px, calc(100% - 32px)); min-height:420px; margin:auto; display:grid; grid-template-columns:46% 54%; align-items:center; }
+                .cj-hero h1 { margin:0 0 14px; font-size:64px; line-height:.95; letter-spacing:-3px; }
+                .cj-hero h1 span { color:#ffc62f; }
+                .cj-hero p { color:#ddd; max-width:450px; font-size:18px; line-height:1.6; }
+                .cj-hero-image { height:420px; background:url('https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&amp;fit=crop&amp;w=900&amp;q=85') center/cover; border-radius:220px 0 0 220px; box-shadow:-40px 0 80px rgba(0,0,0,.25); }
+                .cj-menu-section { width:min(1180px, calc(100% - 32px)); margin:auto; padding:70px 0 90px; }
+                .cj-heading { display:flex; justify-content:space-between; align-items:end; margin-bottom:28px; }
+                .cj-heading h2 { margin:0; font-size:42px; letter-spacing:-2px; }
+                .cj-heading p { color:#777; margin:6px 0 0; }
+                .cj-categories { width:100%; max-width:100%; display:flex; gap:10px; margin-bottom:28px; overflow-x:auto; overflow-y:hidden; padding:0 0 5px; box-sizing:border-box; scrollbar-width:none; -ms-overflow-style:none; -webkit-overflow-scrolling:touch; }
+                .cj-categories::-webkit-scrollbar { height:4px; }
+                .cj-categories::-webkit-scrollbar-track { background:transparent; }
+                .cj-categories::-webkit-scrollbar-thumb { background:#b8c8c6;border-radius:4px }
+                .cj-category { border:1px solid #ddd; background:#fff; border-radius:24px; padding:12px 19px; cursor:pointer; white-space:nowrap; font-weight:700; color:#555; }
+                .cj-category.active { background:var(--cj-dark); color:#fff; border-color:var(--cj-dark); }
+                .cj-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:22px; }
+                .cj-card { background:#fff; border-radius:5px; overflow:hidden; box-shadow:0 14px 38px rgba(0,0,0,.16); transition:.2s; cursor:pointer; display:flex; flex-direction:column; }
+                .cj-card:hover { transform:translateY(-4px); box-shadow:0 22px 48px rgba(0,0,0,.22); }
+                .cj-card-image { display:block; width:100%; height:210px; object-fit:cover; background:#eee; }
+                .cj-api-status { margin:18px 0; color:#555; line-height:1.5; }
+                .cj-api-status.error { color:#b42318; }
+                .cj-card-body { padding:19px; display:flex; flex-direction:column; flex:1; }
+                .cj-card-title { display:block; text-align:center; }
+                .cj-card-title h3 { margin:0; font-size:20px; line-height:1.2; height:24px; overflow:hidden; text-align:center; }
+                .cj-price { display:block; color:var(--cj-red); font-weight:900; white-space:nowrap; margin-top:8px; text-align:center; }
+                .cj-card p { color:#777; line-height:1.45; height:42px; margin:10px 0 12px; overflow:hidden; }
+                .cj-add { width:70%; max-width:220px; border:0; border-radius:0; background:var(--cj-red); color:#fff; height:46px; font-weight:800; cursor:pointer; margin:12px auto 0; }
+                .cj-add:hover { background:#006F75; }
+                .cj-toast { position:fixed; right:24px; bottom:24px; background:#222; color:#fff; padding:15px 20px; border-radius:10px; transform:translateY(100px); transition:.25s; z-index:100; }
+                .cj-toast.show { transform:translateY(0); }
+                @media(max-width:900px){ .cj-grid{grid-template-columns:repeat(2,1fr)} .cj-hero-inner{grid-template-columns:55% 45%} .cj-hero h1{font-size:48px} }
+                @media(max-width:620px){
+                    body{overflow-x:hidden}
+                    #wrap,.cj-menu,.cj-menu-section{max-width:100%;overflow-x:hidden}
+                    .cj-categories{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding:0 0 8px;margin-bottom:24px;scroll-snap-type:x mandatory}
+                    .cj-category{flex:0 0 auto;min-width:max-content;padding:10px 14px;font-size:13px;scroll-snap-align:start}
+                    .cj-hero-inner{display:grid; grid-template-columns:52% 48%; min-height:230px; padding:0}
+                    .cj-hero-inner > div:first-child{padding:28px 0 28px 16px}
+                    .cj-hero h1{font-size:34px; letter-spacing:-1.5px}
+                    .cj-hero p{font-size:13px; line-height:1.4; margin:10px 0 0}
+                    .cj-hero-image{height:230px; margin:0; border-radius:120px 0 0 120px}
+                    .cj-grid{grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px}
+                    .cj-card-image{height:150px}
+                    .cj-card-body{padding:12px}
+                    .cj-card-title h3{font-size:15px; height:18px}
+                    .cj-card p{font-size:13px; height:38px; min-height:38px}
+                    .cj-price{font-size:13px}
+                    .cj-add{width:100%; max-width:none; height:42px; font-size:13px}
+                    .cj-heading h2{font-size:34px}
+                }
+            </style>
+
+            <main class="cj-menu">
+                <t t-call="website.cj_header"/>
+
+                <section class="cj-hero">
+                    <div class="cj-hero-inner">
+                        <div>
+                            <h1>Fresh flavors.<br/><span>Nature's retreat.</span></h1>
+                            <p>Enjoy freshly prepared favorites from Kalitusi Resort Nature Hotel.</p>
+                        </div>
+                        <div class="cj-hero-image"></div>
+                    </div>
+                </section>
+
+                <section class="cj-menu-section" id="popular">
+                    <div class="cj-heading">
+                        <div><h2>Our Menu</h2><p>Made fresh for every guest</p></div>
+                    </div>
+                    <div class="cj-categories" id="cjCategories"></div>
+                    <p class="cj-api-status" id="cjMenuStatus" role="status" aria-live="polite">Loading the menu…</p>
+                    <div class="cj-grid" id="cjProducts"></div>
+                </section>
+            </main>
+            <div class="cj-toast" id="cjToast">Added to cart</div>
+
+            <script>
+                (function(){
+                    if(window.location.protocol==='file:'){
+                        document.querySelectorAll('a[href]').forEach(function(link){
+                            var href=link.getAttribute('href');
+                            if(href==='/'||href===' /')link.setAttribute('href','menu.html');
+                            if(href==='/'||href===' /')return;
+                            if(href.startsWith('/menu'))link.setAttribute('href','menu.html'+href.slice(5));
+                            else if(href.startsWith('/cart'))link.setAttribute('href','cart.html');
+                            else if(href.startsWith('/product'))link.setAttribute('href','product.html'+href.slice(8));
+                            else if(href.startsWith('/checkout'))link.setAttribute('href','checkout.html');
+                        });
+                    }
+                    var key='cjCart';
+                    var apiBase=window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1';
+                    var products=[],categories=[],activeCategory='all';
+                    function escapeHtml(value){
+                        return String(value==null?'':value).replace(/[&<>"']/g,function(character){
+                            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character];
+                        });
+                    }
+                    function safeImageUrl(value){
+                        try{
+                            var url=new URL(value,apiBase);
+                            return url.protocol==='http:'||url.protocol==='https:'?url.href:'';
+                        }catch(e){return '';}
+                    }
+                    function setStatus(message,isError){
+                        var status=document.getElementById('cjMenuStatus');
+                        status.textContent=message;
+                        status.hidden=!message;
+                        status.classList.toggle('error',Boolean(isError));
+                    }
+                    function getCart(){try{return JSON.parse(localStorage.getItem(key))||[];}catch(e){return[];}}
+                    function saveCart(cart){localStorage.setItem(key,JSON.stringify(cart));updateCount();}
+                    function updateCount(){var c=getCart().reduce(function(n,i){return n+(i.qty||1);},0);document.getElementById('cjCartCount').textContent=c;}
+                    function render(category){
+                        activeCategory=category||activeCategory;
+                        var grid=document.getElementById('cjProducts');
+                        var list=activeCategory==='all'?products:products.filter(function(p){return p.category_slug===activeCategory;});
+                        if(!list.length){grid.innerHTML='';setStatus(products.length?'No items in this category yet.':'No menu items are currently available.');return;}
+                        setStatus('');
+                        grid.innerHTML=list.map(function(p){
+                            var image=safeImageUrl(p.image);
+                            var imageMarkup=image?'<img class="cj-card-image" src="'+escapeHtml(image)+'" alt="'+escapeHtml(p.name)+'"/>':'<div class="cj-card-image" aria-hidden="true"></div>';
+                            return '<article class="cj-card" data-product-id="'+escapeHtml(p.slug)+'" role="link" tabindex="0" aria-label="View '+escapeHtml(p.name)+'">'+imageMarkup+'<div class="cj-card-body"><div class="cj-card-title"><h3>'+escapeHtml(p.name)+'</h3><span class="cj-price">UGX '+Number(p.price).toLocaleString('en-UG')+'</span></div><p>'+escapeHtml(p.description)+'</p><button class="cj-add" type="button" data-id="'+escapeHtml(p.slug)+'">Order Now</button></div></article>';
+                        }).join('');
+                    }
+                    function renderCategories(){
+                        var options=[{slug:'all',name:'All'}].concat(categories);
+                        document.getElementById('cjCategories').innerHTML=options.map(function(category,index){
+                            var slug=index===0?'all':category.slug;
+                            return '<button class="cj-category '+(index===0?'active':'')+'" data-category="'+escapeHtml(slug)+'">'+escapeHtml(category.name)+'</button>';
+                        }).join('');
+                    }
+                    document.getElementById('cjCategories').addEventListener('click',function(e){
+                        var button=e.target.closest('.cj-category');if(!button)return;
+                        document.querySelectorAll('.cj-category').forEach(function(b){b.classList.remove('active');});button.classList.add('active');render(button.dataset.category);
+                    });
+                    document.getElementById('cjProducts').addEventListener('click',function(e){
+                        var addButton=e.target.closest('.cj-add');
+                        if(addButton){
+                            var productId=addButton.dataset.id;
+                            window.location.assign((window.location.protocol==='file:'?'product.html':'/product')+'?id='+encodeURIComponent(productId));
+                            return;
+                        }
+                        var card=e.target.closest('.cj-card');
+                        if(card)window.location.href=(window.location.protocol==='file:'?'product.html':'/product')+'?id='+encodeURIComponent(card.dataset.productId);
+                    });
+                    document.getElementById('cjProducts').addEventListener('keydown',function(e){
+                        var card=e.target.closest('.cj-card');
+                        if(card&&(e.key==='Enter'||e.key===' ')){
+                            e.preventDefault();
+                            window.location.href=(window.location.protocol==='file:'?'product.html':'/product')+'?id='+encodeURIComponent(card.dataset.productId);
+                        }
+                    });
+                    updateCount();
+                    Promise.all([
+                        fetch(apiBase+'/products/',{headers:{Accept:'application/json'}}),
+                        fetch(apiBase+'/categories/',{headers:{Accept:'application/json'}})
+                    ]).then(function(responses){
+                        if(!responses[0].ok||!responses[1].ok)throw new Error('The menu service is unavailable. Please try again.');
+                        return Promise.all([responses[0].json(),responses[1].json()]);
+                    }).then(function(data){
+                        if(!Array.isArray(data[0])||!Array.isArray(data[1]))throw new Error('The menu service returned invalid data.');
+                        products=data[0];categories=data[1];renderCategories();render('all');
+                    }).catch(function(error){
+                        setStatus(error instanceof Error?error.message:'Could not load the menu. Please try again.',true);
+                    });
+                })();
+            </script>
+        </div>
+    </t>
+</t>

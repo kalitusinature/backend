@@ -1,0 +1,104 @@
+<t t-name="website.cart">
+    <t t-call="website.layout">
+        <div id="wrap" class="oe_structure oe_empty">
+            <style>
+                :root{--red:#008B92;--red-dark:#006F75;--dark:#151515;--muted:#6f7478;--line:#e8ebe9}
+                *{box-sizing:border-box} body{background:#f6f8f7;color:var(--dark)}
+                .cj-cart-page{font-family:Arial,Helvetica,sans-serif;min-height:100vh}
+                .cj-container{width:min(1180px,calc(100% - 32px));margin:48px auto 90px}
+                .cj-heading{display:flex;align-items:end;justify-content:space-between;margin-bottom:24px}
+                .cj-heading h1{font-size:42px;line-height:1;margin:0;letter-spacing:-1.5px}
+                .cj-heading p{margin:8px 0 0;color:var(--muted)}
+                .cj-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:28px;align-items:start}
+                .cj-items,.cj-summary{background:#fff;border:1px solid var(--line);border-radius:5px}
+                .cj-items{overflow:hidden}
+                .cj-item{display:grid;grid-template-columns:112px minmax(0,1fr) auto;gap:18px;align-items:center;padding:18px;border-bottom:1px solid var(--line)}
+                .cj-item:last-child{border-bottom:0}
+                .cj-item img{width:112px;height:112px;border-radius:5px;object-fit:cover;background:#eee}
+                .cj-item-name{margin:0 0 8px;font-size:19px;line-height:1.2}
+                .cj-item-price{color:var(--red);font-weight:800;font-size:16px}
+                .cj-item-subtotal{color:var(--muted);font-size:13px;margin-top:7px}
+                .cj-item-controls{display:flex;align-items:center;gap:10px}
+                .cj-qty{display:grid;grid-template-columns:36px 42px 36px;height:40px;border:1px solid #d7dcda;border-radius:5px;overflow:hidden;background:#fff}
+                .cj-qty button{border:0;background:#fff;width:36px;height:38px;font-size:20px;font-weight:700;cursor:pointer;color:var(--red);transition:.15s}
+                .cj-qty button:hover{background:#edf7f7}
+                .cj-qty button:active{background:#dfeeed}
+                .cj-qty span{display:grid;place-items:center;font-size:15px;font-weight:800;background:#fff}
+                .cj-remove{width:38px;height:38px;border:1px solid #efaaa5;background:#fff;color:#d32f2f;cursor:pointer;display:grid;place-items:center;padding:0}
+                .cj-remove:hover{color:#b42318;border-color:#d32f2f;background:#fff5f5}
+                .cj-summary{padding:24px;position:sticky;top:96px;box-shadow:0 12px 32px rgba(21,21,21,.07)}
+                .cj-summary h2{margin:0 0 20px;font-size:22px}
+                .cj-line{display:flex;justify-content:space-between;align-items:center;margin:13px 0;color:var(--muted)}
+                .cj-line strong{color:var(--dark)}
+                .cj-total{border-top:1px solid var(--line);margin-top:18px;padding-top:18px;font-size:21px;font-weight:900;color:var(--dark)}
+                .cj-checkout{display:block;text-decoration:none;text-align:center;width:100%;border:0;border-radius:0;background:var(--red);color:#fff;height:52px;line-height:52px;font-weight:800;margin-top:20px}
+                .cj-checkout:hover{background:var(--red-dark)}
+                .cj-empty{min-height:360px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px}
+                .cj-empty-icon{width:64px;height:64px;border-radius:50%;background:#edf7f7;color:var(--red);display:grid;place-items:center;font-size:30px;margin-bottom:12px}
+                .cj-empty h2{margin:8px 0}.cj-empty p{color:var(--muted);margin:0 0 18px}.cj-empty a{color:var(--red);font-weight:800;text-decoration:none}
+                @media(max-width:900px){
+                    .cj-container{width:calc(100% - 24px);margin:28px auto 60px}
+                    .cj-layout{grid-template-columns:1fr}
+                    .cj-summary{position:static}
+                }
+                @media(max-width:620px){
+                    .cj-heading h1{font-size:34px}
+                    .cj-heading p{font-size:14px}
+                    .cj-item{grid-template-columns:72px minmax(0,1fr) auto;gap:10px;padding:14px}
+                    .cj-item img{width:72px;height:72px}
+                    .cj-item-name{font-size:16px}
+                    .cj-item-controls{grid-column:3;grid-row:1;justify-self:end;justify-content:flex-end;border-top:0;padding-top:0;flex-wrap:nowrap;gap:6px}
+                    .cj-summary{padding:18px}
+                }
+            </style>
+            <main class="cj-cart-page">
+                <t t-call="website.cj_header"/>
+                <div class="cj-container">
+                    <div class="cj-heading">
+                        <div><h1>Your Cart</h1><p id="cjItemCount">0 items</p></div>
+                        <a href="/menu" style="color:#008B92;font-weight:800;text-decoration:none">Continue ordering</a>
+                    </div>
+                    <div class="cj-layout" id="cjLayout"></div>
+                </div>
+            </main>
+            <script>
+                (function(){
+                    if(window.location.protocol==='file:'){
+                        document.querySelectorAll('a[href]').forEach(function(link){
+                            var href=link.getAttribute('href');
+                            if(href.startsWith('/menu'))link.setAttribute('href','menu.html'+href.slice(5));
+                            else if(href.startsWith('/cart'))link.setAttribute('href','cart.html');
+                            else if(href.startsWith('/checkout'))link.setAttribute('href','checkout.html');
+                        });
+                    }
+                    var key='cjCart';
+                    function getCart(){try{return JSON.parse(localStorage.getItem(key))||[];}catch(e){return[];}}
+                    function saveCart(cart){localStorage.setItem(key,JSON.stringify(cart));render();}
+                    function render(){
+                        var cart=getCart(), layout=document.getElementById('cjLayout');
+                        var count=cart.reduce(function(n,i){return n+(i.qty||1);},0);
+                        var countLabel=document.getElementById('cjItemCount');
+                        if(countLabel)countLabel.textContent=count+(count===1?' item':' items');
+                        if(!cart.length){layout.innerHTML='<div class="cj-items cj-empty"><div class="cj-empty-icon">♡</div><h2>Your cart is empty</h2><p>Add something delicious from the menu.</p><a href="/menu">Browse the menu</a></div>';return;}
+                        var subtotal=cart.reduce(function(n,i){return n+i.price*(i.qty||1);},0), total=subtotal;
+                        layout.innerHTML='<div class="cj-items">'+cart.map(function(i){
+                            var lineTotal=i.price*(i.qty||1);
+                            return '<div class="cj-item"><img src="'+i.image+'" alt="'+i.name+'"/><div><h3 class="cj-item-name">'+i.name+'</h3><div class="cj-item-price">UGX '+i.price.toLocaleString('en-UG')+'</div><div class="cj-item-subtotal">Item total: UGX '+lineTotal.toLocaleString('en-UG')+'</div></div><div class="cj-item-controls"><div class="cj-qty"><button data-action="minus" data-id="'+i.id+'" aria-label="Decrease '+i.name+' quantity">−</button><span>'+ (i.qty||1)+'</span><button data-action="plus" data-id="'+i.id+'" aria-label="Increase '+i.name+' quantity">+</button></div><button class="cj-remove" data-action="remove" data-id="'+i.id+'" title="Remove '+i.name+'" aria-label="Remove '+i.name+'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 10v6M14 10v6"/></svg></button></div></div>';
+                        }).join('')+'</div><aside class="cj-summary"><h2>Order Summary</h2><div class="cj-line"><span>Subtotal</span><strong>UGX '+subtotal.toLocaleString('en-UG')+'</strong></div><div class="cj-line"><span>Service charge</span><strong>UGX 0</strong></div><div class="cj-line cj-total"><span>Total</span><span>UGX '+total.toLocaleString('en-UG')+'</span></div><a class="cj-checkout" id="cjCheckoutLink" href="/checkout">Proceed to checkout</a></aside>';
+                        var checkoutLink=document.getElementById('cjCheckoutLink');
+                        if(checkoutLink&&window.location.protocol==='file:')checkoutLink.setAttribute('href','checkout.html');
+                    }
+                    document.getElementById('cjLayout').addEventListener('click',function(e){
+                        var button=e.target.closest('[data-action]');if(!button)return;
+                        var cart=getCart(),item=cart.find(function(i){return i.id===button.dataset.id;});
+                        if(!item)return;if(button.dataset.action==='plus')item.qty=(item.qty||1)+1;
+                        if(button.dataset.action==='minus'){item.qty=(item.qty||1)-1;if(item.qty<=0)cart=cart.filter(function(i){return i.id!==item.id;});}
+                        if(button.dataset.action==='remove')cart=cart.filter(function(i){return i.id!==item.id;});
+                        saveCart(cart);
+                    });
+                    render();
+                })();
+            </script>
+        </div>
+    </t>
+</t>

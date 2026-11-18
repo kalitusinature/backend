@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
 from .models import (
@@ -46,6 +47,31 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(order.total_ugx, 24000)
         self.assertEqual(order.payment_status, Order.PaymentStatus.UNPAID)
         self.assertEqual(order.items.get().line_total_ugx, 24000)
+
+    def test_public_order_is_visible_to_staff_orders_api(self):
+        order_response = self.client.post(
+            "/api/v1/orders/",
+            {
+                "guest_name": "A Guest",
+                "phone": "+256700000000",
+                "order_type": "dine_in",
+                "location": "Table 4",
+                "items": [{"product": self.product.slug, "quantity": 1}],
+            },
+            format="json",
+        )
+        self.assertEqual(order_response.status_code, 201)
+
+        staff_user = get_user_model().objects.create_user(
+            username="staff", password="staff-password", is_staff=True
+        )
+        token = Token.objects.create(user=staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        staff_response = self.client.get("/api/v1/staff/orders/")
+
+        self.assertEqual(staff_response.status_code, 200)
+        self.assertEqual(staff_response.data[0]["number"], order_response.data["number"])
 
     def test_unavailable_product_cannot_be_ordered(self):
         self.product.is_available = False

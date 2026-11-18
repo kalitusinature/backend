@@ -1,0 +1,258 @@
+<t t-name="website.product">
+    <t t-call="website.layout">
+        <div id="wrap" class="oe_structure oe_empty">
+            <style>
+                :root{--cj-red:#008B92;--cj-dark:#151515}
+                *{box-sizing:border-box} body{background:#fffaf3;color:var(--cj-dark)}
+                .cj-product-page{font-family:Arial,Helvetica,sans-serif;min-height:100vh}
+                .cj-container{width:min(1180px,calc(100% - 32px));margin:55px auto 90px}
+                .cj-breadcrumb{margin-bottom:20px}.cj-breadcrumb a{color:#777;text-decoration:none}
+                .cj-layout{display:grid;grid-template-columns:58% 42%;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 10px 32px rgba(0,0,0,.08)}
+                .cj-image{display:block;width:100%;min-height:520px;height:100%;object-fit:cover;background:#edf0ef}
+                .cj-api-status{margin:18px 0;color:#555;line-height:1.5}
+                .cj-api-status.error{color:#b42318}
+                .cj-details{padding:48px}
+                .cj-category{color:var(--cj-red);font-weight:800;text-transform:uppercase;font-size:13px;letter-spacing:1px}
+                .cj-details h1{font-size:48px;letter-spacing:-2px;margin:12px 0}.cj-price{font-size:30px;font-weight:900;color:var(--cj-red)}
+                .cj-description{color:#666;line-height:1.7;font-size:17px;margin:22px 0 28px}
+                .cj-option-title{font-weight:800;margin:20px 0 10px}.cj-options{display:flex;flex-wrap:wrap;gap:8px}
+                .cj-option{border:1px solid #ddd;border-radius:24px;background:#fff;padding:10px 15px;cursor:pointer}
+                .cj-option.active{border-color:var(--cj-dark);background:var(--cj-dark);color:#fff}
+                .cj-buy-row{display:flex;flex-direction:column;gap:12px;margin-top:32px}
+                .cj-pairing{margin-top:28px;background:#fff;border:1px solid #e8ece9;border-radius:8px;padding:26px;box-shadow:0 14px 36px rgba(21,21,21,.08)}
+                .cj-pairing-header{display:flex;justify-content:space-between;align-items:end;margin-bottom:16px}
+                .cj-pairing-label{color:var(--cj-red);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1.4px}
+                .cj-pairing h2{margin:7px 0 0;font-size:24px;letter-spacing:-.8px}
+                .cj-pairing p{margin:6px 0 0;color:#777;line-height:1.5;font-size:14px}
+                .cj-drinks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+                .cj-drink{appearance:none;width:100%;font-family:inherit;text-align:left;position:relative;display:grid;grid-template-columns:76px minmax(0,1fr) 38px;align-items:center;gap:12px;padding:10px;border:1px solid #e4e8e5;border-radius:8px;text-decoration:none;color:var(--cj-dark);background:#fff;transition:.18s ease;cursor:pointer}
+                .cj-drink:hover{border-color:var(--cj-red);box-shadow:0 10px 24px rgba(0,139,146,.12);transform:translateY(-2px)}
+                .cj-drink img{width:76px;height:76px;border-radius:6px;object-fit:cover}
+                .cj-drink-image{width:76px;height:76px;border-radius:6px;background:#edf0ef}
+                .cj-drink strong{display:block;font-size:15px;line-height:1.2}
+                .cj-drink-info>span{display:block;color:var(--cj-red);font-size:14px;font-weight:800;margin-top:7px}
+                .cj-drink-action{width:38px;height:38px;border-radius:50%;background:var(--cj-red);color:#fff;font-size:20px;line-height:38px;text-align:center;box-shadow:0 6px 16px rgba(0,139,146,.22)}
+                .cj-drink:hover .cj-drink-action{background:#006F75}
+                .cj-modal{display:none;position:fixed;inset:0;z-index:2147483000;background:rgba(15,24,24,.62);align-items:center;justify-content:center;padding:12px}
+                .cj-modal.open{display:flex}
+                .cj-modal-card{position:relative;width:min(760px,100%);max-height:calc(100vh - 24px);display:grid;grid-template-columns:45% 55%;background:#fff;border-radius:10px;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.28);animation:cjModalIn .2s ease-out}
+                .cj-modal-image{width:100%;height:100%;min-height:300px;object-fit:cover;background:#edf0ef}
+                .cj-modal-content{padding:24px;display:flex;flex-direction:column;justify-content:center}
+                .cj-modal-category{color:var(--cj-red);font-size:12px;font-weight:900;letter-spacing:1px;text-transform:uppercase}
+                .cj-modal-title{font-size:30px;line-height:1.1;margin:10px 0}
+                .cj-modal-price{font-size:20px;font-weight:900;color:var(--cj-red)}
+                .cj-modal-unit-note{font-size:12px;color:#777;margin-top:3px}
+                .cj-modal-total{display:flex;justify-content:space-between;align-items:center;margin:0 0 16px;padding:12px 0;border-top:1px solid #e8ece9;font-weight:800}
+                .cj-modal-total strong{font-size:18px;color:var(--cj-dark)}
+                .cj-modal-description{color:#69716e;line-height:1.6;margin:14px 0 24px}
+                .cj-modal-quantity{display:flex;align-items:center;gap:14px;margin:0 0 16px}
+                .cj-modal-quantity-label{font-size:13px;font-weight:700;color:#555}
+                .cj-modal-qty{display:grid;grid-template-columns:38px 42px 38px;align-items:center;height:38px;border:1px solid #dfe4e1;border-radius:5px;overflow:hidden}
+                .cj-modal-qty button{height:36px;border:0;background:#f7f9f8;color:var(--cj-red);font-size:20px;font-weight:700;cursor:pointer}
+                .cj-modal-qty button:hover{background:#e7f3f3}
+                .cj-modal-qty span{display:grid;place-items:center;height:100%;font-weight:800}
+                .cj-modal-close{position:absolute;right:14px;top:14px;width:38px;height:38px;border:0;border-radius:50%;background:#fff;color:#333;font-size:24px;line-height:1;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.14)}
+                .cj-modal-add{height:50px;border:0;background:var(--cj-red);color:#fff;font-weight:800;font-size:15px;cursor:pointer}
+                .cj-modal-add:hover{background:#006F75}
+                body.cj-modal-open{overflow:hidden}
+                @keyframes cjModalIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+                .cj-qty{width:min(100%, 220px);height:52px;margin:0 auto;border:1px solid #ddd;border-radius:0;display:grid;grid-template-columns:52px 1fr 52px;align-items:center}
+                .cj-selected-total{display:flex;justify-content:space-between;align-items:center;width:100%;padding:12px 0;border-top:1px solid #ecefec;font-weight:700}
+                .cj-selected-total strong{font-size:19px;color:var(--cj-red)}
+                .cj-qty button{border:0;background:transparent;width:52px;height:50px;font-size:20px;cursor:pointer}.cj-qty span{min-width:30px;text-align:center;font-weight:800}
+                .cj-add{width:100%;height:52px;border:0;border-radius:0;background:var(--cj-red);color:#fff;font-weight:800;font-size:16px;cursor:pointer;text-decoration:none;display:flex;align-items:center;justify-content:center}.cj-add:hover{background:#006F75}
+                .cj-toast{position:fixed;right:24px;bottom:24px;background:#222;color:#fff;padding:15px 20px;border-radius:10px;transform:translateY(100px);transition:.25s;z-index:100}.cj-toast.show{transform:translateY(0)}
+                @media(max-width:800px){
+                    .cj-container{width:calc(100% - 24px);margin:24px auto 60px}
+                    .cj-layout{grid-template-columns:1fr;border-radius:5px}
+                    .cj-image{min-height:280px}
+                    .cj-details{padding:22px}
+                    .cj-details h1{font-size:32px}
+                    .cj-description{font-size:15px}
+                    .cj-qty{width:min(100%, 180px)}
+                    .cj-buy-row{margin-top:24px}
+                    .cj-pairing{margin-top:24px}
+                    .cj-pairing h2{font-size:19px}
+                    .cj-drinks{grid-template-columns:1fr}
+                    .cj-pairing{padding:18px}
+                    .cj-drink{grid-template-columns:64px minmax(0,1fr) 36px;gap:10px;padding:8px}
+                    .cj-drink img{width:64px;height:64px}
+                    .cj-drink-image{width:64px;height:64px}
+                    .cj-drink-action{width:36px;height:36px;line-height:36px}
+                    .cj-modal{padding:8px}
+                    .cj-modal-card{grid-template-columns:1fr;max-width:440px;max-height:calc(100vh - 16px)}
+                    .cj-modal-image{height:160px;min-height:160px}
+                    .cj-modal-content{padding:16px}
+                    .cj-modal-title{font-size:23px}
+                }
+                @media(max-width:420px){
+                    .cj-image{min-height:220px}
+                    .cj-details{padding:18px}
+                    .cj-details h1{font-size:28px}
+                    .cj-price{font-size:24px}
+                }
+            </style>
+            <main class="cj-product-page">
+                <t t-call="website.cj_header"/>
+                <div class="cj-container">
+                    <div class="cj-breadcrumb"><a href="/menu">Menu</a> / <span id="cjBreadcrumb">Product</span></div>
+                    <p class="cj-api-status" id="cjProductStatus" role="status" aria-live="polite">Loading item…</p>
+                    <div class="cj-layout" id="cjLayout"></div>
+                </div>
+            </main>
+            <div class="cj-toast" id="cjToast">Added to cart</div>
+            <script>
+                (function(){
+                    if(window.location.protocol==='file:'){
+                        document.querySelectorAll('a[href]').forEach(function(link){
+                            var href=link.getAttribute('href');
+                            if(href.startsWith('/menu'))link.setAttribute('href','menu.html'+href.slice(5));
+                            else if(href.startsWith('/cart'))link.setAttribute('href','cart.html');
+                            else if(href.startsWith('/checkout'))link.setAttribute('href','checkout.html');
+                        });
+                    }
+                    var key='cjCart';
+                    var apiBase=window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1';
+                    function escapeHtml(value){
+                        return String(value==null?'':value).replace(/[&<>"']/g,function(character){
+                            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character];
+                        });
+                    }
+                    function safeImageUrl(value){
+                        try{
+                            var url=new URL(value,apiBase);
+                            return url.protocol==='http:'||url.protocol==='https:'?url.href:'';
+                        }catch(e){return '';}
+                    }
+                    function getCart(){try{return JSON.parse(localStorage.getItem(key))||[];}catch(e){return[];}}
+                    function saveCart(cart){
+                        try{localStorage.setItem(key,JSON.stringify(cart));}
+                        catch(e){console.warn('Unable to save cart',e);}
+                        updateCount();
+                    }
+                    function updateCount(){
+                        var count=getCart().reduce(function(n,i){return n+(i.qty||1);},0);
+                        var badge=document.getElementById('cjCartCount');
+                        if(badge)badge.textContent=count;
+                        var badges=document.querySelectorAll('[id="cjCartCount"]');
+                        badges.forEach(function(item){item.textContent=count;});
+                    }
+                    function renderProduct(product,products){
+                    document.getElementById('cjBreadcrumb').textContent=product.name;
+                    var pairing='';
+                    var recommendations=products.filter(function(p){return p.slug!==product.slug;}).sort(function(a,b){
+                        function rank(item){
+                            if(product.category_slug==='drinks')return item.category_slug==='sides'?0:1;
+                            return item.category_slug==='drinks'?0:item.category_slug==='sides'?1:2;
+                        }
+                        return rank(a)-rank(b);
+                    }).slice(0,4);
+                    if(recommendations.length){
+                        pairing='<section class="cj-pairing"><div class="cj-pairing-header"><div><div class="cj-pairing-label">Recommended for you</div><h2>Make your order extra special</h2><p>Tap an item to see more and add it to your order.</p></div></div><div class="cj-drinks">'+recommendations.map(function(item){
+                            var image=safeImageUrl(item.image);
+                            var imageMarkup=image?'<img src="'+escapeHtml(image)+'" alt=""/>':'<span class="cj-drink-image" aria-hidden="true"></span>';
+                            return '<button type="button" class="cj-drink" data-recommendation="'+escapeHtml(item.slug)+'" aria-label="View '+escapeHtml(item.name)+' details">'+imageMarkup+'<span class="cj-drink-info"><strong>'+escapeHtml(item.name)+'</strong><span>UGX '+Number(item.price).toLocaleString('en-UG')+'</span></span><span class="cj-drink-action" aria-hidden="true">+</span></button>';
+                        }).join('')+'</div></section>';
+                    }
+                    var image=safeImageUrl(product.image);
+                    var imageMarkup=image?'<img class="cj-image" src="'+escapeHtml(image)+'" alt="'+escapeHtml(product.name)+'"/>':'<div class="cj-image" aria-hidden="true"></div>';
+                    document.getElementById('cjLayout').innerHTML=imageMarkup+'<div class="cj-details"><div class="cj-category">'+escapeHtml(product.category_name)+'</div><h1>'+escapeHtml(product.name)+'</h1><div class="cj-price">UGX '+Number(product.price).toLocaleString('en-UG')+'</div><p class="cj-description">'+escapeHtml(product.description)+'</p><div class="cj-option-title">Choose option</div><div class="cj-options"><button class="cj-option active">Regular</button><button class="cj-option">Large</button></div><div class="cj-buy-row"><div class="cj-selected-total"><span>Item total</span><strong id="cjProductTotal">UGX '+Number(product.price).toLocaleString('en-UG')+'</strong></div><div class="cj-qty"><button id="cjMinus">-</button><span id="cjQty">1</span><button id="cjPlus">+</button></div><a class="cj-add" id="cjAdd" href="/cart">Order Now</a></div></div>';
+                    document.getElementById('cjLayout').insertAdjacentHTML('afterend',pairing);
+                    document.getElementById('cjLayout').insertAdjacentHTML('afterend','<div class="cj-modal" id="cjRecommendationModal" aria-hidden="true"><div class="cj-modal-card" role="dialog" aria-modal="true" aria-labelledby="cjModalTitle"><button type="button" class="cj-modal-close" id="cjModalClose" aria-label="Close">×</button><img class="cj-modal-image" id="cjModalImage" alt=""/><div class="cj-modal-content"><div class="cj-modal-category" id="cjModalCategory"></div><h2 class="cj-modal-title" id="cjModalTitle"></h2><div class="cj-modal-price" id="cjModalPrice"></div><div class="cj-modal-unit-note">Price per item</div><p class="cj-modal-description" id="cjModalDescription"></p><div class="cj-modal-quantity"><span class="cj-modal-quantity-label">Quantity</span><div class="cj-modal-qty"><button type="button" id="cjModalMinus" aria-label="Decrease quantity">−</button><span id="cjModalQty">1</span><button type="button" id="cjModalPlus" aria-label="Increase quantity">+</button></div></div><div class="cj-modal-total"><span>Item total</span><strong id="cjModalTotal"></strong></div><button type="button" class="cj-modal-add" id="cjModalAdd">Add to order</button></div></div></div>');
+                    document.body.appendChild(document.getElementById('cjRecommendationModal'));
+                    if(window.location.protocol==='file:')document.getElementById('cjAdd').setAttribute('href','cart.html');
+                    var qty=1;
+                    function updateProductQuantity(){
+                        document.getElementById('cjQty').textContent=qty;
+                        document.getElementById('cjProductTotal').textContent='UGX '+(product.price*qty).toLocaleString('en-UG');
+                    }
+                    document.getElementById('cjMinus').onclick=function(){qty=Math.max(1,qty-1);updateProductQuantity();};
+                    document.getElementById('cjPlus').onclick=function(){qty++;updateProductQuantity();};
+                    document.querySelectorAll('.cj-option').forEach(function(button){button.onclick=function(){document.querySelectorAll('.cj-option').forEach(function(b){b.classList.remove('active');});button.classList.add('active');};});
+                    var modal=document.getElementById('cjRecommendationModal'),selectedRecommendation=null,modalQty=1;
+                    var modalClose=document.getElementById('cjModalClose');
+                    var modalQtyDisplay=document.getElementById('cjModalQty');
+                    function updateModalQuantity(){
+                        modalQtyDisplay.textContent=modalQty;
+                        if(selectedRecommendation)document.getElementById('cjModalTotal').textContent='UGX '+(selectedRecommendation.price*modalQty).toLocaleString('en-UG');
+                    }
+                    document.getElementById('cjModalMinus').addEventListener('click',function(){modalQty=Math.max(1,modalQty-1);updateModalQuantity();});
+                    document.getElementById('cjModalPlus').addEventListener('click',function(){modalQty++;updateModalQuantity();});
+                    function closeRecommendation(){
+                        modal.classList.remove('open');
+                        modal.setAttribute('aria-hidden','true');
+                        document.body.classList.remove('cj-modal-open');
+                    }
+                    document.querySelectorAll('.cj-drink[data-recommendation]').forEach(function(card){
+                        card.addEventListener('click',function(){
+                            selectedRecommendation=products.find(function(p){return p.slug===card.dataset.recommendation;});
+                            if(!selectedRecommendation)return;
+                            var cardImage=card.querySelector('img');
+                            var modalImage=document.getElementById('cjModalImage');
+                            modalImage.removeAttribute('src');
+                            modalImage.alt=selectedRecommendation.name;
+                            var recommendationImage=safeImageUrl(selectedRecommendation.image);
+                            if(recommendationImage)modalImage.src=recommendationImage;
+                            document.getElementById('cjModalCategory').textContent=selectedRecommendation.category_name;
+                            document.getElementById('cjModalTitle').textContent=selectedRecommendation.name;
+                            document.getElementById('cjModalPrice').textContent='UGX '+selectedRecommendation.price.toLocaleString('en-UG');
+                            document.getElementById('cjModalDescription').textContent=selectedRecommendation.description;
+                            modalQty=1;
+                            updateModalQuantity();
+                            modal.classList.add('open');
+                            modal.setAttribute('aria-hidden','false');
+                            document.body.classList.add('cj-modal-open');
+                            modalClose.focus();
+                        });
+                    });
+                    modalClose.addEventListener('click',closeRecommendation);
+                    modal.addEventListener('click',function(e){if(e.target===modal)closeRecommendation();});
+                    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&modal.classList.contains('open'))closeRecommendation();});
+                    document.getElementById('cjModalAdd').addEventListener('click',function(){
+                        if(!selectedRecommendation)return;
+                        var cart=getCart(),item=cart.find(function(i){return i.id===selectedRecommendation.slug;});
+                        if(item)item.qty=(item.qty||1)+modalQty;
+                        else cart.push({id:selectedRecommendation.slug,name:selectedRecommendation.name,price:selectedRecommendation.price,image:selectedRecommendation.image,qty:modalQty});
+                        saveCart(cart);
+                        closeRecommendation();
+                        var toast=document.getElementById('cjToast');
+                        toast.textContent=selectedRecommendation.name+' added to your order';
+                        toast.classList.add('show');
+                        setTimeout(function(){toast.classList.remove('show');toast.textContent='Added to cart';},1600);
+                    });
+                    document.getElementById('cjAdd').onclick=function(e){
+                        e.preventDefault();
+                        var cart=getCart(),item=cart.find(function(i){return i.id===product.slug});
+                        if(item)item.qty=(item.qty||1)+qty;else cart.push({id:product.slug,name:product.name,price:product.price,image:product.image,qty:qty});
+                        saveCart(cart);
+                        if(window.location.protocol==='file:'){
+                            window.location.assign('cart.html');
+                        }else{
+                            window.location.assign('/cart');
+                        }
+                    };
+                    updateCount();
+                    document.getElementById('cjProductStatus').hidden=true;
+                    }
+                    var productId=new URLSearchParams(window.location.search).get('id');
+                    fetch(apiBase+'/products/',{headers:{Accept:'application/json'}}).then(function(response){
+                        if(!response.ok)throw new Error('The menu service returned HTTP '+response.status+'.');
+                        return response.json();
+                    }).then(function(data){
+                        if(!Array.isArray(data))throw new Error('The menu service returned invalid data.');
+                        var product=data.find(function(item){return item.slug===productId;});
+                        if(!product){
+                            document.getElementById('cjProductStatus').textContent='This item is no longer available. Please return to the menu.';
+                            document.getElementById('cjProductStatus').classList.add('error');
+                            return;
+                        }
+                        renderProduct(product,data);
+                    }).catch(function(error){
+                        document.getElementById('cjProductStatus').textContent=error instanceof Error?error.message:'Could not load this item. Please try again.';
+                        document.getElementById('cjProductStatus').classList.add('error');
+                    });
+                })();
+            </script>
+        </div>
+    </t>
+</t>

@@ -35,9 +35,9 @@ of source control.
 4. Deploy. Render provisions PostgreSQL, runs migrations, collects static files, bootstraps the initial admin, and starts Gunicorn.
 5. Open `/staff/` on the deployed service and add menu categories, products, and lodge/cottage inventory.
 6. Add the final Render service origin to `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` if it differs from the value in `render.yaml`.
-7. Configure the Odoo frontend to use the deployed service base URL (no trailing slash) as `window.CJ_API_BASE`. Do not put database credentials or Django secrets in Odoo.
+7. Configure the Odoo frontend to use the deployed service base URL as `window.CJ_API_BASE_URL`. Do not put database credentials or Django secrets in Odoo.
 
-The Blueprint uses a Render PostgreSQL database and allows browser API calls only from `https://kalitusi-nature-resort.odoo.com`. Update that origin if the Odoo site domain changes.
+The Blueprint uses a Render PostgreSQL database and allows browser API calls from `https://kalitusi-nature-resort.odoo.com` and `https://kalitusinature.github.io`. Update these origins if either site domain changes.
 
 ## Public API
 
@@ -74,6 +74,8 @@ Only active categories, available products, and active lodges are public.
 `order_type` is `dine_in` or `lodge`; `location` is the table number or lodge/cottage identifier. `payment_method` is `cash` or `card_at_counter`. The server looks up current prices and calculates totals; clients cannot set prices. The order remains unpaid until staff records payment at the resort.
 
 Successful response (`201`) contains the order number, status, server-calculated UGX total, and creation time.
+
+The Odoo menu and product pages load categories and available products from this API. Checkout posts orders to Render; the server validates product slugs and calculates prices from its catalog. New orders are stored in Render's database and appear in the GitHub Pages admin portal's Orders view, which refreshes every 30 seconds.
 
 ### Request a lodge reservation
 

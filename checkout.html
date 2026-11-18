@@ -1,0 +1,216 @@
+<t t-name="website.checkout">
+    <t t-call="website.layout">
+        <div id="wrap" class="oe_structure oe_empty">
+            <style>
+                :root{--red:#008B92;--red-dark:#006F75;--dark:#151515;--muted:#6f7478;--line:#e6eae8}
+                *{box-sizing:border-box} body{background:#f4f7f6;color:var(--dark)}
+                .cj-checkout-page{font-family:Arial,Helvetica,sans-serif;min-height:100vh}
+                .cj-container{width:min(1120px,calc(100% - 32px));margin:42px auto 90px}
+                .cj-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+                .cj-heading h1{font-size:38px;letter-spacing:-1.2px;margin:0}
+                .cj-heading a{color:var(--red);font-weight:800;text-decoration:none}
+                .cj-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
+                .cj-form,.cj-summary{background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 14px 36px rgba(21,21,21,.07)}
+                .cj-form{padding:26px}
+                .cj-summary{padding:22px;position:sticky;top:96px;overflow:hidden}
+                .cj-summary-header{display:flex;justify-content:space-between;align-items:center;margin:-22px -22px 18px;padding:18px 22px;border-bottom:1px solid var(--line);background:#fafcfb}
+                .cj-summary-header h2{margin:0;font-size:18px}
+                .cj-summary-count{font-size:12px;font-weight:800;color:var(--red);background:#e7f3f3;border-radius:20px;padding:6px 9px}
+                .cj-summary-item{display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f2f1;font-size:14px}
+                .cj-summary-item img{width:54px;height:54px;border-radius:5px;object-fit:cover;background:#edf0ef}
+                .cj-summary-item-name{color:#444;min-width:0}
+                .cj-summary-item-name span{color:var(--muted);font-size:12px}
+                .cj-summary-item strong{white-space:nowrap;font-size:14px}
+                .cj-section-head{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+                .cj-section-number{width:34px;height:34px;border-radius:50%;background:#e7f3f3;color:var(--red);display:grid;place-items:center;font-weight:900}
+                .cj-section-head h2{margin:0;font-size:21px}
+                .cj-section-number{font-weight:900}
+                .cj-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+                .cj-field.full{grid-column:1/-1}.cj-field label{display:block;font-weight:700;font-size:13px;margin:0 0 7px;color:#444}
+                .cj-field input,.cj-field textarea,.cj-field select{width:100%;border:1px solid #d9dfdc;border-radius:6px;padding:13px 14px;font-size:15px;background:#fff;color:var(--dark);outline:none}
+                .cj-field input:focus,.cj-field textarea:focus,.cj-field select:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(0,139,146,.10)}
+                .cj-field input[readonly]{background:#f2f5f4;color:#555}
+                .cj-field textarea{height:78px;resize:vertical}
+                .cj-payment{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 18px}
+                .cj-payment label{border:1px solid #dfe4e1;border-radius:6px;padding:14px;cursor:pointer;font-weight:700;display:flex;align-items:center;gap:9px}
+                .cj-payment label:has(input:checked){border-color:var(--red);background:#edf7f7}
+                .cj-payment input{accent-color:var(--red)}
+                .cj-pay-note{color:var(--muted);font-size:12px;line-height:1.5;margin:0 0 14px}
+                .cj-line{display:flex;justify-content:space-between;gap:16px;margin:12px 0;color:var(--muted);font-size:14px}.cj-line strong{color:var(--dark)}
+                .cj-total{border-top:1px solid var(--line);margin-top:16px;padding-top:16px;font-size:20px;font-weight:900;color:var(--dark)}
+                .cj-place{width:min(100%, 280px);display:block;margin:18px 0 0 auto;border:0;border-radius:6px;background:var(--red);color:#fff;height:52px;font-weight:800;cursor:pointer}
+                .cj-place:hover:not(:disabled){background:var(--red-dark)}
+                .cj-place:disabled{background:#bbb;cursor:not-allowed}
+                .cj-order-error{margin:16px 0 0;color:#b42318;font-size:14px;line-height:1.5}
+                .cj-success{display:none;position:relative;width:min(620px,100%);margin:20px auto;text-align:center;padding:64px 32px 54px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 18px 48px rgba(21,21,21,.10);overflow:hidden}
+                .cj-success.show{display:block;animation:cjSuccessIn .45s ease-out}
+                .cj-success-icon{position:relative;z-index:2;width:78px;height:78px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-size:38px;margin:0 auto 22px;box-shadow:0 10px 28px rgba(0,139,146,.28);animation:cjPop .55s .15s both}
+                .cj-success h2{margin:0 0 10px;font-size:32px;letter-spacing:-1px}.cj-success p{max-width:440px;margin:0 auto;color:var(--muted);line-height:1.6}
+                .cj-success a{display:inline-flex;align-items:center;justify-content:center;min-width:220px;height:52px;margin-top:26px;background:var(--red);color:#fff;border-radius:6px;font-weight:800;text-decoration:none}
+                .cj-success a:hover{background:var(--red-dark)}
+                .cj-sparks{position:absolute;inset:0;pointer-events:none}
+                .cj-spark{position:absolute;left:50%;top:98px;width:7px;height:7px;border-radius:50%;background:var(--red);animation:cjSpark 1.2s ease-out both}
+                .cj-spark:nth-child(2n){background:#ffc62f}.cj-spark:nth-child(3n){background:#22a447}
+                @keyframes cjSuccessIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+                @keyframes cjPop{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+                @keyframes cjSpark{0%{transform:translate(0,0) scale(.5);opacity:0}15%{opacity:1}100%{transform:var(--spark-end) scale(0);opacity:0}}
+                @media(max-width:800px){.cj-success{padding:52px 18px 42px}.cj-success h2{font-size:28px}.cj-success a{width:100%;max-width:280px}}
+                @media(prefers-reduced-motion:reduce){.cj-success,.cj-success-icon,.cj-spark{animation:none}}
+                @media(max-width:800px){
+                    .cj-container{width:calc(100% - 24px);margin:28px auto 60px}
+                    .cj-heading h1{font-size:32px}
+                    .cj-layout{grid-template-columns:1fr}
+                    .cj-summary{position:static}
+                    .cj-form-grid{grid-template-columns:1fr}
+                    .cj-field.full{grid-column:auto}
+                    .cj-payment{grid-template-columns:1fr 1fr;gap:8px}
+                    .cj-payment label{padding:12px 8px;font-size:13px;justify-content:center;text-align:center}
+                    .cj-place{width:100%;margin:18px 0 0}
+                }
+            </style>
+            <main class="cj-checkout-page">
+                <t t-call="website.cj_header"/>
+                <div class="cj-container">
+                    <div class="cj-heading"><h1 id="cjTitle">Checkout</h1><a id="cjContinueOrdering" href="/menu">Continue ordering</a></div>
+                    <div class="cj-layout" id="cjLayout">
+                        <form class="cj-form" id="cjForm">
+                            <div class="cj-section-head"><div class="cj-section-number">1</div><h2>Order Details</h2></div>
+                            <div class="cj-form-grid">
+                                <div class="cj-field"><label>Full name</label><input name="name" required="required" placeholder="Guest name"/></div>
+                                <div class="cj-field"><label>Phone number</label><input name="phone" required="required" placeholder="+256 000 000 000"/></div>
+                                <div class="cj-field"><label>Order type</label><select name="order_type" id="cjOrderType"><option value="dine_in">Dine-in</option><option value="lodge">Lodge / Cottage</option></select></div>
+                                <div class="cj-field"><label id="cjLocationLabel">Table number</label><input name="location" id="cjLocation" required="required" placeholder="e.g. 12"/></div>
+                                <div class="cj-field full"><label>Order note</label><textarea name="note" placeholder="Optional special request"></textarea></div>
+                            </div>
+                            <div class="cj-section-head" style="margin-top:26px"><div class="cj-section-number">2</div><h2>Pay at the Resort</h2></div>
+                            <div class="cj-payment">
+                                <label><input type="radio" name="payment" value="cash" checked="checked"/> Cash</label>
+                                <label><input type="radio" name="payment" value="card_at_counter"/> Card at counter</label>
+                            </div>
+                            <p class="cj-pay-note">Payment is made at the resort after confirmation. No payment is collected on this page.</p>
+                            <p class="cj-order-error" id="cjOrderError" role="alert" hidden="hidden"></p>
+                            <button class="cj-place" type="submit" id="cjPlace">Place Order</button>
+                        </form>
+                        <aside class="cj-summary" id="cjSummary"></aside>
+                    </div>
+                    <div class="cj-success" id="cjSuccess">
+                        <div class="cj-sparks" id="cjSparks" aria-hidden="true"></div>
+                        <div class="cj-success-icon">✓</div><h2>Order received!</h2><p id="cjSuccessText">Your order was sent to the resort.</p><a id="cjSuccessMenu" href="/menu">Continue ordering</a>
+                    </div>
+                </div>
+            </main>
+            <script>
+                (function(){
+                    if(window.location.protocol==='file:'){
+                        document.querySelectorAll('a[href]').forEach(function(link){
+                            var href=link.getAttribute('href');
+                            if(href.startsWith('/menu'))link.setAttribute('href','menu.html'+href.slice(5));
+                            else if(href.startsWith('/cart'))link.setAttribute('href','cart.html');
+                            else if(href.startsWith('/checkout'))link.setAttribute('href','checkout.html');
+                        });
+                    }
+                    var key='cjCart';
+                    function getCart(){try{return JSON.parse(localStorage.getItem(key))||[];}catch(e){return[];}}
+                    var cart=getCart();
+                    var subtotal=cart.reduce(function(n,i){return n+i.price*(i.qty||1);},0), total=subtotal;
+                    var summary=document.getElementById('cjSummary');
+                    var orderType=document.getElementById('cjOrderType');
+                    var locationLabel=document.getElementById('cjLocationLabel');
+                    var locationInput=document.getElementById('cjLocation');
+                    if(orderType){
+                        orderType.addEventListener('change',function(){
+                            if(orderType.value==='lodge'){
+                                locationLabel.textContent='Lodge or cottage number';
+                                locationInput.placeholder='e.g. Cottage 7';
+                            }else{
+                                locationLabel.textContent='Table number';
+                                locationInput.placeholder='e.g. 12';
+                            }
+                        });
+                    }
+                    if(!cart.length){summary.innerHTML='<div class="cj-summary-header"><h2>Order Summary</h2><span class="cj-summary-count">0 items</span></div><p>Your cart is empty.</p><a href="/menu" style="color:#008B92;font-weight:800">Continue ordering</a>';document.getElementById('cjPlace').disabled=true;}
+                    else{
+                        var count=cart.reduce(function(n,i){return n+(i.qty||1);},0);
+                        summary.innerHTML='<div class="cj-summary-header"><h2>Order Summary</h2><span class="cj-summary-count">'+count+(count===1?' item':' items')+'</span></div>'+
+                            cart.map(function(i){
+                                var image=i.image?'<img src="'+i.image+'" alt="'+i.name+'"/>':'<div></div>';
+                                return '<div class="cj-summary-item">'+image+'<div class="cj-summary-item-name">'+i.name+'<br/><span>UGX '+i.price.toLocaleString('en-UG')+' × '+(i.qty||1)+'</span></div><strong>UGX '+(i.price*(i.qty||1)).toLocaleString('en-UG')+'</strong></div>';
+                            }).join('')+
+                            '<div class="cj-line" style="margin-top:16px"><span>Subtotal</span><strong>UGX '+subtotal.toLocaleString('en-UG')+'</strong></div>'+
+                            '<div class="cj-line"><span>Service charge</span><strong>UGX 0</strong></div>'+
+                            '<div class="cj-line cj-total"><span>Total</span><span>UGX '+total.toLocaleString('en-UG')+'</span></div>';
+                    }
+                    document.getElementById('cjForm').addEventListener('submit',function(e){
+                        e.preventDefault();var form=e.target;if(!form.checkValidity()||!cart.length)return;
+                        var formData=new FormData(form);
+                        var order={
+                            guest_name:String(formData.get('name')||'').trim(),
+                            phone:String(formData.get('phone')||'').trim(),
+                            order_type:String(formData.get('order_type')||'dine_in'),
+                            location:String(formData.get('location')||'').trim(),
+                            payment_method:String(formData.get('payment')||'cash'),
+                            note:String(formData.get('note')||'').trim(),
+                            items:cart.map(function(item){return {product:String(item.slug||item.id),quantity:Number(item.qty||1)};})
+                        };
+                        var button=document.getElementById('cjPlace');
+                        var errorNode=document.getElementById('cjOrderError');
+                        button.disabled=true;button.textContent='Sending order…';errorNode.hidden=true;errorNode.textContent='';
+                        function errorMessage(data,status){
+                            if(data&&typeof data.detail==='string')return data.detail;
+                            if(data&&typeof data==='object'){
+                                var messages=Object.keys(data).map(function(field){
+                                    var value=data[field];
+                                    return field+': '+(Array.isArray(value)?value.join(' '):typeof value==='string'?value:JSON.stringify(value));
+                                });
+                                if(messages.length)return messages.join(' ');
+                            }
+                            return 'The order service returned HTTP '+status+'.';
+                        }
+                        fetch((window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1')+'/orders/',{
+                            method:'POST',
+                            headers:{Accept:'application/json','Content-Type':'application/json'},
+                            body:JSON.stringify(order)
+                        }).then(function(response){
+                            return response.text().then(function(text){
+                                var data=null;
+                                try{data=text?JSON.parse(text):null;}catch(parseError){}
+                                if(!response.ok)throw new Error(errorMessage(data,response.status));
+                                if(!data||!data.number)throw new Error('The resort returned an invalid order receipt.');
+                                return data;
+                            });
+                        }).then(function(receipt){
+                            localStorage.removeItem(key);
+                            document.getElementById('cjLayout').style.display='none';
+                            document.querySelector('.cj-heading').style.display='none';
+                            document.getElementById('cjSuccessText').textContent='Order '+receipt.number+' has been sent to the resort. Total: UGX '+Number(receipt.total_ugx).toLocaleString('en-UG')+'. Payment is made at the resort.';
+                            document.getElementById('cjSuccess').classList.add('show');
+                            var sparks=document.getElementById('cjSparks');
+                            var paths=[
+                                'translate(-170px,-58px)','translate(-145px,28px)','translate(-115px,-92px)',
+                                'translate(-80px,-125px)','translate(-42px,-145px)','translate(42px,-145px)',
+                                'translate(80px,-125px)','translate(115px,-92px)','translate(145px,28px)',
+                                'translate(170px,-58px)','translate(-205px,-5px)','translate(205px,-5px)',
+                                'translate(-62px,-40px)','translate(62px,-40px)'
+                            ];
+                            paths.forEach(function(path,index){
+                                var spark=document.createElement('span');
+                                spark.className='cj-spark';
+                                spark.style.setProperty('--spark-end','translate('+path.match(/-?\d+/g)[0]+'px,'+path.match(/-?\d+/g)[1]+'px)');
+                                spark.style.animationDelay=(index%3)*.08+'s';
+                                spark.style.width=(5+(index%3))+'px';
+                                spark.style.height=spark.style.width;
+                                sparks.appendChild(spark);
+                            });
+                            if(window.location.protocol==='file:')document.getElementById('cjSuccessMenu').setAttribute('href','menu.html');
+                        }).catch(function(error){
+                            errorNode.textContent=error instanceof TypeError?'Could not connect to the resort order service. Check your connection and try again.':error.message;
+                            errorNode.hidden=false;
+                        }).finally(function(){
+                            button.disabled=false;button.textContent='Place Order';
+                        });
+                    });
+                })();
+            </script>
+        </div>
+    </t>
+</t>

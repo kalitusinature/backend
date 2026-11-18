@@ -1,0 +1,47 @@
+<t t-name="website.cj_header">
+    <style>
+        .cj-nav{height:78px;background:#fff;border-bottom:1px solid #eee;display:flex;align-items:center;position:relative;z-index:50}
+        .cj-nav-inner{width:min(1180px,calc(100% - 32px));margin:auto;display:flex;align-items:center;justify-content:space-between}
+        .cj-logo{color:#008B92;font-size:20px;font-weight:900;text-decoration:none;letter-spacing:-1px;text-transform:uppercase}
+        .cj-nav-links,.cj-nav-actions{display:flex;align-items:center;gap:24px}
+        .cj-nav-links a,.cj-nav-actions a{color:#222;text-decoration:none;font-weight:700}
+        .cj-cart-link{background:#008B92;color:#fff!important;height:46px;min-width:46px;border-radius:24px!important;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 14px}
+        .cj-count{background:#fff;color:#008B92;width:21px;height:21px;border-radius:50%;display:grid;place-items:center;font-size:12px}
+        @media(max-width:620px){
+            .cj-nav{height:68px}
+            .cj-logo{max-width:180px;font-size:12px;line-height:1.15}
+            .cj-nav-links>a:not(.cj-cart-link){display:none}
+            .cj-nav-actions>a:first-child{display:none}
+            .cj-cart-link{height:42px}
+        }
+    </style>
+    <nav class="cj-nav">
+        <div class="cj-nav-inner">
+            <a class="cj-logo" href="/menu">Kalitusi Resort Nature Hotel</a>
+            <div class="cj-nav-links">
+                <a href="/menu">Menu</a>
+                <a href="/menu#popular">Popular</a>
+                <a class="cj-cart-link" href="/cart">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 11h11l2-7H6"/></svg>
+                    <span class="cj-count" id="cjCartCount">0</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+    <script>
+        (function(){
+            window.CJ_API_BASE_URL = window.CJ_API_BASE_URL || 'https://backend-bte7.onrender.com/api/v1';
+            if(window.location.protocol==='file:'){
+                document.querySelectorAll('.cj-nav a[href]').forEach(function(link){
+                    var href=link.getAttribute('href');
+                    if(href.startsWith('/menu'))link.setAttribute('href','menu.html'+href.slice(5));
+                    else if(href.startsWith('/cart'))link.setAttribute('href','cart.html');
+                    else if(href.startsWith('/checkout'))link.setAttribute('href','checkout.html');
+                });
+            }
+            var count=0;
+            try{var cart=JSON.parse(localStorage.getItem('cjCart'))||[];count=cart.reduce(function(n,i){return n+(i.qty||1);},0);}catch(e){}
+            var badge=document.getElementById('cjCartCount');if(badge)badge.textContent=count;
+        })();
+    </script>
+</t>
