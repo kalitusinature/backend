@@ -100,3 +100,25 @@ New requests are `pending`; a `201` response includes a reservation reference. S
 - Lodges: maintain lodge/cottage details, capacity, image, and active state.
 
 Use Django admin for staff user creation and detailed record management. Payment processing is intentionally not implemented.
+
+## React admin portal
+
+The React admin portal is a separate GitHub Pages app. Its API base URL is
+`https://backend-bte7.onrender.com/api/v1`. The Django staff API uses token
+authentication and only accepts active staff accounts.
+
+The portal uses these protected endpoints after login:
+
+- `POST /auth/token/` and `POST /auth/logout/`
+- `GET /staff/dashboard/`
+- `GET /staff/orders/` and `PATCH /staff/orders/<id>/`
+- `GET, POST /staff/products/` and `GET, PATCH /staff/products/<id>/`
+- `GET, POST /staff/categories/` and `GET, PATCH /staff/categories/<id>/`
+- `GET, POST /staff/lodges/` and `GET, PATCH /staff/lodges/<id>/`
+- `GET /staff/reservations/` and `PATCH /staff/reservations/<id>/`
+
+Set `CORS_ALLOWED_ORIGINS` on Render to include both the Odoo storefront origin
+and `https://kalitusinature.github.io`. Create the first staff account using
+`DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, and
+`DJANGO_SUPERUSER_PASSWORD` in Render's environment settings. Never put these
+credentials in the React app or its GitHub repository.

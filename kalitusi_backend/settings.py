@@ -2,8 +2,11 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
+
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-this-secret-key")
 DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
 ALLOWED_HOSTS = os.environ.get(
@@ -17,6 +20,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework.authtoken",
     "corsheaders",
     "rest_framework",
     "core.apps.CoreConfig",
@@ -114,6 +118,7 @@ REST_FRAMEWORK = {
         "anon": "300/hour",
         "order_create": "30/hour",
         "reservation_create": "10/hour",
+        "staff_login": "10/hour",
     },
 }
 

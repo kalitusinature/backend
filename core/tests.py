@@ -131,3 +131,144 @@ class StaffReservationApprovalTests(TestCase):
         self.second.refresh_from_db()
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.second.status, LodgeReservation.Status.PENDING)
+
+
+class StaffApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.staff = get_user_model().objects.create_user(
+            username="portal-admin",
+            password="staff-password",
+            email="admin@example.com",
+            is_staff=True,
+        )
+        self.regular_user = get_user_model().objects.create_user(
+            username="guest",
+            password="guest-password",
+        )
+        self.category = Category.objects.create(name="Drinks")
+        self.lodge = Lodge.objects.create(name="View Cottage", capacity=4)
+        self.product = Product.objects.create(
+            name="Resort Juice",
+            category=self.category,
+            price_ugx=5000,
+        )
+
+    def login_as_staff(self):
+        response = self.client.post(
+            "/api/v1/auth/token/",
+            {"username": "portal-admin", "password": "staff-password"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Token {response.data['token']}"
+        )
+
+    def test_staff_login_rejects_non_staff_users(self):
+        response = self.client.post(
+            "/api/v1/auth/token/",
+            {"username": "guest", "password": "guest-password"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_staff_endpoints_require_staff_token(self):
+        response = self.client.get("/api/v1/staff/products/")
+        self.assertEqual(response.status_code, 401)
+
+        self.client.force_authenticate(user=self.regular_user)
+        response = self.client.get("/api/v1/staff/products/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_can_create_and_edit_products(self):
+        self.login_as_staff()
+        response = self.client.post(
+            "/api/v1/staff/products/",
+            {
+                "name": "Lake Smoothie",
+                "category_id": self.category.id,
+                "description": "Fresh fruit",
+                "price_ugx": 8000,
+                "image_url": "",
+                "is_available": True,
+                "is_featured": False,
+                "sort_order": 0,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        product_id = response.data["id"]
+        self.assertEqual(response.data["category_id"], self.category.id)
+
+        response = self.client.patch(
+            f"/api/v1/staff/products/{product_id}/",
+            {"price_ugx": 9000},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["price_ugx"], 9000)
+
+    def test_staff_can_accept_orders_and_conflicting_reservations_cannot_be_confirmed(self):
+        self.login_as_staff()
+        order = Order.objects.create(
+            guest_name="Order Guest",
+            phone="+256700000000",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 2",
+        )
+        response = self.client.patch(
+            f"/api/v1/staff/orders/{order.id}/",
+            {"status": Order.Status.ACCEPTED},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.ACCEPTED)
+
+        today = date.today()
+        LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="Confirmed Guest",
+            phone="+256700000001",
+            check_in=today + timedelta(days=4),
+            check_out=today + timedelta(days=7),
+            status=LodgeReservation.Status.CONFIRMED,
+        )
+        pending = LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="Pending Guest",
+            phone="+256700000002",
+            check_in=today + timedelta(days=6),
+            check_out=today + timedelta(days=8),
+        )
+        response = self.client.patch(
+            f"/api/v1/staff/reservations/{pending.id}/",
+            {"status": LodgeReservation.Status.CONFIRMED},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, LodgeReservation.Status.PENDING)
+
+    def test_staff_can_manage_categories_and_lodges(self):
+        self.login_as_staff()
+        category_response = self.client.post(
+            "/api/v1/staff/categories/",
+            {"name": "Breakfast", "description": "Morning menu", "sort_order": 1},
+            format="json",
+        )
+        self.assertEqual(category_response.status_code, 201)
+
+        lodge_response = self.client.post(
+            "/api/v1/staff/lodges/",
+            {
+                "name": "Forest Cabin",
+                "description": "Quiet cabin",
+                "capacity": 3,
+                "image_url": "",
+                "is_active": True,
+            },
+            format="json",
+        )
+        self.assertEqual(lodge_response.status_code, 201)
