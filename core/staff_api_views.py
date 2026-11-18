@@ -101,9 +101,13 @@ class StaffOrderList(StaffApiMixin, generics.ListAPIView):
 
 
 class StaffOrderUpdate(StaffApiMixin, generics.UpdateAPIView):
-    queryset = Order.objects.all()
+    queryset = Order.objects.select_for_update()
     serializer_class = StaffOrderUpdateSerializer
     http_method_names = ("patch", "options", "head")
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
 
 
 class StaffProductListCreate(StaffApiMixin, generics.ListCreateAPIView):

@@ -48,6 +48,152 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(order.payment_status, Order.PaymentStatus.UNPAID)
         self.assertEqual(order.items.get().line_total_ugx, 24000)
 
+    def test_customer_can_track_order_with_number_and_phone_without_private_fields(self):
+        order_response = self.client.post(
+            "/api/v1/orders/",
+            {
+                "guest_name": "A Guest",
+                "phone": "+256700000000",
+                "order_type": "dine_in",
+                "location": "Table 4",
+                "items": [{"product": self.product.slug, "quantity": 2}],
+            },
+            format="json",
+        )
+
+        response = self.client.post(
+            "/api/v1/orders/track/",
+            {
+                "number": order_response.data["number"].lower(),
+                "phone": "+256700000000",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], Order.Status.NEW)
+        self.assertEqual(response.data["status_label"], "New")
+        self.assertEqual(response.data["items"][0]["product_name"], self.product.name)
+        self.assertNotIn("phone", response.data)
+        self.assertNotIn("guest_name", response.data)
+
+    def test_customer_order_tracking_requires_matching_phone(self):
+        order_response = self.client.post(
+            "/api/v1/orders/",
+            {
+                "guest_name": "A Guest",
+                "phone": "+256700000000",
+                "order_type": "dine_in",
+                "location": "Table 4",
+                "items": [{"product": self.product.slug, "quantity": 1}],
+            },
+            format="json",
+        )
+
+        response = self.client.post(
+            "/api/v1/orders/track/",
+            {"number": order_response.data["number"], "phone": "+256700000001"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_customer_tracking_reflects_staff_order_and_payment_updates(self):
+        order_response = self.client.post(
+            "/api/v1/orders/",
+            {
+                "guest_name": "A Guest",
+                "phone": "+256700000000",
+                "order_type": "dine_in",
+                "location": "Table 4",
+                "items": [{"product": self.product.slug, "quantity": 1}],
+            },
+            format="json",
+        )
+        staff_user = get_user_model().objects.create_user(
+            username="order-staff", password="staff-password", is_staff=True
+        )
+        token = Token.objects.create(user=staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        status_response = self.client.patch(
+            f"/api/v1/staff/orders/{Order.objects.get(number=order_response.data['number']).id}/",
+            {"status": Order.Status.ACCEPTED},
+            format="json",
+        )
+        payment_response = self.client.patch(
+            f"/api/v1/staff/orders/{Order.objects.get(number=order_response.data['number']).id}/",
+            {"payment_status": Order.PaymentStatus.PAID},
+            format="json",
+        )
+        tracking_response = self.client.post(
+            "/api/v1/orders/track/",
+            {"number": order_response.data["number"], "phone": "+256700000000"},
+            format="json",
+        )
+
+        self.assertEqual(status_response.status_code, 200)
+        self.assertEqual(payment_response.status_code, 200)
+        self.assertEqual(tracking_response.status_code, 200)
+        self.assertEqual(tracking_response.data["status"], Order.Status.ACCEPTED)
+        self.assertEqual(tracking_response.data["status_label"], "Confirmed")
+        self.assertEqual(tracking_response.data["payment_status"], Order.PaymentStatus.PAID)
+
+    def test_staff_cannot_skip_order_statuses_or_revert_payment(self):
+        staff_user = get_user_model().objects.create_user(
+            username="restricted-order-staff",
+            password="staff-password",
+            is_staff=True,
+        )
+        token = Token.objects.create(user=staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        order = Order.objects.create(
+            guest_name="Order Guest",
+            phone="+256700000000",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 2",
+        )
+
+        skip_response = self.client.patch(
+            f"/api/v1/staff/orders/{order.id}/",
+            {"status": Order.Status.COMPLETED},
+            format="json",
+        )
+        paid_response = self.client.patch(
+            f"/api/v1/staff/orders/{order.id}/",
+            {"status": Order.Status.ACCEPTED},
+            format="json",
+        )
+        paid_order_response = self.client.patch(
+            f"/api/v1/staff/orders/{order.id}/",
+            {"payment_status": Order.PaymentStatus.PAID},
+            format="json",
+        )
+        revert_response = self.client.patch(
+            f"/api/v1/staff/orders/{order.id}/",
+            {"payment_status": Order.PaymentStatus.UNPAID},
+            format="json",
+        )
+
+        self.assertEqual(skip_response.status_code, 400)
+        self.assertEqual(paid_response.status_code, 200)
+        self.assertEqual(paid_order_response.status_code, 200)
+        self.assertEqual(revert_response.status_code, 400)
+
+        cancelled_order = Order.objects.create(
+            guest_name="Cancelled Guest",
+            phone="+256700000003",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 3",
+            status=Order.Status.CANCELLED,
+        )
+        cancelled_payment_response = self.client.patch(
+            f"/api/v1/staff/orders/{cancelled_order.id}/",
+            {"payment_status": Order.PaymentStatus.PAID},
+            format="json",
+        )
+        self.assertEqual(cancelled_payment_response.status_code, 400)
+
     def test_public_order_is_visible_to_staff_orders_api(self):
         order_response = self.client.post(
             "/api/v1/orders/",
@@ -370,6 +516,19 @@ class StaffApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.ACCEPTED)
+        for next_status in (
+            Order.Status.PREPARING,
+            Order.Status.READY,
+            Order.Status.COMPLETED,
+        ):
+            response = self.client.patch(
+                f"/api/v1/staff/orders/{order.id}/",
+                {"status": next_status},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200)
+            order.refresh_from_db()
+            self.assertEqual(order.status, next_status)
 
         today = date.today()
         LodgeReservation.objects.create(

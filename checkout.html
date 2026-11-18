@@ -46,7 +46,9 @@
                 .cj-success.show{display:block;animation:cjSuccessIn .45s ease-out}
                 .cj-success-icon{position:relative;z-index:2;width:78px;height:78px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-size:38px;margin:0 auto 22px;box-shadow:0 10px 28px rgba(0,139,146,.28);animation:cjPop .55s .15s both}
                 .cj-success h2{margin:0 0 10px;font-size:32px;letter-spacing:-1px}.cj-success p{max-width:440px;margin:0 auto;color:var(--muted);line-height:1.6}
+                .cj-success-links{display:flex;justify-content:center;flex-wrap:wrap;gap:12px}
                 .cj-success a{display:inline-flex;align-items:center;justify-content:center;min-width:220px;height:52px;margin-top:26px;background:var(--red);color:#fff;border-radius:6px;font-weight:800;text-decoration:none}
+                .cj-success a.cj-success-secondary{background:#e7f3f3;color:var(--red-dark)}
                 .cj-success a:hover{background:var(--red-dark)}
                 .cj-sparks{position:absolute;inset:0;pointer-events:none}
                 .cj-spark{position:absolute;left:50%;top:98px;width:7px;height:7px;border-radius:50%;background:var(--red);animation:cjSpark 1.2s ease-out both}
@@ -95,7 +97,7 @@
                     </div>
                     <div class="cj-success" id="cjSuccess">
                         <div class="cj-sparks" id="cjSparks" aria-hidden="true"></div>
-                        <div class="cj-success-icon">✓</div><h2>Order received!</h2><p id="cjSuccessText">Your order was sent to the resort.</p><a id="cjSuccessMenu" href="/menu">Continue ordering</a>
+                        <div class="cj-success-icon">✓</div><h2>Order received!</h2><p id="cjSuccessText">Your order was sent to the resort.</p><div class="cj-success-links"><a id="cjSuccessMyOrders" href="/my-orders">Track My Order</a><a class="cj-success-secondary" id="cjSuccessMenu" href="/menu">Continue ordering</a></div>
                     </div>
                 </div>
             </main>
@@ -107,6 +109,7 @@
                             if(href.startsWith('/menu'))link.setAttribute('href','menu.html'+href.slice(5));
                             else if(href.startsWith('/cart'))link.setAttribute('href','cart.html');
                             else if(href.startsWith('/checkout'))link.setAttribute('href','checkout.html');
+                            else if(href.startsWith('/my-orders'))link.setAttribute('href','my-orders.html');
                         });
                     }
                     var key='cjCart';
@@ -179,10 +182,18 @@
                                 return data;
                             });
                         }).then(function(receipt){
+                            var trackingReady=false;
+                            try{
+                                sessionStorage.setItem('cjLastOrderNumber',receipt.number);
+                                sessionStorage.setItem('cjLastOrderPhone',order.phone);
+                                trackingReady=true;
+                            }catch(storageError){
+                                trackingReady=false;
+                            }
                             localStorage.removeItem(key);
                             document.getElementById('cjLayout').style.display='none';
                             document.querySelector('.cj-heading').style.display='none';
-                            document.getElementById('cjSuccessText').textContent='Order '+receipt.number+' has been sent to the resort. Total: UGX '+Number(receipt.total_ugx).toLocaleString('en-UG')+'. Payment is made at the resort.';
+                            document.getElementById('cjSuccessText').textContent='Order '+receipt.number+' has been sent to the resort. Total: UGX '+Number(receipt.total_ugx).toLocaleString('en-UG')+'. Payment is made at the resort.'+(trackingReady?' Opening My Orders…':' Open My Orders and enter your order number and phone to track it.');
                             document.getElementById('cjSuccess').classList.add('show');
                             var sparks=document.getElementById('cjSparks');
                             var paths=[
@@ -201,7 +212,10 @@
                                 spark.style.height=spark.style.width;
                                 sparks.appendChild(spark);
                             });
+                            var myOrdersUrl=window.location.protocol==='file:'?'my-orders.html':'/my-orders';
+                            document.getElementById('cjSuccessMyOrders').setAttribute('href',myOrdersUrl);
                             if(window.location.protocol==='file:')document.getElementById('cjSuccessMenu').setAttribute('href','menu.html');
+                            if(trackingReady)window.setTimeout(function(){window.location.assign(myOrdersUrl);},900);
                         }).catch(function(error){
                             errorNode.textContent=error instanceof TypeError?'Could not connect to the resort order service. Check your connection and try again.':error.message;
                             errorNode.hidden=false;

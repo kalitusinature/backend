@@ -1,8 +1,11 @@
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from .models import (
@@ -18,6 +21,8 @@ from .serializers import (
     LodgeSerializer,
     OrderCreateSerializer,
     OrderReceiptSerializer,
+    OrderTrackingRequestSerializer,
+    OrderTrackingSerializer,
     ProductSerializer,
     ReservationCreateSerializer,
     ReservationReceiptSerializer,
@@ -101,6 +106,23 @@ class OrderCreate(APIView):
         return Response(
             OrderReceiptSerializer(order).data, status=status.HTTP_201_CREATED
         )
+
+
+class OrderTrack(APIView):
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "order_track"
+
+    def post(self, request):
+        serializer = OrderTrackingRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order = get_object_or_404(
+            Order.objects.prefetch_related("items"),
+            number__iexact=serializer.validated_data["number"].strip(),
+            phone=serializer.validated_data["phone"],
+        )
+        return Response(OrderTrackingSerializer(order).data)
 
 
 class ReservationCreate(APIView):

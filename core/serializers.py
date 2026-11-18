@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Category, Lodge, LodgeReservation, Order, Product
+from .models import Category, Lodge, LodgeReservation, Order, OrderItem, Product
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -109,6 +109,42 @@ class OrderReceiptSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ("number", "status", "total_ugx", "created_at")
+
+
+class OrderTrackingRequestSerializer(serializers.Serializer):
+    number = serializers.CharField(max_length=20)
+    phone = serializers.CharField(max_length=40)
+
+
+class OrderTrackingItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = ("product_name", "unit_price_ugx", "quantity", "line_total_ugx")
+
+
+class OrderTrackingSerializer(serializers.ModelSerializer):
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    payment_status_label = serializers.CharField(
+        source="get_payment_status_display", read_only=True
+    )
+    items = OrderTrackingItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = (
+            "number",
+            "status",
+            "status_label",
+            "order_type",
+            "location",
+            "payment_method",
+            "payment_status",
+            "payment_status_label",
+            "total_ugx",
+            "created_at",
+            "updated_at",
+            "items",
+        )
 
 
 class ReservationReceiptSerializer(serializers.ModelSerializer):

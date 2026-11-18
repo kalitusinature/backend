@@ -247,6 +247,49 @@ class StaffOrderUpdateSerializer(serializers.ModelSerializer):
         model = Order
         fields = ("status", "payment_status")
 
+    def validate(self, attrs):
+        order = self.instance
+        if order is None:
+            return attrs
+
+        status_value = attrs.get("status", order.status)
+        allowed_transitions = {
+            Order.Status.NEW: {Order.Status.ACCEPTED, Order.Status.CANCELLED},
+            Order.Status.ACCEPTED: {
+                Order.Status.PREPARING,
+                Order.Status.CANCELLED,
+            },
+            Order.Status.PREPARING: {Order.Status.READY, Order.Status.CANCELLED},
+            Order.Status.READY: {Order.Status.COMPLETED, Order.Status.CANCELLED},
+            Order.Status.COMPLETED: set(),
+            Order.Status.CANCELLED: set(),
+        }
+        if (
+            status_value != order.status
+            and status_value not in allowed_transitions.get(order.status, set())
+        ):
+            raise serializers.ValidationError(
+                {"status": "This order cannot move to the requested status."}
+            )
+
+        payment_status = attrs.get("payment_status", order.payment_status)
+        if (
+            status_value == Order.Status.CANCELLED
+            and payment_status == Order.PaymentStatus.PAID
+            and order.payment_status != Order.PaymentStatus.PAID
+        ):
+            raise serializers.ValidationError(
+                {"payment_status": "A cancelled order cannot be marked paid."}
+            )
+        if (
+            order.payment_status == Order.PaymentStatus.PAID
+            and payment_status != Order.PaymentStatus.PAID
+        ):
+            raise serializers.ValidationError(
+                {"payment_status": "A paid order cannot be marked unpaid."}
+            )
+        return attrs
+
 
 class StaffReservationSerializer(serializers.ModelSerializer):
     lodge_name = serializers.CharField(source="lodge.name", read_only=True)

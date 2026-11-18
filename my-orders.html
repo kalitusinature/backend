@@ -1,0 +1,251 @@
+<t t-name="website.cj_my_orders">
+    <t t-call="website.layout">
+        <div id="wrap" class="oe_structure oe_empty">
+            <style>
+                .cj-orders-page{min-height:100vh;background:#f4f7f6;color:#242b27;font-family:Arial,Helvetica,sans-serif}
+                .cj-orders-container{width:min(900px,calc(100% - 32px));margin:46px auto 80px}
+                .cj-orders-heading{margin-bottom:24px}
+                .cj-orders-heading .eyebrow{color:#008B92;font-size:12px;font-weight:800;letter-spacing:1.6px}
+                .cj-orders-heading h1{margin:8px 0;font-size:38px;letter-spacing:-1px}
+                .cj-orders-heading p{max-width:620px;margin:0;color:#6f7a74;line-height:1.6}
+                .cj-orders-lookup,.cj-order-result{padding:24px;background:#fff;border:1px solid #e3e9e5;border-radius:10px;box-shadow:0 12px 32px rgba(21,40,30,.06)}
+                .cj-orders-lookup{display:grid;grid-template-columns:1fr 1fr auto;align-items:end;gap:14px}
+                .cj-orders-field{display:grid;gap:7px}
+                .cj-orders-field label{color:#47564e;font-size:13px;font-weight:700}
+                .cj-orders-field input{width:100%;height:46px;padding:0 12px;border:1px solid #d6dfd9;border-radius:6px;color:#27342d;background:#fff;font-size:15px}
+                .cj-orders-field input:focus{outline:2px solid rgba(0,139,146,.18);border-color:#008B92}
+                .cj-orders-submit{height:46px;padding:0 20px;border:0;border-radius:6px;color:#fff;background:#008B92;font-size:14px;font-weight:800;cursor:pointer}
+                .cj-orders-submit:disabled{opacity:.6;cursor:wait}
+                .cj-order-notice{min-height:24px;margin:16px 0;color:#557064;font-size:13px}
+                .cj-order-notice.error{color:#a63d36}
+                .cj-order-result:empty{display:none}
+                .cj-order-result{margin-top:8px}
+                .cj-order-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-bottom:18px;border-bottom:1px solid #edf1ee}
+                .cj-order-heading h2{margin:0;color:#2e4539;font-size:23px}
+                .cj-order-heading small{display:block;margin-top:5px;color:#89968f;font-size:12px}
+                .cj-order-status{display:inline-flex;align-items:center;min-height:30px;padding:0 11px;border-radius:20px;color:#315b48;background:#eaf4ed;font-size:12px;font-weight:800}
+                .cj-order-status.cancelled{color:#99443f;background:#fff0ee}
+                .cj-order-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:18px 0}
+                .cj-order-meta div{display:grid;gap:5px}
+                .cj-order-meta span{color:#89968f;font-size:11px}
+                .cj-order-meta strong{color:#41534a;font-size:13px}
+                .cj-order-items h3{margin:0 0 8px;color:#41534a;font-size:14px}
+                .cj-order-item{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid #eff2f0;color:#5e6d65;font-size:13px}
+                .cj-order-item strong{color:#34483c;white-space:nowrap}
+                .cj-order-total{display:flex;justify-content:space-between;gap:16px;margin-top:16px;color:#34483c;font-size:17px;font-weight:800}
+                .cj-order-update-note{margin:18px 0 0;color:#6f7a74;font-size:12px;line-height:1.5}
+                @media(max-width:680px){
+                    .cj-orders-container{width:calc(100% - 24px);margin:28px auto 56px}
+                    .cj-orders-heading h1{font-size:32px}
+                    .cj-orders-lookup{grid-template-columns:1fr}
+                    .cj-orders-submit{width:100%}
+                    .cj-order-meta{grid-template-columns:1fr 1fr}
+                }
+                @media(max-width:420px){.cj-order-heading{align-items:flex-start;flex-direction:column}.cj-order-meta{grid-template-columns:1fr}}
+            </style>
+            <main class="cj-orders-page">
+                <t t-call="website.cj_header"/>
+                <div class="cj-orders-container">
+                    <header class="cj-orders-heading">
+                        <div class="eyebrow">YOUR RESORT ORDER</div>
+                        <h1>My Orders</h1>
+                        <p>Enter the order number and phone number used at checkout to see the latest status. This page refreshes automatically while your order is active.</p>
+                    </header>
+                    <form id="cjOrderLookup" class="cj-orders-lookup">
+                        <div class="cj-orders-field">
+                            <label for="cjOrderNumber">Order number</label>
+                            <input id="cjOrderNumber" name="number" required="required" maxlength="20" autocomplete="off" placeholder="e.g. KR-1234ABCD"/>
+                        </div>
+                        <div class="cj-orders-field">
+                            <label for="cjOrderPhone">Phone number</label>
+                            <input id="cjOrderPhone" name="phone" type="tel" required="required" maxlength="40" autocomplete="tel" placeholder="+256 700 000 000"/>
+                        </div>
+                        <button class="cj-orders-submit" id="cjOrderSubmit" type="submit">Find order</button>
+                    </form>
+                    <div class="cj-order-notice" id="cjOrderNotice" role="status" aria-live="polite"></div>
+                    <section class="cj-order-result" id="cjOrderResult" aria-label="Order details"></section>
+                </div>
+            </main>
+            <script>
+                (function(){
+                    var apiBase=(window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1').replace(/\/+$/,'');
+                    var form=document.getElementById('cjOrderLookup');
+                    var numberInput=document.getElementById('cjOrderNumber');
+                    var phoneInput=document.getElementById('cjOrderPhone');
+                    var submitButton=document.getElementById('cjOrderSubmit');
+                    var notice=document.getElementById('cjOrderNotice');
+                    var result=document.getElementById('cjOrderResult');
+                    var latestOrder=null;
+                    var latestNumber='';
+                    var latestPhone='';
+                    var requestNumber=0;
+                    var isFetching=false;
+
+                    function showNotice(message,isError){
+                        notice.textContent=message;
+                        notice.className='cj-order-notice'+(isError?' error':'');
+                    }
+
+                    function addMeta(container,label,value){
+                        var field=document.createElement('div');
+                        var labelNode=document.createElement('span');
+                        var valueNode=document.createElement('strong');
+                        labelNode.textContent=label;
+                        valueNode.textContent=value;
+                        field.appendChild(labelNode);
+                        field.appendChild(valueNode);
+                        container.appendChild(field);
+                    }
+
+                    function formatAmount(amount){
+                        return 'UGX '+Number(amount).toLocaleString('en-UG');
+                    }
+
+                    function renderOrder(order){
+                        result.replaceChildren();
+                        var heading=document.createElement('div');
+                        heading.className='cj-order-heading';
+                        var titleGroup=document.createElement('div');
+                        var title=document.createElement('h2');
+                        var created=document.createElement('small');
+                        var status=document.createElement('span');
+                        title.textContent=order.number;
+                        created.textContent='Placed '+new Date(order.created_at).toLocaleString();
+                        status.className='cj-order-status'+(order.status==='cancelled'?' cancelled':'');
+                        status.textContent=order.status_label;
+                        titleGroup.appendChild(title);
+                        titleGroup.appendChild(created);
+                        heading.appendChild(titleGroup);
+                        heading.appendChild(status);
+                        result.appendChild(heading);
+
+                        var meta=document.createElement('div');
+                        meta.className='cj-order-meta';
+                        addMeta(meta,'Order status',order.status_label);
+                        addMeta(meta,'Payment',order.payment_status_label);
+                        addMeta(meta,'Service location',order.location);
+                        addMeta(meta,'Order type',order.order_type==='dine_in'?'Dine-in':'Lodge / cottage');
+                        addMeta(meta,'Payment method',order.payment_method==='cash'?'Cash at resort':'Card at counter');
+                        result.appendChild(meta);
+
+                        var itemsSection=document.createElement('div');
+                        itemsSection.className='cj-order-items';
+                        var itemsTitle=document.createElement('h3');
+                        itemsTitle.textContent='Items';
+                        itemsSection.appendChild(itemsTitle);
+                        order.items.forEach(function(item){
+                            var line=document.createElement('div');
+                            var description=document.createElement('span');
+                            var amount=document.createElement('strong');
+                            line.className='cj-order-item';
+                            description.textContent=item.quantity+' × '+item.product_name;
+                            amount.textContent=formatAmount(item.line_total_ugx);
+                            line.appendChild(description);
+                            line.appendChild(amount);
+                            itemsSection.appendChild(line);
+                        });
+                        result.appendChild(itemsSection);
+
+                        var total=document.createElement('div');
+                        var totalLabel=document.createElement('span');
+                        var totalAmount=document.createElement('strong');
+                        total.className='cj-order-total';
+                        totalLabel.textContent='Total';
+                        totalAmount.textContent=formatAmount(order.total_ugx);
+                        total.appendChild(totalLabel);
+                        total.appendChild(totalAmount);
+                        result.appendChild(total);
+
+                        var updateNote=document.createElement('p');
+                        updateNote.className='cj-order-update-note';
+                        updateNote.textContent='Order updates appear here automatically. Keep this page open to see status or payment changes.';
+                        result.appendChild(updateNote);
+                    }
+
+                    function lookup(isPolling){
+                        if(isPolling&&isFetching)return;
+                        var number=numberInput.value.trim();
+                        var phone=phoneInput.value.trim();
+                        if(!number||!phone){
+                            if(!isPolling)showNotice('Enter both your order number and phone number.',true);
+                            return;
+                        }
+                        var currentRequest=++requestNumber;
+                        isFetching=true;
+                        submitButton.disabled=true;
+                        if(!isPolling)showNotice('Looking up your order…',false);
+                        fetch(apiBase+'/orders/track/',{
+                            method:'POST',
+                            headers:{Accept:'application/json','Content-Type':'application/json'},
+                            body:JSON.stringify({number:number,phone:phone})
+                        }).then(function(response){
+                            return response.text().then(function(text){
+                                var data=null;
+                                try{data=text?JSON.parse(text):null;}catch(parseError){}
+                                if(!response.ok){
+                                    if(response.status===404)throw new Error('No matching order found. Check the order number and phone number.');
+                                    if(response.status===429)throw new Error('Too many lookup attempts. Please wait before trying again.');
+                                    if(data&&typeof data.detail==='string')throw new Error(data.detail);
+                                    throw new Error('Could not look up the order (HTTP '+response.status+').');
+                                }
+                                if(!data||!Array.isArray(data.items))throw new Error('The order service returned an invalid response.');
+                                return data;
+                            });
+                        }).then(function(order){
+                            if(currentRequest!==requestNumber)return;
+                            var previous=latestOrder;
+                            latestOrder=order;
+                            latestNumber=number.toUpperCase();
+                            latestPhone=phone;
+                            renderOrder(order);
+                            var updates=[];
+                            if(previous&&previous.number===order.number&&previous.status!==order.status){
+                                updates.push('order '+order.number+' is now '+order.status_label);
+                            }
+                            if(previous&&previous.number===order.number&&previous.payment_status!==order.payment_status){
+                                updates.push('payment is now '+order.payment_status_label);
+                            }
+                            if(updates.length){
+                                showNotice('Update: '+updates.join('; ')+'.',false);
+                            }else if(!isPolling){
+                                showNotice('Showing order '+order.number+'.',false);
+                            }
+                        }).catch(function(error){
+                            if(currentRequest===requestNumber){
+                                showNotice(error instanceof TypeError?'Could not connect to the resort order service. Check your connection and try again.':error.message,true);
+                            }
+                        }).finally(function(){
+                            if(currentRequest===requestNumber){
+                                submitButton.disabled=false;
+                                isFetching=false;
+                            }
+                        });
+                    }
+
+                    form.addEventListener('submit',function(event){
+                        event.preventDefault();
+                        lookup(false);
+                    });
+
+                    window.setInterval(function(){
+                        if(latestOrder&&latestOrder.status!=='cancelled'&&(latestOrder.status!=='completed'||latestOrder.payment_status!=='paid')&&document.visibilityState==='visible'&&numberInput.value.trim().toUpperCase()===latestNumber&&phoneInput.value.trim()===latestPhone){
+                            lookup(true);
+                        }
+                    },30000);
+
+                    try{
+                        var savedNumber=sessionStorage.getItem('cjLastOrderNumber');
+                        var savedPhone=sessionStorage.getItem('cjLastOrderPhone');
+                        if(savedNumber&&savedPhone){
+                            numberInput.value=savedNumber;
+                            phoneInput.value=savedPhone;
+                            lookup(false);
+                        }
+                    }catch(storageError){
+                        showNotice('Enter your order number and phone number to track your order.',false);
+                    }
+                })();
+            </script>
+        </div>
+    </t>
+</t>

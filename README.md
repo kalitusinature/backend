@@ -77,7 +77,11 @@ Successful response (`201`) contains the order number, status, server-calculated
 
 The Odoo menu and product pages load categories and available products from this API. Checkout posts orders to Render; the server validates product slugs and calculates prices from its catalog. New orders are stored in Render's database and appear in the GitHub Pages admin portal's Orders view, which refreshes every 30 seconds.
 
-The standalone Odoo page templates in this repository must also be copied into and published from the Odoo Website editor; pushing them to GitHub does not update Odoo pages automatically.
+Customers are sent to the Odoo My Orders page after checkout. The page looks up an order using its number and checkout phone, and checks for status/payment changes while open. The lookup response excludes the guest name and phone number.
+
+`POST /api/v1/orders/track/` accepts an order number and phone number and returns the matching order's status and item totals. Both values are required; a non-matching pair returns `404`. The endpoint is rate-limited to 600 lookups per hour per client.
+
+The standalone Odoo page templates in this repository, including `my-orders.html`, must also be copied into and published from the Odoo Website editor; pushing them to GitHub does not update Odoo pages automatically.
 
 ### Request a lodge reservation
 
@@ -103,7 +107,7 @@ New requests are `pending`; a `201` response includes a reservation reference. S
 
 `/staff/` is for authenticated staff accounts. It shows recent orders and reservations, supports status changes, and links to catalog management:
 
-- Orders: accept, prepare, mark ready/completed, or cancel.
+- Orders: open order details, confirm, prepare, mark ready/delivered, cancel, or mark payment received. Order statuses can only move forward through the service flow; delivered orders retain the backend `completed` status.
 - Reservations: confirm, decline, or cancel; conflicting confirmed stays cannot be approved.
 - Products: create and maintain food/drink items, UGX price, uploaded Cloudinary image, availability, and featured state.
 - Categories: create menu sections and control order/visibility.

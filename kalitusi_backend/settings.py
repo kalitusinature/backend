@@ -122,6 +122,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "300/hour",
         "order_create": "30/hour",
+        "order_track": "600/hour",
         "reservation_create": "10/hour",
         "staff_login": "10/hour",
     },

@@ -1,6 +1,13 @@
 from django.urls import path
 
-from .api_views import CategoryList, LodgeList, OrderCreate, ProductList, ReservationCreate
+from .api_views import (
+    CategoryList,
+    LodgeList,
+    OrderCreate,
+    OrderTrack,
+    ProductList,
+    ReservationCreate,
+)
 from .staff_api_views import (
     StaffCategoryDetail,
     StaffCategoryListCreate,
@@ -24,6 +31,7 @@ urlpatterns = [
     path("products/", ProductList.as_view(), name="api_products"),
     path("lodges/", LodgeList.as_view(), name="api_lodges"),
     path("orders/", OrderCreate.as_view(), name="api_orders"),
+    path("orders/track/", OrderTrack.as_view(), name="api_order_track"),
     path("reservations/", ReservationCreate.as_view(), name="api_reservations"),
     path("staff/dashboard/", StaffDashboard.as_view(), name="staff_api_dashboard"),
     path("staff/orders/", StaffOrderList.as_view(), name="staff_api_orders"),

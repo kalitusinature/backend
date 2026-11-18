@@ -78,10 +78,10 @@ class Lodge(models.Model):
 class Order(models.Model):
     class Status(models.TextChoices):
         NEW = "new", "New"
-        ACCEPTED = "accepted", "Accepted"
+        ACCEPTED = "accepted", "Confirmed"
         PREPARING = "preparing", "Preparing"
         READY = "ready", "Ready"
-        COMPLETED = "completed", "Completed"
+        COMPLETED = "completed", "Delivered"
         CANCELLED = "cancelled", "Cancelled"
 
     class OrderType(models.TextChoices):
