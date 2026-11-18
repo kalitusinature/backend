@@ -1,0 +1,185 @@
+import uuid
+
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+from django.utils.text import slugify
+
+
+class Category(models.Model):
+    name = models.CharField(max_length=80, unique=True)
+    slug = models.SlugField(max_length=90, unique=True, blank=True)
+    description = models.CharField(max_length=240, blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        verbose_name_plural = "categories"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class Product(models.Model):
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=130, unique=True, blank=True)
+    category = models.ForeignKey(
+        Category, on_delete=models.PROTECT, related_name="products"
+    )
+    description = models.TextField(blank=True)
+    price_ugx = models.PositiveIntegerField(validators=[MinValueValidator(0)])
+    image_url = models.URLField(max_length=1000, blank=True)
+    is_available = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class Lodge(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(max_length=130, unique=True, blank=True)
+    description = models.TextField(blank=True)
+    capacity = models.PositiveSmallIntegerField(
+        default=2, validators=[MinValueValidator(1), MaxValueValidator(50)]
+    )
+    image_url = models.URLField(max_length=1000, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class Order(models.Model):
+    class Status(models.TextChoices):
+        NEW = "new", "New"
+        ACCEPTED = "accepted", "Accepted"
+        PREPARING = "preparing", "Preparing"
+        READY = "ready", "Ready"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class OrderType(models.TextChoices):
+        DINE_IN = "dine_in", "Dine-in"
+        LODGE = "lodge", "Lodge / cottage"
+
+    class PaymentMethod(models.TextChoices):
+        CASH = "cash", "Cash at resort"
+        CARD_AT_COUNTER = "card_at_counter", "Card at counter"
+
+    class PaymentStatus(models.TextChoices):
+        UNPAID = "unpaid", "Unpaid"
+        PAID = "paid", "Paid at resort"
+
+    number = models.CharField(max_length=20, unique=True, editable=False)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.NEW, db_index=True
+    )
+    order_type = models.CharField(max_length=12, choices=OrderType.choices)
+    location = models.CharField(max_length=80)
+    guest_name = models.CharField(max_length=120)
+    phone = models.CharField(max_length=40)
+    payment_method = models.CharField(
+        max_length=24, choices=PaymentMethod.choices, default=PaymentMethod.CASH
+    )
+    payment_status = models.CharField(
+        max_length=12, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID
+    )
+    note = models.TextField(blank=True)
+    total_ugx = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.number:
+            self.number = "KR-" + uuid.uuid4().hex[:8].upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.number
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(
+        Product, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    product_name = models.CharField(max_length=120)
+    unit_price_ugx = models.PositiveIntegerField()
+    quantity = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(99)]
+    )
+    line_total_ugx = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.quantity} × {self.product_name}"
+
+
+class LodgeReservation(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        CONFIRMED = "confirmed", "Confirmed"
+        DECLINED = "declined", "Declined"
+        CANCELLED = "cancelled", "Cancelled"
+
+    reference = models.CharField(max_length=20, unique=True, editable=False)
+    lodge = models.ForeignKey(
+        Lodge, on_delete=models.PROTECT, related_name="reservations"
+    )
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    guest_name = models.CharField(max_length=120)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=40)
+    check_in = models.DateField()
+    check_out = models.DateField()
+    adults = models.PositiveSmallIntegerField(
+        default=1, validators=[MinValueValidator(1), MaxValueValidator(50)]
+    )
+    children = models.PositiveSmallIntegerField(
+        default=0, validators=[MinValueValidator(0), MaxValueValidator(50)]
+    )
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            self.reference = "LR-" + uuid.uuid4().hex[:8].upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.reference} — {self.guest_name}"

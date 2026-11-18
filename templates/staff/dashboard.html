@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Staff portal | Kalitusi Resort</title>
+    <style>
+        :root{--teal:#008b92;--dark:#172321;--muted:#66716f;--line:#e3e9e6;--bg:#f4f7f6}
+        *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--dark);font:14px Arial,sans-serif}
+        header{background:#fff;border-bottom:1px solid var(--line);padding:16px max(20px,calc((100vw - 1200px)/2));display:flex;justify-content:space-between;align-items:center}
+        header strong{font-size:18px}header form{margin:0}button,a.btn{border:0;background:var(--teal);color:#fff;text-decoration:none;padding:10px 14px;border-radius:4px;font-weight:700;cursor:pointer}
+        .wrap{width:min(1200px,calc(100% - 32px));margin:28px auto 60px}h1{font-size:28px;margin:0 0 18px}
+        .flash{padding:12px 14px;background:#e8f5f2;border:1px solid #c7e6df;margin-bottom:12px;border-radius:4px}.flash.error{background:#fff1f0;border-color:#f0c2be}
+        .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+        .stat,.panel{background:#fff;border:1px solid var(--line);border-radius:6px;padding:17px}
+        .stat span{color:var(--muted);display:block;font-size:12px}.stat strong{font-size:24px;display:block;margin-top:8px}
+        .links{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+        .panel{margin-top:16px;overflow:hidden}.panel h2{font-size:18px;margin:0 0 14px}
+        .table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:760px}th,td{text-align:left;padding:11px 9px;border-top:1px solid var(--line);vertical-align:middle}
+        th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+        .status-form{display:flex;gap:6px}select{border:1px solid #cfd9d5;border-radius:4px;padding:7px;background:#fff}
+        .status-form button{padding:8px 10px}.muted{color:var(--muted)}.empty{color:var(--muted);padding:14px 0}
+        @media(max-width:850px){.stats{grid-template-columns:repeat(2,1fr)}}
+        @media(max-width:520px){header{padding:14px 16px}.wrap{width:calc(100% - 20px);margin-top:20px}.stats{gap:8px}.stat,.panel{padding:13px}.stat strong{font-size:20px}.links a{flex:1;text-align:center}}
+    </style>
+</head>
+<body>
+    <header>
+        <strong>Kalitusi Resort · Staff Portal</strong>
+        <form method="post" action="{% url 'staff_logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form>
+    </header>
+    <main class="wrap">
+        <h1>Operations overview</h1>
+        {% for message in messages %}<div class="flash{% if message.tags == 'error' %} error{% endif %}">{{ message }}</div>{% endfor %}
+        <section class="stats">
+            <div class="stat"><span>Open orders</span><strong>{{ order_count }}</strong></div>
+            <div class="stat"><span>New orders</span><strong>{{ new_order_count }}</strong></div>
+            <div class="stat"><span>Pending reservations</span><strong>{{ pending_reservation_count }}</strong></div>
+            <div class="stat"><span>Menu products</span><strong>{{ product_count }}</strong></div>
+            <div class="stat"><span>Categories · Lodges</span><strong>{{ category_count }} · {{ lodge_count }}</strong></div>
+        </section>
+        <nav class="links" aria-label="Management links">
+            <a class="btn" href="{% url 'admin:core_order_changelist' %}">All orders</a>
+            <a class="btn" href="{% url 'admin:core_product_changelist' %}">Manage food &amp; drinks</a>
+            <a class="btn" href="{% url 'admin:core_category_changelist' %}">Manage categories</a>
+            <a class="btn" href="{% url 'admin:core_lodge_changelist' %}">Manage lodges</a>
+            <a class="btn" href="{% url 'admin:core_lodgereservation_changelist' %}">All reservations</a>
+        </nav>
+        <section class="panel">
+            <h2>Recent orders</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Order</th><th>Guest</th><th>Type / location</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
+                    <tbody>
+                    {% for order in orders %}
+                        <tr>
+                            <td><strong>{{ order.number }}</strong><br/><span class="muted">{{ order.created_at|date:"M j, H:i" }}</span></td>
+                            <td>{{ order.guest_name }}<br/><span class="muted">{{ order.phone }}</span></td>
+                            <td>{{ order.get_order_type_display }} · {{ order.location }}</td>
+                            <td>{% for item in order.items.all %}{{ item.quantity }} × {{ item.product_name }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}</td>
+                            <td>UGX {{ order.total_ugx }}</td>
+                            <td><form class="status-form" method="post" action="{% url 'staff_order_status' order.id %}">{% csrf_token %}<select name="status">{% for value,label in order_statuses %}<option value="{{ value }}"{% if order.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button type="submit">Save</button></form></td>
+                        </tr>
+                    {% empty %}<tr><td colspan="6" class="empty">No orders have been received yet.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <section class="panel">
+            <h2>Lodge &amp; cottage reservations</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Reference</th><th>Guest</th><th>Lodge</th><th>Dates</th><th>Guests</th><th>Status</th></tr></thead>
+                    <tbody>
+                    {% for reservation in reservations %}
+                        <tr>
+                            <td><strong>{{ reservation.reference }}</strong><br/><span class="muted">{{ reservation.created_at|date:"M j, H:i" }}</span></td>
+                            <td>{{ reservation.guest_name }}<br/><span class="muted">{{ reservation.phone }}</span></td>
+                            <td>{{ reservation.lodge.name }}</td>
+                            <td>{{ reservation.check_in }} – {{ reservation.check_out }}</td>
+                            <td>{{ reservation.adults }} adult{{ reservation.adults|pluralize }}{% if reservation.children %}, {{ reservation.children }} child{{ reservation.children|pluralize }}{% endif %}</td>
+                            <td><form class="status-form" method="post" action="{% url 'staff_reservation_status' reservation.id %}">{% csrf_token %}<select name="status">{% for value,label in reservation_statuses %}<option value="{{ value }}"{% if reservation.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button type="submit">Save</button></form></td>
+                        </tr>
+                    {% empty %}<tr><td colspan="6" class="empty">No lodge reservations have been received yet.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
