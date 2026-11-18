@@ -9,6 +9,9 @@ load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-this-secret-key")
 DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
+CLOUDINARY_NAME = os.environ.get("CLOUDINARY_NAME", "").strip()
+CLOUDINARY_KEY = os.environ.get("CLOUDINARY_KEY", "").strip()
+CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_SECRET", "").strip()
 ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS", "localhost,127.0.0.1,.onrender.com"
 ).split(",")

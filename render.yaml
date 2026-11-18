@@ -25,6 +25,12 @@ services:
         fromDatabase:
           name: kalitusi-db
           property: connectionString
+      - key: CLOUDINARY_NAME
+        sync: false
+      - key: CLOUDINARY_KEY
+        sync: false
+      - key: CLOUDINARY_SECRET
+        sync: false
       - key: CORS_ALLOWED_ORIGINS
         value: https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io
       - key: CSRF_TRUSTED_ORIGINS

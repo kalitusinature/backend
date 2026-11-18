@@ -22,14 +22,20 @@ Health check: `http://127.0.0.1:8000/health/`
 
 Create categories, products, and lodges in Django admin before using the public API. Product prices are stored as whole UGX amounts. Lodge reservations are requests (`pending`) until staff confirms them. A reservation can only be confirmed if no other confirmed reservation overlaps the requested dates.
 
+Set `CLOUDINARY_NAME`, `CLOUDINARY_KEY`, and `CLOUDINARY_SECRET` in the local
+`.env` file to enable product image uploads. Keep the Cloudinary API secret out
+of source control.
+
 ## Render deployment
 
 1. Push this project to a GitHub repository and create a Render Blueprint from `render.yaml`.
 2. Set `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, and `DJANGO_SUPERUSER_PASSWORD` in the Render service environment. Use a unique, strong password. The startup command creates this initial admin only when the username does not already exist.
-3. Deploy. Render provisions PostgreSQL, runs migrations, collects static files, bootstraps the initial admin, and starts Gunicorn.
-4. Open `/staff/` on the deployed service and add menu categories, products, and lodge/cottage inventory.
-5. Add the final Render service origin to `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` if it differs from the value in `render.yaml`.
-6. Configure the Odoo frontend to use the deployed service base URL (no trailing slash) as `window.CJ_API_BASE`. Do not put database credentials or Django secrets in Odoo.
+3. Set `CLOUDINARY_NAME`, `CLOUDINARY_KEY`, and `CLOUDINARY_SECRET` in the
+   Render service environment using values from your Cloudinary API settings.
+4. Deploy. Render provisions PostgreSQL, runs migrations, collects static files, bootstraps the initial admin, and starts Gunicorn.
+5. Open `/staff/` on the deployed service and add menu categories, products, and lodge/cottage inventory.
+6. Add the final Render service origin to `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` if it differs from the value in `render.yaml`.
+7. Configure the Odoo frontend to use the deployed service base URL (no trailing slash) as `window.CJ_API_BASE`. Do not put database credentials or Django secrets in Odoo.
 
 The Blueprint uses a Render PostgreSQL database and allows browser API calls only from `https://kalitusi-nature-resort.odoo.com`. Update that origin if the Odoo site domain changes.
 
@@ -95,7 +101,7 @@ New requests are `pending`; a `201` response includes a reservation reference. S
 
 - Orders: accept, prepare, mark ready/completed, or cancel.
 - Reservations: confirm, decline, or cancel; conflicting confirmed stays cannot be approved.
-- Products: create and maintain food/drink items, UGX price, image URL, availability, and featured state.
+- Products: create and maintain food/drink items, UGX price, uploaded Cloudinary image, availability, and featured state.
 - Categories: create menu sections and control order/visibility.
 - Lodges: maintain lodge/cottage details, capacity, image, and active state.
 
@@ -116,6 +122,10 @@ The portal uses these protected endpoints after login:
 - `GET, POST /staff/categories/` and `GET, PATCH /staff/categories/<id>/`
 - `GET, POST /staff/lodges/` and `GET, PATCH /staff/lodges/<id>/`
 - `GET /staff/reservations/` and `PATCH /staff/reservations/<id>/`
+
+Uploaded product images are optimized in the browser and sent to Cloudinary by
+the authenticated backend. PostgreSQL stores the secure delivery URL and asset
+ID; existing image URLs remain supported.
 
 Set `CORS_ALLOWED_ORIGINS` on Render to include both the Odoo storefront origin
 and `https://kalitusinature.github.io`. Create the first staff account using

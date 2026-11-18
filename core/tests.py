@@ -1,7 +1,9 @@
 from datetime import date, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -208,6 +210,123 @@ class StaffApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["price_ugx"], 9000)
+
+    def test_staff_can_upload_product_image_for_public_menu(self):
+        self.login_as_staff()
+        with (
+            override_settings(
+                CLOUDINARY_NAME="demo",
+                CLOUDINARY_KEY="test-key",
+                CLOUDINARY_SECRET="test-secret",
+            ),
+            patch(
+                "core.staff_api_serializers.cloudinary.uploader.upload",
+                side_effect=lambda image, **options: {
+                    "secure_url": (
+                        "https://res.cloudinary.com/demo/image/upload/"
+                        f"{options['public_id']}.webp"
+                    ),
+                    "public_id": options["public_id"],
+                },
+            ) as upload_image,
+        ):
+            response = self.client.post(
+                "/api/v1/staff/products/",
+                {
+                    "name": "Uploaded Dish",
+                    "category_id": self.category.id,
+                    "description": "",
+                    "price_ugx": 8000,
+                    "image_url": "",
+                    "image_file": SimpleUploadedFile(
+                        "dish.webp", b"sample image", content_type="image/webp"
+                    ),
+                    "is_available": True,
+                    "is_featured": False,
+                    "sort_order": 0,
+                },
+                format="multipart",
+            )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["image_url"].startswith("https://res.cloudinary.com/"))
+        upload_image.assert_called_once()
+
+        public_products = self.client.get("/api/v1/products/")
+        uploaded_product = next(
+            product
+            for product in public_products.data
+            if product["id"] == response.data["id"]
+        )
+        self.assertEqual(uploaded_product["image"], response.data["image_url"])
+
+    def test_staff_product_image_rejects_data_urls(self):
+        self.login_as_staff()
+        response = self.client.post(
+            "/api/v1/staff/products/",
+            {
+                "name": "Invalid Image Dish",
+                "category_id": self.category.id,
+                "description": "",
+                "price_ugx": 8000,
+                "image_url": "data:text/html;base64,PGgxPk5vdCBhbiBpbWFnZTwvaDE+",
+                "is_available": True,
+                "is_featured": False,
+                "sort_order": 0,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("image_url", response.data)
+
+    def test_staff_product_image_rejects_oversized_uploads(self):
+        self.login_as_staff()
+        response = self.client.post(
+            "/api/v1/staff/products/",
+            {
+                "name": "Oversized Image Dish",
+                "category_id": self.category.id,
+                "description": "",
+                "price_ugx": 8000,
+                "image_file": SimpleUploadedFile(
+                    "large.webp",
+                    b"x" * (1_572_864 + 1),
+                    content_type="image/webp",
+                ),
+                "is_available": True,
+                "is_featured": False,
+                "sort_order": 0,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("image_file", response.data)
+
+    def test_product_image_upload_requires_cloudinary_configuration(self):
+        self.login_as_staff()
+        with override_settings(
+            CLOUDINARY_NAME="",
+            CLOUDINARY_KEY="",
+            CLOUDINARY_SECRET="",
+        ):
+            response = self.client.post(
+                "/api/v1/staff/products/",
+                {
+                    "name": "Unconfigured Image Dish",
+                    "category_id": self.category.id,
+                    "description": "",
+                    "price_ugx": 8000,
+                    "image_file": SimpleUploadedFile(
+                        "dish.webp", b"sample image", content_type="image/webp"
+                    ),
+                    "is_available": True,
+                    "is_featured": False,
+                    "sort_order": 0,
+                },
+                format="multipart",
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("image_file", response.data)
+        self.assertFalse(Product.objects.filter(name="Unconfigured Image Dish").exists())
 
     def test_staff_can_accept_orders_and_conflicting_reservations_cannot_be_confirmed(self):
         self.login_as_staff()

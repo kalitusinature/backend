@@ -34,6 +34,7 @@ class Product(models.Model):
     description = models.TextField(blank=True)
     price_ugx = models.PositiveIntegerField(validators=[MinValueValidator(0)])
     image_url = models.URLField(max_length=1000, blank=True)
+    image_public_id = models.CharField(max_length=255, blank=True)
     is_available = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     sort_order = models.PositiveSmallIntegerField(default=0)
