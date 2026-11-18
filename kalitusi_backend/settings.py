@@ -99,6 +99,8 @@ CORS_ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+if "https://kalitusinature.github.io" not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append("https://kalitusinature.github.io")
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
