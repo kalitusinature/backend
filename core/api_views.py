@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
+from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
@@ -27,6 +30,8 @@ from .serializers import (
     ReservationCreateSerializer,
     ReservationReceiptSerializer,
 )
+
+ORDER_TRACKING_RETENTION = timedelta(days=2)
 
 
 class CategoryList(generics.ListAPIView):
@@ -120,8 +125,13 @@ class OrderTrack(APIView):
         order = get_object_or_404(
             Order.objects.prefetch_related("items"),
             number__iexact=serializer.validated_data["number"].strip(),
-            phone=serializer.validated_data["phone"],
+            email__iexact=serializer.validated_data["email"],
         )
+        if order.created_at <= timezone.now() - ORDER_TRACKING_RETENTION:
+            return Response(
+                {"detail": "Online order tracking is available for two days after placement."},
+                status=status.HTTP_410_GONE,
+            )
         return Response(OrderTrackingSerializer(order).data)
 
 

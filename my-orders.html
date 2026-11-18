@@ -49,7 +49,7 @@
                     <header class="cj-orders-heading">
                         <div class="eyebrow">YOUR RESORT ORDER</div>
                         <h1>My Orders</h1>
-                        <p>Enter the order number and phone number used at checkout to see the latest status. This page refreshes automatically while your order is active.</p>
+                        <p>Enter the order number and email used at checkout to see the latest status. Online tracking is available for two days after the order is placed.</p>
                     </header>
                     <form id="cjOrderLookup" class="cj-orders-lookup">
                         <div class="cj-orders-field">
@@ -57,8 +57,8 @@
                             <input id="cjOrderNumber" name="number" required="required" maxlength="20" autocomplete="off" placeholder="e.g. KR-1234ABCD"/>
                         </div>
                         <div class="cj-orders-field">
-                            <label for="cjOrderPhone">Phone number</label>
-                            <input id="cjOrderPhone" name="phone" type="tel" required="required" maxlength="40" autocomplete="tel" placeholder="+256 700 000 000"/>
+                            <label for="cjOrderEmail">Email address</label>
+                            <input id="cjOrderEmail" name="email" type="email" required="required" maxlength="254" autocomplete="email" placeholder="you@example.com"/>
                         </div>
                         <button class="cj-orders-submit" id="cjOrderSubmit" type="submit">Find order</button>
                     </form>
@@ -71,13 +71,13 @@
                     var apiBase=(window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1').replace(/\/+$/,'');
                     var form=document.getElementById('cjOrderLookup');
                     var numberInput=document.getElementById('cjOrderNumber');
-                    var phoneInput=document.getElementById('cjOrderPhone');
+                    var emailInput=document.getElementById('cjOrderEmail');
                     var submitButton=document.getElementById('cjOrderSubmit');
                     var notice=document.getElementById('cjOrderNotice');
                     var result=document.getElementById('cjOrderResult');
                     var latestOrder=null;
                     var latestNumber='';
-                    var latestPhone='';
+                    var latestEmail='';
                     var requestNumber=0;
                     var isFetching=false;
 
@@ -165,10 +165,16 @@
                     function lookup(isPolling){
                         if(isPolling&&isFetching)return;
                         var number=numberInput.value.trim();
-                        var phone=phoneInput.value.trim();
-                        if(!number||!phone){
-                            if(!isPolling)showNotice('Enter both your order number and phone number.',true);
+                        var email=emailInput.value.trim();
+                        if(!number||!email){
+                            if(!isPolling)showNotice('Enter both your order number and email address.',true);
                             return;
+                        }
+                        if(!isPolling&&latestOrder&&(number.toUpperCase()!==latestNumber||email.toLowerCase()!==latestEmail)){
+                            latestOrder=null;
+                            latestNumber='';
+                            latestEmail='';
+                            result.replaceChildren();
                         }
                         var currentRequest=++requestNumber;
                         isFetching=true;
@@ -177,14 +183,19 @@
                         fetch(apiBase+'/orders/track/',{
                             method:'POST',
                             headers:{Accept:'application/json','Content-Type':'application/json'},
-                            body:JSON.stringify({number:number,phone:phone})
+                            body:JSON.stringify({number:number,email:email})
                         }).then(function(response){
                             return response.text().then(function(text){
                                 var data=null;
                                 try{data=text?JSON.parse(text):null;}catch(parseError){}
                                 if(!response.ok){
-                                    if(response.status===404)throw new Error('No matching order found. Check the order number and phone number.');
+                                    if(response.status===404)throw new Error('No matching order found. Check the order number and email address.');
                                     if(response.status===429)throw new Error('Too many lookup attempts. Please wait before trying again.');
+                                    if(response.status===410){
+                                        var expiredError=new Error(data&&typeof data.detail==='string'?data.detail:'Online order tracking is available for two days after placement.');
+                                        expiredError.name='OrderTrackingExpiredError';
+                                        throw expiredError;
+                                    }
                                     if(data&&typeof data.detail==='string')throw new Error(data.detail);
                                     throw new Error('Could not look up the order (HTTP '+response.status+').');
                                 }
@@ -196,7 +207,7 @@
                             var previous=latestOrder;
                             latestOrder=order;
                             latestNumber=number.toUpperCase();
-                            latestPhone=phone;
+                            latestEmail=email.toLowerCase();
                             renderOrder(order);
                             var updates=[];
                             if(previous&&previous.number===order.number&&previous.status!==order.status){
@@ -212,6 +223,12 @@
                             }
                         }).catch(function(error){
                             if(currentRequest===requestNumber){
+                                if(error.name==='OrderTrackingExpiredError'){
+                                    latestOrder=null;
+                                    latestNumber='';
+                                    latestEmail='';
+                                    result.replaceChildren();
+                                }
                                 showNotice(error instanceof TypeError?'Could not connect to the resort order service. Check your connection and try again.':error.message,true);
                             }
                         }).finally(function(){
@@ -228,21 +245,21 @@
                     });
 
                     window.setInterval(function(){
-                        if(latestOrder&&latestOrder.status!=='cancelled'&&(latestOrder.status!=='completed'||latestOrder.payment_status!=='paid')&&document.visibilityState==='visible'&&numberInput.value.trim().toUpperCase()===latestNumber&&phoneInput.value.trim()===latestPhone){
+                        if(latestOrder&&latestOrder.status!=='cancelled'&&(latestOrder.status!=='completed'||latestOrder.payment_status!=='paid')&&document.visibilityState==='visible'&&numberInput.value.trim().toUpperCase()===latestNumber&&emailInput.value.trim().toLowerCase()===latestEmail){
                             lookup(true);
                         }
                     },30000);
 
                     try{
                         var savedNumber=sessionStorage.getItem('cjLastOrderNumber');
-                        var savedPhone=sessionStorage.getItem('cjLastOrderPhone');
-                        if(savedNumber&&savedPhone){
+                        var savedEmail=sessionStorage.getItem('cjLastOrderEmail');
+                        if(savedNumber&&savedEmail){
                             numberInput.value=savedNumber;
-                            phoneInput.value=savedPhone;
+                            emailInput.value=savedEmail;
                             lookup(false);
                         }
                     }catch(storageError){
-                        showNotice('Enter your order number and phone number to track your order.',false);
+                        showNotice('Enter your order number and email address to track your order.',false);
                     }
                 })();
             </script>

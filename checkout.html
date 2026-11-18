@@ -27,6 +27,7 @@
                 .cj-section-number{font-weight:900}
                 .cj-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
                 .cj-field.full{grid-column:1/-1}.cj-field label{display:block;font-weight:700;font-size:13px;margin:0 0 7px;color:#444}
+                .cj-field small{display:block;margin-top:6px;color:var(--muted);font-size:11px;line-height:1.4}
                 .cj-field input,.cj-field textarea,.cj-field select{width:100%;border:1px solid #d9dfdc;border-radius:6px;padding:13px 14px;font-size:15px;background:#fff;color:var(--dark);outline:none}
                 .cj-field input:focus,.cj-field textarea:focus,.cj-field select:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(0,139,146,.10)}
                 .cj-field input[readonly]{background:#f2f5f4;color:#555}
@@ -80,6 +81,7 @@
                             <div class="cj-form-grid">
                                 <div class="cj-field"><label>Full name</label><input name="name" required="required" placeholder="Guest name"/></div>
                                 <div class="cj-field"><label>Phone number</label><input name="phone" required="required" placeholder="+256 000 000 000"/></div>
+                                <div class="cj-field"><label>Email address (optional)</label><input name="email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"/><small>Enter an email to track this order online for two days.</small></div>
                                 <div class="cj-field"><label>Order type</label><select name="order_type" id="cjOrderType"><option value="dine_in">Dine-in</option><option value="lodge">Lodge / Cottage</option></select></div>
                                 <div class="cj-field"><label id="cjLocationLabel">Table number</label><input name="location" id="cjLocation" required="required" placeholder="e.g. 12"/></div>
                                 <div class="cj-field full"><label>Order note</label><textarea name="note" placeholder="Optional special request"></textarea></div>
@@ -149,6 +151,7 @@
                         var order={
                             guest_name:String(formData.get('name')||'').trim(),
                             phone:String(formData.get('phone')||'').trim(),
+                            email:String(formData.get('email')||'').trim(),
                             order_type:String(formData.get('order_type')||'dine_in'),
                             location:String(formData.get('location')||'').trim(),
                             payment_method:String(formData.get('payment')||'cash'),
@@ -184,16 +187,22 @@
                         }).then(function(receipt){
                             var trackingReady=false;
                             try{
-                                sessionStorage.setItem('cjLastOrderNumber',receipt.number);
-                                sessionStorage.setItem('cjLastOrderPhone',order.phone);
-                                trackingReady=true;
+                                sessionStorage.removeItem('cjLastOrderNumber');
+                                sessionStorage.removeItem('cjLastOrderEmail');
+                                sessionStorage.removeItem('cjLastOrderPhone');
+                                if(order.email){
+                                    sessionStorage.setItem('cjLastOrderNumber',receipt.number);
+                                    sessionStorage.setItem('cjLastOrderEmail',order.email);
+                                    trackingReady=true;
+                                }
                             }catch(storageError){
                                 trackingReady=false;
                             }
                             localStorage.removeItem(key);
                             document.getElementById('cjLayout').style.display='none';
                             document.querySelector('.cj-heading').style.display='none';
-                            document.getElementById('cjSuccessText').textContent='Order '+receipt.number+' has been sent to the resort. Total: UGX '+Number(receipt.total_ugx).toLocaleString('en-UG')+'. Payment is made at the resort.'+(trackingReady?' Opening My Orders…':' Open My Orders and enter your order number and phone to track it.');
+                            var trackingMessage=!order.email?' This order is saved for resort staff but cannot be tracked online without an email.':trackingReady?' Tracking is available for two days. Opening My Orders…':' To track within two days, open My Orders and enter your order number and email.';
+                            document.getElementById('cjSuccessText').textContent='Order '+receipt.number+' has been sent to the resort. Total: UGX '+Number(receipt.total_ugx).toLocaleString('en-UG')+'. Payment is made at the resort.'+trackingMessage;
                             document.getElementById('cjSuccess').classList.add('show');
                             var sparks=document.getElementById('cjSparks');
                             var paths=[
@@ -213,7 +222,9 @@
                                 sparks.appendChild(spark);
                             });
                             var myOrdersUrl=window.location.protocol==='file:'?'my-orders.html':'/my-orders';
-                            document.getElementById('cjSuccessMyOrders').setAttribute('href',myOrdersUrl);
+                            var myOrdersLink=document.getElementById('cjSuccessMyOrders');
+                            myOrdersLink.setAttribute('href',myOrdersUrl);
+                            myOrdersLink.style.display=order.email?'inline-flex':'none';
                             if(window.location.protocol==='file:')document.getElementById('cjSuccessMenu').setAttribute('href','menu.html');
                             if(trackingReady)window.setTimeout(function(){window.location.assign(myOrdersUrl);},900);
                         }).catch(function(error){

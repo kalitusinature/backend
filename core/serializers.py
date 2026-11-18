@@ -47,6 +47,7 @@ class OrderLineInputSerializer(serializers.Serializer):
 class OrderCreateSerializer(serializers.Serializer):
     guest_name = serializers.CharField(max_length=120)
     phone = serializers.CharField(max_length=40)
+    email = serializers.EmailField(required=False, allow_blank=True)
     order_type = serializers.ChoiceField(choices=Order.OrderType.choices)
     location = serializers.CharField(max_length=80)
     payment_method = serializers.ChoiceField(
@@ -113,7 +114,7 @@ class OrderReceiptSerializer(serializers.ModelSerializer):
 
 class OrderTrackingRequestSerializer(serializers.Serializer):
     number = serializers.CharField(max_length=20)
-    phone = serializers.CharField(max_length=40)
+    email = serializers.EmailField(max_length=254)
 
 
 class OrderTrackingItemSerializer(serializers.ModelSerializer):

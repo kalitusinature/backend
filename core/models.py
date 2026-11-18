@@ -104,6 +104,7 @@ class Order(models.Model):
     location = models.CharField(max_length=80)
     guest_name = models.CharField(max_length=120)
     phone = models.CharField(max_length=40)
+    email = models.EmailField(blank=True)
     payment_method = models.CharField(
         max_length=24, choices=PaymentMethod.choices, default=PaymentMethod.CASH
     )

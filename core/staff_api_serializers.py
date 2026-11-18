@@ -233,6 +233,7 @@ class StaffOrderSerializer(serializers.ModelSerializer):
             "location",
             "guest_name",
             "phone",
+            "email",
             "payment_method",
             "payment_status",
             "note",

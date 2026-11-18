@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
@@ -48,12 +49,13 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(order.payment_status, Order.PaymentStatus.UNPAID)
         self.assertEqual(order.items.get().line_total_ugx, 24000)
 
-    def test_customer_can_track_order_with_number_and_phone_without_private_fields(self):
+    def test_customer_can_track_order_with_number_and_email_without_private_fields(self):
         order_response = self.client.post(
             "/api/v1/orders/",
             {
                 "guest_name": "A Guest",
                 "phone": "+256700000000",
+                "email": "guest@example.com",
                 "order_type": "dine_in",
                 "location": "Table 4",
                 "items": [{"product": self.product.slug, "quantity": 2}],
@@ -65,7 +67,7 @@ class PublicOrderingApiTests(TestCase):
             "/api/v1/orders/track/",
             {
                 "number": order_response.data["number"].lower(),
-                "phone": "+256700000000",
+                "email": "GUEST@example.com",
             },
             format="json",
         )
@@ -74,15 +76,17 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(response.data["status"], Order.Status.NEW)
         self.assertEqual(response.data["status_label"], "New")
         self.assertEqual(response.data["items"][0]["product_name"], self.product.name)
+        self.assertNotIn("email", response.data)
         self.assertNotIn("phone", response.data)
         self.assertNotIn("guest_name", response.data)
 
-    def test_customer_order_tracking_requires_matching_phone(self):
+    def test_customer_order_tracking_requires_matching_email(self):
         order_response = self.client.post(
             "/api/v1/orders/",
             {
                 "guest_name": "A Guest",
                 "phone": "+256700000000",
+                "email": "guest@example.com",
                 "order_type": "dine_in",
                 "location": "Table 4",
                 "items": [{"product": self.product.slug, "quantity": 1}],
@@ -92,11 +96,38 @@ class PublicOrderingApiTests(TestCase):
 
         response = self.client.post(
             "/api/v1/orders/track/",
-            {"number": order_response.data["number"], "phone": "+256700000001"},
+            {"number": order_response.data["number"], "email": "another@example.com"},
             format="json",
         )
 
         self.assertEqual(response.status_code, 404)
+
+    def test_customer_tracking_expires_after_two_days_but_order_remains_for_staff(self):
+        order_response = self.client.post(
+            "/api/v1/orders/",
+            {
+                "guest_name": "A Guest",
+                "phone": "+256700000000",
+                "email": "guest@example.com",
+                "order_type": "dine_in",
+                "location": "Table 4",
+                "items": [{"product": self.product.slug, "quantity": 1}],
+            },
+            format="json",
+        )
+        order = Order.objects.get(number=order_response.data["number"])
+        Order.objects.filter(pk=order.pk).update(
+            created_at=timezone.now() - timedelta(days=2, minutes=1)
+        )
+
+        tracking_response = self.client.post(
+            "/api/v1/orders/track/",
+            {"number": order.number, "email": "guest@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(tracking_response.status_code, 410)
+        self.assertTrue(Order.objects.filter(pk=order.pk).exists())
 
     def test_customer_tracking_reflects_staff_order_and_payment_updates(self):
         order_response = self.client.post(
@@ -104,6 +135,7 @@ class PublicOrderingApiTests(TestCase):
             {
                 "guest_name": "A Guest",
                 "phone": "+256700000000",
+                "email": "guest@example.com",
                 "order_type": "dine_in",
                 "location": "Table 4",
                 "items": [{"product": self.product.slug, "quantity": 1}],
@@ -128,7 +160,7 @@ class PublicOrderingApiTests(TestCase):
         )
         tracking_response = self.client.post(
             "/api/v1/orders/track/",
-            {"number": order_response.data["number"], "phone": "+256700000000"},
+            {"number": order_response.data["number"], "email": "guest@example.com"},
             format="json",
         )
 
@@ -218,6 +250,16 @@ class PublicOrderingApiTests(TestCase):
 
         self.assertEqual(staff_response.status_code, 200)
         self.assertEqual(staff_response.data[0]["number"], order_response.data["number"])
+        self.assertEqual(staff_response.data[0]["email"], "")
+        tracking_response = self.client.post(
+            "/api/v1/orders/track/",
+            {
+                "number": order_response.data["number"],
+                "email": "guest@example.com",
+            },
+            format="json",
+        )
+        self.assertEqual(tracking_response.status_code, 404)
 
     def test_unavailable_product_cannot_be_ordered(self):
         self.product.is_available = False

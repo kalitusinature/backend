@@ -61,6 +61,7 @@ Only active categories, available products, and active lodges are public.
 {
   "guest_name": "Guest Name",
   "phone": "+256700000000",
+  "email": "guest@example.com",
   "order_type": "dine_in",
   "location": "Table 4",
   "payment_method": "cash",
@@ -71,15 +72,15 @@ Only active categories, available products, and active lodges are public.
 }
 ```
 
-`order_type` is `dine_in` or `lodge`; `location` is the table number or lodge/cottage identifier. `payment_method` is `cash` or `card_at_counter`. The server looks up current prices and calculates totals; clients cannot set prices. The order remains unpaid until staff records payment at the resort.
+`order_type` is `dine_in` or `lodge`; `location` is the table number or lodge/cottage identifier. `payment_method` is `cash` or `card_at_counter`. `email` is optional; when omitted, the order is still saved for staff but cannot be tracked by the customer. The server looks up current prices and calculates totals; clients cannot set prices. The order remains unpaid until staff records payment at the resort.
 
 Successful response (`201`) contains the order number, status, server-calculated UGX total, and creation time.
 
 The Odoo menu and product pages load categories and available products from this API. Checkout posts orders to Render; the server validates product slugs and calculates prices from its catalog. New orders are stored in Render's database and appear in the GitHub Pages admin portal's Orders view, which refreshes every 30 seconds.
 
-Customers are sent to the Odoo My Orders page after checkout. The page looks up an order using its number and checkout phone, and checks for status/payment changes while open. The lookup response excludes the guest name and phone number.
+Customers who provide an email are sent to the Odoo My Orders page after checkout, where the page checks for status/payment changes while open. Online tracking expires two days after the order is placed. No email notification is sent.
 
-`POST /api/v1/orders/track/` accepts an order number and phone number and returns the matching order's status and item totals. Both values are required; a non-matching pair returns `404`. The endpoint is rate-limited to 600 lookups per hour per client.
+`POST /api/v1/orders/track/` accepts an order number and email and returns the matching order's status and item totals. A non-matching pair returns `404`; an expired lookup returns `410`. The response excludes the guest name, phone, and email. The endpoint is rate-limited to 600 lookups per hour per client.
 
 The standalone Odoo page templates in this repository, including `my-orders.html`, must also be copied into and published from the Odoo Website editor; pushing them to GitHub does not update Odoo pages automatically.
 
