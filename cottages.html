@@ -36,8 +36,7 @@
                 @keyframes cjLoadingProgress{0%{transform:translateX(-120%)}50%{transform:translateX(150%)}100%{transform:translateX(320%)}}
                 @media(max-width:540px){.cj-loading-card{padding:30px 21px 25px}.cj-loading-card h2{font-size:21px}}
                 @media(prefers-reduced-motion:reduce){.cj-loading-spinner,.cj-loading-track span{animation:none}.cj-loading-track span{width:100%}}
-                @media(max-width:850px){.cj-cottages-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-                @media(max-width:580px){.cj-cottages-container{width:calc(100% - 24px);margin:26px auto 56px}.cj-cottages-grid{grid-template-columns:1fr}.cj-cottage-photo{height:210px}}
+                @media(max-width:580px){.cj-cottages-container{width:calc(100% - 24px);margin:26px auto 56px}.cj-cottages-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.cj-cottage-photo{height:170px}.cj-cottage-body{padding:14px}.cj-cottage-body h2{font-size:17px}.cj-cottage-description{font-size:13px}.cj-cottage-capacity,.cj-cottage-policy{font-size:12px}.cj-cottage-book{width:100%;padding:0 10px;font-size:13px}}
             </style>
             <main class="cj-cottages-page">
                 <t t-call="website.cj_header"/>
