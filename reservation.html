@@ -56,8 +56,8 @@
                                     <input id="cjPhone" name="phone" type="tel" maxlength="40" autocomplete="tel" required="required" placeholder="+256 700 000 000"/>
                                 </div>
                                 <div class="cj-reservation-field">
-                                    <label for="cjEmail">Email address (optional)</label>
-                                    <input id="cjEmail" name="email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"/>
+                                    <label for="cjEmail">Email address</label>
+                                    <input id="cjEmail" name="email" type="email" maxlength="254" autocomplete="email" required="required" placeholder="you@example.com"/>
                                 </div>
                                 <div class="cj-reservation-field">
                                     <label for="cjAdults">Adults</label>
@@ -66,6 +66,10 @@
                                 <div class="cj-reservation-field">
                                     <label for="cjChildren">Children</label>
                                     <input id="cjChildren" name="children" type="number" min="0" max="50" value="0" required="required"/>
+                                </div>
+                                <div class="cj-reservation-field full">
+                                    <label for="cjOccasion">Occasion (optional)</label>
+                                    <input id="cjOccasion" name="occasion" type="text" maxlength="100" placeholder="Birthday, anniversary, or other occasion"/>
                                 </div>
                                 <div class="cj-reservation-field full">
                                     <label for="cjNote">Additional note (optional)</label>
@@ -87,6 +91,8 @@
                     var lodgeHelp=document.getElementById('cjLodgeHelp');
                     var checkIn=document.getElementById('cjCheckIn');
                     var checkOut=document.getElementById('cjCheckOut');
+                    var adultsInput=document.getElementById('cjAdults');
+                    var childrenInput=document.getElementById('cjChildren');
                     var submitButton=document.getElementById('cjReservationSubmit');
                     var message=document.getElementById('cjReservationMessage');
                     var lodges=[];
@@ -121,12 +127,13 @@
                         }
                         return 'The reservation service returned HTTP '+status+'. Please try again.';
                     }
-                    function loadLodges(){
+                    function loadLodges(preserveMessage){
                         var selectedSlug=lodgeSelect.value||requestedSlug;
                         var query=new URLSearchParams();
                         if(checkIn.value&&checkOut.value&&checkOut.value>checkIn.value){
                             query.set('check_in',checkIn.value);
                             query.set('check_out',checkOut.value);
+                            query.set('guests',String(Number(adultsInput.value||1)+Number(childrenInput.value||0)));
                         }
                         var url=apiBase+'/lodges/'+(query.toString()?'?'+query.toString():'');
                         lodgeSelect.disabled=true;
@@ -155,7 +162,7 @@
                             }else{
                                 lodgeHelp.textContent=matchingLodge?'Your selected cottage is ready.':'Choose an active cottage or lodge from the list.';
                                 if(selectedSlug&&!matchingLodge)showMessage('error','That cottage is not currently listed as available. Please choose another stay.');
-                                else hideMessage();
+                                else if(!preserveMessage)hideMessage();
                             }
                             requestedSlug='';
                         }).catch(function(error){
@@ -177,6 +184,8 @@
                         hideMessage();
                         loadLodges();
                     });
+                    adultsInput.addEventListener('change',function(){loadLodges();});
+                    childrenInput.addEventListener('change',function(){loadLodges();});
                     lodgeSelect.addEventListener('change',hideMessage);
                     form.addEventListener('submit',function(event){
                         event.preventDefault();
@@ -202,6 +211,7 @@
                             check_out:String(formData.get('check_out')||''),
                             adults:adults,
                             children:children,
+                            occasion:String(formData.get('occasion')||'').trim(),
                             note:String(formData.get('note')||'').trim()
                         };
                         submitButton.disabled=true;
@@ -224,7 +234,8 @@
                             checkIn.min=today;
                             checkOut.min=today;
                             requestedSlug='';
-                            showMessage('success','Request '+receipt.reference+' received for '+receipt.lodge_name+' ('+receipt.check_in+' to '+receipt.check_out+'). Your request is pending staff review; the resort will contact you to confirm.');
+                            showMessage('success','Request '+receipt.reference+' received for '+receipt.lodge_name+' ('+receipt.check_in+' to '+receipt.check_out+'). Status: '+(receipt.status_label||'Pending review')+'. The resort will contact you to confirm.');
+                            loadLodges(true);
                         }).catch(function(error){
                             showMessage('error',error.message||'Could not send your reservation request. Please try again.');
                         }).finally(function(){

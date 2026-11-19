@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import Category, Lodge, LodgeReservation, Order, OrderItem, Product
+from .reservation_rules import validate_lodge_stay
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -33,7 +34,17 @@ class ProductSerializer(serializers.ModelSerializer):
 class LodgeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lodge
-        fields = ("id", "name", "slug", "description", "capacity", "image_url")
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "description",
+            "capacity",
+            "min_nights",
+            "max_nights",
+            "checkin_weekdays",
+            "image_url",
+        )
 
 
 class OrderLineInputSerializer(serializers.Serializer):
@@ -73,33 +84,26 @@ class ReservationCreateSerializer(serializers.Serializer):
         slug_field="slug", queryset=Lodge.objects.filter(is_active=True)
     )
     guest_name = serializers.CharField(max_length=120)
-    email = serializers.EmailField(required=False, allow_blank=True)
-    phone = serializers.CharField(max_length=40)
+    email = serializers.EmailField(max_length=254)
+    phone = serializers.RegexField(
+        regex=r"^\+?[0-9][0-9\s().-]{5,38}[0-9]$", max_length=40
+    )
     check_in = serializers.DateField()
     check_out = serializers.DateField()
     adults = serializers.IntegerField(min_value=1, max_value=50, default=1)
     children = serializers.IntegerField(min_value=0, max_value=50, default=0)
     note = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    occasion = serializers.CharField(required=False, allow_blank=True, max_length=100)
 
     def validate(self, attrs):
-        if attrs["check_out"] <= attrs["check_in"]:
-            raise serializers.ValidationError(
-                {"check_out": "Check-out must be after check-in."}
-            )
-        if attrs["adults"] + attrs["children"] > attrs["lodge"].capacity:
-            raise serializers.ValidationError(
-                {"adults": "Guest count exceeds this lodge's capacity."}
-            )
-        overlaps = LodgeReservation.objects.filter(
+        validate_lodge_stay(
             lodge=attrs["lodge"],
-            status=LodgeReservation.Status.CONFIRMED,
-            check_in__lt=attrs["check_out"],
-            check_out__gt=attrs["check_in"],
+            check_in=attrs["check_in"],
+            check_out=attrs["check_out"],
+            adults=attrs["adults"],
+            children=attrs["children"],
+            status=LodgeReservation.Status.PENDING,
         )
-        if overlaps.exists():
-            raise serializers.ValidationError(
-                {"lodge": "This lodge is already reserved for those dates."}
-            )
         return attrs
 
     def create(self, validated_data):
@@ -150,7 +154,15 @@ class OrderTrackingSerializer(serializers.ModelSerializer):
 
 class ReservationReceiptSerializer(serializers.ModelSerializer):
     lodge_name = serializers.CharField(source="lodge.name", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
         model = LodgeReservation
-        fields = ("reference", "status", "lodge_name", "check_in", "check_out")
+        fields = (
+            "reference",
+            "status",
+            "status_label",
+            "lodge_name",
+            "check_in",
+            "check_out",
+        )

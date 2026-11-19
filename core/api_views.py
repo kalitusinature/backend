@@ -19,6 +19,8 @@ from .models import (
     OrderItem,
     Product,
 )
+from .reservation_rules import validate_lodge_stay
+from .reservation_notifications import notify_new_reservation
 from .serializers import (
     CategorySerializer,
     LodgeSerializer,
@@ -73,12 +75,29 @@ class LodgeList(generics.ListAPIView):
                 raise ValidationError(
                     {"dates": "Provide valid dates and ensure check_out is after check_in."}
                 )
-            booked_ids = LodgeReservation.objects.filter(
-                status=LodgeReservation.Status.CONFIRMED,
-                check_in__lt=check_out,
-                check_out__gt=check_in,
-            ).values_list("lodge_id", flat=True)
-            queryset = queryset.exclude(id__in=booked_ids)
+            guests_value = self.request.query_params.get("guests", "1")
+            try:
+                guests = int(guests_value)
+            except ValueError as error:
+                raise ValidationError({"guests": "Provide a valid guest count."}) from error
+            if guests < 1 or guests > 50:
+                raise ValidationError({"guests": "Guest count must be between 1 and 50."})
+
+            available_ids = []
+            for lodge in queryset:
+                try:
+                    validate_lodge_stay(
+                        lodge=lodge,
+                        check_in=check_in,
+                        check_out=check_out,
+                        adults=guests,
+                        children=0,
+                        status=LodgeReservation.Status.PENDING,
+                    )
+                except ValidationError:
+                    continue
+                available_ids.append(lodge.pk)
+            queryset = queryset.filter(pk__in=available_ids)
         return queryset
 
 
@@ -142,7 +161,19 @@ class ReservationCreate(APIView):
     def post(self, request):
         serializer = ReservationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        lodge = Lodge.objects.select_for_update().get(
+            pk=serializer.validated_data["lodge"].pk
+        )
+        validate_lodge_stay(
+            lodge=lodge,
+            check_in=serializer.validated_data["check_in"],
+            check_out=serializer.validated_data["check_out"],
+            adults=serializer.validated_data["adults"],
+            children=serializer.validated_data["children"],
+            status=LodgeReservation.Status.PENDING,
+        )
         reservation = serializer.save()
+        transaction.on_commit(lambda: notify_new_reservation(reservation))
         return Response(
             ReservationReceiptSerializer(reservation).data,
             status=status.HTTP_201_CREATED,

@@ -20,11 +20,11 @@ Django catalog administration: `http://127.0.0.1:8000/admin/`
 
 Health check: `http://127.0.0.1:8000/health/`
 
-Create categories, products, and lodges in Django admin before using the public API. Product prices are stored as whole UGX amounts. Lodge reservations are requests (`pending`) until staff confirms them. A reservation can only be confirmed if no other confirmed reservation overlaps the requested dates.
+Create categories, products, and lodges in Django admin before using the public API. Product prices are stored as whole UGX amounts. Lodge reservations are requests (`pending`) until staff confirms them. Pending and confirmed stays both reserve their dates; overlapping requests are rejected under a per-lodge database lock.
 
 Set `CLOUDINARY_NAME`, `CLOUDINARY_KEY`, and `CLOUDINARY_SECRET` in the local
-`.env` file to enable product image uploads. Keep the Cloudinary API secret out
-of source control.
+`.env` file to enable product and lodge image uploads. Keep the Cloudinary API
+secret out of source control.
 
 ## Neon PostgreSQL
 
@@ -63,7 +63,7 @@ All endpoints are under `/api/v1/`. JSON is expected for POST requests.
 - `GET /api/v1/products/`
 - `GET /api/v1/products/?category=drinks`
 - `GET /api/v1/lodges/`
-- `GET /api/v1/lodges/?check_in=2027-01-10&check_out=2027-01-12` returns lodges without confirmed overlapping reservations.
+- `GET /api/v1/lodges/?check_in=2027-01-10&check_out=2027-01-12&guests=2` returns stays that satisfy capacity, booking limits, check-in days, blockouts, and pending/confirmed reservations.
 
 Only active categories, available products, and active lodges are public.
 
@@ -112,21 +112,22 @@ The standalone Odoo page templates in this repository, including `my-orders.html
   "check_out": "2027-01-12",
   "adults": 2,
   "children": 1,
+  "occasion": "",
   "note": ""
 }
 ```
 
-New requests are `pending`; a `201` response includes a reservation reference. Staff review requests in the portal and confirm availability before accepting.
+New requests are `pending`; a `201` response includes a unique reservation reference and booking status. Email is required. The server validates stay dates, lodge capacity and policies, blockouts, and pending/confirmed overlaps. Reservation notifications use Django's SMTP backend when configured.
 
 ## Staff portal
 
 `/staff/` is for authenticated staff accounts. It shows recent orders and reservations, supports status changes, and links to catalog management:
 
 - Orders: open order details, confirm, prepare, mark ready/delivered, cancel, or mark payment received. Order statuses can only move forward through the service flow; delivered orders retain the backend `completed` status.
-- Reservations: confirm, decline, or cancel; conflicting confirmed stays cannot be approved.
+- Reservations: create manually, search/filter, paginate, edit details, confirm, decline, cancel, complete, or delete inactive records. Day/week/month calendar views show the status of each stay.
 - Products: create and maintain food/drink items, UGX price, uploaded Cloudinary image, availability, and featured state.
 - Categories: create menu sections and control order/visibility.
-- Lodges: maintain lodge/cottage details, capacity, image, and active state.
+- Lodges: maintain lodge/cottage details, capacity, images, stay length and advance-booking rules, check-in days, and active state. Add and remove unavailable date ranges.
 
 Use Django admin for staff user creation and detailed record management. Payment processing is intentionally not implemented.
 
@@ -144,7 +145,8 @@ The portal uses these protected endpoints after login:
 - `GET, POST /staff/products/` and `GET, PATCH /staff/products/<id>/`
 - `GET, POST /staff/categories/` and `GET, PATCH /staff/categories/<id>/`
 - `GET, POST /staff/lodges/` and `GET, PATCH /staff/lodges/<id>/`
-- `GET /staff/reservations/` and `PATCH /staff/reservations/<id>/`
+- `GET, POST /staff/reservations/`, `GET, PATCH, DELETE /staff/reservations/<id>/`, and `GET /staff/reservations/calendar/`
+- `GET, POST /staff/lodge-blockouts/` and `GET, PATCH, DELETE /staff/lodge-blockouts/<id>/`
 
 Uploaded product images are optimized in the browser and sent to Cloudinary by
 the authenticated backend. PostgreSQL stores the secure delivery URL and asset
@@ -155,3 +157,10 @@ and `https://kalitusinature.github.io`. Create the first staff account using
 `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, and
 `DJANGO_SUPERUSER_PASSWORD` in Render's environment settings. Never put these
 credentials in the React app or its GitHub repository.
+
+To enable reservation emails on Render, configure `EMAIL_HOST`, `EMAIL_PORT`,
+`EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, and
+`DEFAULT_FROM_EMAIL`. Set `RESERVATION_NOTIFICATION_EMAIL` to receive new
+reservation alerts. SMTP credentials must be stored only in Render's
+environment settings; without SMTP configuration, reservations are still
+saved and the backend logs that delivery was skipped.

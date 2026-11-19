@@ -6,10 +6,19 @@ from django.conf import settings
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import Category, Lodge, LodgeReservation, Order, OrderItem, Product
+from .models import (
+    Category,
+    Lodge,
+    LodgeBlockout,
+    LodgeReservation,
+    Order,
+    OrderItem,
+    Product,
+)
+from .reservation_rules import validate_lodge_stay
 
-MAX_PRODUCT_IMAGE_BYTES = 1_572_864
-PRODUCT_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_IMAGE_BYTES = 1_572_864
+IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 logger = logging.getLogger(__name__)
 
 
@@ -30,23 +39,23 @@ def _configure_cloudinary():
     return True
 
 
-class ProductImageFileField(serializers.FileField):
+class ImageFileField(serializers.FileField):
     def __init__(self, **kwargs):
         kwargs.setdefault("allow_empty_file", False)
         super().__init__(**kwargs)
 
     def to_internal_value(self, data):
         image = super().to_internal_value(data)
-        if image.size > MAX_PRODUCT_IMAGE_BYTES:
+        if image.size > MAX_IMAGE_BYTES:
             raise serializers.ValidationError(
                 "Images must be 1.5 MB or smaller after optimization."
             )
-        if image.content_type not in PRODUCT_IMAGE_CONTENT_TYPES:
+        if image.content_type not in IMAGE_CONTENT_TYPES:
             raise serializers.ValidationError("Upload a PNG, JPEG, or WebP image.")
         return image
 
 
-def _upload_product_image(image, public_id):
+def _upload_cloudinary_image(image, public_id):
     if not _configure_cloudinary():
         raise serializers.ValidationError(
             {
@@ -80,7 +89,7 @@ def _upload_product_image(image, public_id):
 def _delete_cloudinary_image(public_id):
     if not _configure_cloudinary():
         logger.error(
-            "Could not delete Cloudinary product image %s: credentials are not set.",
+            "Could not delete Cloudinary image %s: credentials are not set.",
             public_id,
         )
         return
@@ -101,7 +110,7 @@ def _delete_cloudinary_image(public_id):
 
     if result.get("result") not in {"ok", "not found"}:
         logger.error(
-            "Cloudinary did not delete product image %s (result: %s).",
+            "Cloudinary did not delete image %s (result: %s).",
             public_id,
             result.get("result", "unknown"),
         )
@@ -119,6 +128,13 @@ class StaffCategorySerializer(serializers.ModelSerializer):
 
 
 class StaffLodgeSerializer(serializers.ModelSerializer):
+    image_file = ImageFileField(required=False, write_only=True)
+    checkin_weekdays = serializers.ListField(
+        child=serializers.IntegerField(min_value=0, max_value=6),
+        required=False,
+        allow_empty=True,
+    )
+
     class Meta:
         model = Lodge
         fields = (
@@ -127,9 +143,130 @@ class StaffLodgeSerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "capacity",
+            "min_nights",
+            "max_nights",
+            "min_advance_days",
+            "max_advance_days",
+            "checkin_weekdays",
             "image_url",
+            "image_file",
             "is_active",
         )
+        read_only_fields = ("id", "slug")
+
+    def validate(self, attrs):
+        instance = self.instance
+        min_nights = attrs.get("min_nights", instance.min_nights if instance else 1)
+        max_nights = attrs.get("max_nights", instance.max_nights if instance else 30)
+        min_advance = attrs.get(
+            "min_advance_days", instance.min_advance_days if instance else 0
+        )
+        max_advance = attrs.get(
+            "max_advance_days", instance.max_advance_days if instance else 365
+        )
+        weekdays = attrs.get(
+            "checkin_weekdays", instance.checkin_weekdays if instance else []
+        )
+        errors = {}
+        if max_nights < min_nights:
+            errors["max_nights"] = "Maximum stay must be at least the minimum stay."
+        if max_advance < min_advance:
+            errors["max_advance_days"] = (
+                "Maximum booking notice must be at least the minimum notice."
+            )
+        if len(weekdays) != len(set(weekdays)):
+            errors["checkin_weekdays"] = "Each check-in weekday may only be selected once."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        image_file = validated_data.pop("image_file", None)
+        lodge = super().create(validated_data)
+        if image_file:
+            result = _upload_cloudinary_image(
+                image_file, f"kalitusi/lodges/{lodge.pk}"
+            )
+            lodge.image_url = result["secure_url"]
+            lodge.image_public_id = result["public_id"]
+            lodge.save(update_fields=("image_url", "image_public_id"))
+        return lodge
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        image_file = validated_data.pop("image_file", None)
+        old_public_id = instance.image_public_id
+        if image_file:
+            lodge = super().update(instance, validated_data)
+            result = _upload_cloudinary_image(
+                image_file, f"kalitusi/lodges/{lodge.pk}"
+            )
+            lodge.image_url = result["secure_url"]
+            lodge.image_public_id = result["public_id"]
+            lodge.save(update_fields=("image_url", "image_public_id"))
+            if old_public_id and old_public_id != lodge.image_public_id:
+                transaction.on_commit(
+                    lambda: _delete_cloudinary_image(old_public_id)
+                )
+            return lodge
+
+        image_url_changed = (
+            "image_url" in validated_data
+            and validated_data["image_url"] != instance.image_url
+        )
+        if image_url_changed and old_public_id:
+            validated_data["image_public_id"] = ""
+
+        lodge = super().update(instance, validated_data)
+        if image_url_changed and old_public_id:
+            transaction.on_commit(lambda: _delete_cloudinary_image(old_public_id))
+        return lodge
+
+
+class StaffLodgeBlockoutSerializer(serializers.ModelSerializer):
+    lodge_name = serializers.CharField(source="lodge.name", read_only=True)
+
+    class Meta:
+        model = LodgeBlockout
+        fields = (
+            "id",
+            "lodge",
+            "lodge_name",
+            "start_date",
+            "end_date",
+            "reason",
+            "created_at",
+        )
+        read_only_fields = ("id", "lodge_name", "created_at")
+
+    def validate(self, attrs):
+        instance = self.instance
+        lodge = attrs.get("lodge", instance.lodge if instance else None)
+        start_date = attrs.get(
+            "start_date", instance.start_date if instance else None
+        )
+        end_date = attrs.get("end_date", instance.end_date if instance else None)
+        errors = {}
+        if start_date and end_date and end_date <= start_date:
+            errors["end_date"] = "End date must be after start date."
+        if lodge and start_date and end_date and end_date > start_date:
+            occupied = LodgeReservation.objects.filter(
+                lodge=lodge,
+                status__in=(
+                    LodgeReservation.Status.PENDING,
+                    LodgeReservation.Status.CONFIRMED,
+                ),
+                check_in__lt=end_date,
+                check_out__gt=start_date,
+            ).exists()
+            if occupied:
+                errors["start_date"] = (
+                    "This period overlaps an active reservation. Resolve it first."
+                )
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
 
 class StaffProductSerializer(serializers.ModelSerializer):
@@ -137,7 +274,7 @@ class StaffProductSerializer(serializers.ModelSerializer):
         source="category", queryset=Category.objects.all()
     )
     category_name = serializers.CharField(source="category.name", read_only=True)
-    image_file = ProductImageFileField(required=False, write_only=True)
+    image_file = ImageFileField(required=False, write_only=True)
 
     class Meta:
         model = Product
@@ -164,7 +301,7 @@ class StaffProductSerializer(serializers.ModelSerializer):
         image_file = validated_data.pop("image_file", None)
         product = super().create(validated_data)
         if image_file:
-            result = _upload_product_image(
+            result = _upload_cloudinary_image(
                 image_file, f"kalitusi/products/{product.pk}"
             )
             product.image_url = result["secure_url"]
@@ -181,7 +318,7 @@ class StaffProductSerializer(serializers.ModelSerializer):
 
         if image_file:
             product = super().update(instance, validated_data)
-            result = _upload_product_image(
+            result = _upload_cloudinary_image(
                 image_file, f"kalitusi/products/{product.pk}"
             )
             product.image_url = result["secure_url"]
@@ -311,12 +448,126 @@ class StaffReservationSerializer(serializers.ModelSerializer):
             "adults",
             "children",
             "note",
+            "occasion",
+            "source",
             "created_at",
+            "updated_at",
         )
         read_only_fields = fields
 
 
-class StaffReservationStatusSerializer(serializers.ModelSerializer):
+class StaffReservationCreateSerializer(serializers.ModelSerializer):
+    lodge = serializers.PrimaryKeyRelatedField(queryset=Lodge.objects.all())
+    lodge_name = serializers.CharField(source="lodge.name", read_only=True)
+    phone = serializers.RegexField(
+        regex=r"^\+?[0-9][0-9\s().-]{5,38}[0-9]$", max_length=40
+    )
+
     class Meta:
         model = LodgeReservation
-        fields = ("status",)
+        fields = (
+            "id",
+            "reference",
+            "lodge",
+            "lodge_name",
+            "guest_name",
+            "email",
+            "phone",
+            "check_in",
+            "check_out",
+            "adults",
+            "children",
+            "note",
+            "occasion",
+            "source",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "reference", "lodge_name", "created_at", "updated_at")
+        extra_kwargs = {
+            "email": {"required": False, "allow_blank": True},
+            "adults": {"required": False},
+            "children": {"required": False},
+            "note": {"required": False},
+            "occasion": {"required": False},
+            "source": {"required": False, "default": LodgeReservation.Source.STAFF},
+            "status": {"required": False, "default": LodgeReservation.Status.PENDING},
+        }
+
+    def validate(self, attrs):
+        status_value = attrs.get("status", LodgeReservation.Status.PENDING)
+        validate_lodge_stay(
+            lodge=attrs["lodge"],
+            check_in=attrs["check_in"],
+            check_out=attrs["check_out"],
+            adults=attrs.get("adults", 1),
+            children=attrs.get("children", 0),
+            status=status_value,
+        )
+        return attrs
+
+
+class StaffReservationUpdateSerializer(serializers.ModelSerializer):
+    lodge = serializers.PrimaryKeyRelatedField(
+        queryset=Lodge.objects.all(), required=False
+    )
+    status = serializers.ChoiceField(
+        choices=LodgeReservation.Status.choices, required=False
+    )
+    phone = serializers.RegexField(
+        regex=r"^\+?[0-9][0-9\s().-]{5,38}[0-9]$", max_length=40, required=False
+    )
+
+    class Meta:
+        model = LodgeReservation
+        fields = (
+            "id",
+            "reference",
+            "status",
+            "lodge",
+            "lodge_name",
+            "guest_name",
+            "email",
+            "phone",
+            "check_in",
+            "check_out",
+            "adults",
+            "children",
+            "note",
+            "occasion",
+            "source",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "reference",
+            "lodge_name",
+            "created_at",
+            "updated_at",
+        )
+
+    lodge_name = serializers.CharField(source="lodge.name", read_only=True)
+
+    def validate(self, attrs):
+        reservation = self.instance
+        if reservation is None:
+            return attrs
+
+        lodge = attrs.get("lodge", reservation.lodge)
+        check_in = attrs.get("check_in", reservation.check_in)
+        check_out = attrs.get("check_out", reservation.check_out)
+        adults = attrs.get("adults", reservation.adults)
+        children = attrs.get("children", reservation.children)
+
+        validate_lodge_stay(
+            lodge=lodge,
+            check_in=check_in,
+            check_out=check_out,
+            adults=adults,
+            children=children,
+            status=attrs.get("status", reservation.status),
+            exclude_reservation_id=reservation.pk,
+        )
+        return attrs

@@ -14,6 +14,8 @@ from .staff_api_views import (
     StaffDashboard,
     StaffLodgeDetail,
     StaffLodgeListCreate,
+    StaffLodgeBlockoutDetail,
+    StaffLodgeBlockoutListCreate,
     StaffLogin,
     StaffLogout,
     StaffOrderList,
@@ -21,6 +23,7 @@ from .staff_api_views import (
     StaffProductDetail,
     StaffProductListCreate,
     StaffReservationList,
+    StaffReservationCalendar,
     StaffReservationUpdate,
 )
 
@@ -71,9 +74,24 @@ urlpatterns = [
         name="staff_api_lodge_detail",
     ),
     path(
+        "staff/lodge-blockouts/",
+        StaffLodgeBlockoutListCreate.as_view(),
+        name="staff_api_lodge_blockouts",
+    ),
+    path(
+        "staff/lodge-blockouts/<int:pk>/",
+        StaffLodgeBlockoutDetail.as_view(),
+        name="staff_api_lodge_blockout_detail",
+    ),
+    path(
         "staff/reservations/",
         StaffReservationList.as_view(),
         name="staff_api_reservations",
+    ),
+    path(
+        "staff/reservations/calendar/",
+        StaffReservationCalendar.as_view(),
+        name="staff_api_reservation_calendar",
     ),
     path(
         "staff/reservations/<int:pk>/",

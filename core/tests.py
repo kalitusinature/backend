@@ -2,6 +2,8 @@ from datetime import date, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -12,6 +14,7 @@ from rest_framework.test import APIClient
 from .models import (
     Category,
     Lodge,
+    LodgeBlockout,
     LodgeReservation,
     Order,
     Product,
@@ -280,16 +283,20 @@ class PublicOrderingApiTests(TestCase):
 
     def test_reservation_is_pending_and_validates_lodge_capacity(self):
         lodge = Lodge.objects.create(name="Lake Cottage", capacity=3)
+        check_in = date.today() + timedelta(days=10)
+        check_out = check_in + timedelta(days=2)
         response = self.client.post(
             "/api/v1/reservations/",
             {
                 "lodge": lodge.slug,
                 "guest_name": "A Guest",
+                "email": "guest@example.com",
                 "phone": "+256700000000",
-                "check_in": "2027-01-10",
-                "check_out": "2027-01-12",
+                "check_in": check_in.isoformat(),
+                "check_out": check_out.isoformat(),
                 "adults": 2,
                 "children": 1,
+                "status": LodgeReservation.Status.CONFIRMED,
             },
             format="json",
         )
@@ -302,15 +309,120 @@ class PublicOrderingApiTests(TestCase):
             {
                 "lodge": lodge.slug,
                 "guest_name": "Another Guest",
+                "email": "another@example.com",
                 "phone": "+256700000001",
-                "check_in": "2027-01-10",
-                "check_out": "2027-01-11",
+                "check_in": check_in.isoformat(),
+                "check_out": (check_in + timedelta(days=1)).isoformat(),
                 "adults": 4,
                 "children": 0,
             },
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_pending_reservation_and_blockouts_are_excluded_from_availability(self):
+        lodge = Lodge.objects.create(name="Cedar Cottage", capacity=4)
+        today = date.today()
+        LodgeReservation.objects.create(
+            lodge=lodge,
+            guest_name="Pending Guest",
+            phone="+256700000001",
+            check_in=today + timedelta(days=4),
+            check_out=today + timedelta(days=7),
+            status=LodgeReservation.Status.PENDING,
+        )
+        LodgeBlockout.objects.create(
+            lodge=lodge,
+            start_date=today + timedelta(days=8),
+            end_date=today + timedelta(days=10),
+            reason="Maintenance",
+        )
+
+        overlapping = self.client.get(
+            "/api/v1/lodges/",
+            {
+                "check_in": (today + timedelta(days=6)).isoformat(),
+                "check_out": (today + timedelta(days=8)).isoformat(),
+                "guests": 2,
+            },
+        )
+        blocked = self.client.get(
+            "/api/v1/lodges/",
+            {
+                "check_in": (today + timedelta(days=9)).isoformat(),
+                "check_out": (today + timedelta(days=11)).isoformat(),
+            },
+        )
+        duplicate = self.client.post(
+            "/api/v1/reservations/",
+            {
+                "lodge": lodge.slug,
+                "guest_name": "Second Guest",
+                "email": "second@example.com",
+                "phone": "+256700000002",
+                "check_in": (today + timedelta(days=6)).isoformat(),
+                "check_out": (today + timedelta(days=8)).isoformat(),
+                "adults": 2,
+                "children": 0,
+            },
+            format="json",
+        )
+        self.assertEqual(overlapping.status_code, 200)
+        self.assertEqual(blocked.status_code, 200)
+        self.assertEqual(overlapping.data, [])
+        self.assertEqual(blocked.data, [])
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertIn("lodge", duplicate.data)
+
+    def test_public_reservation_enforces_lodge_stay_rules(self):
+        lodge = Lodge.objects.create(name="Minimum Stay Lodge", min_nights=2)
+        response = self.client.post(
+            "/api/v1/reservations/",
+            {
+                "lodge": lodge.slug,
+                "guest_name": "A Guest",
+                "email": "guest@example.com",
+                "phone": "+256700000000",
+                "check_in": (date.today() + timedelta(days=5)).isoformat(),
+                "check_out": (date.today() + timedelta(days=6)).isoformat(),
+                "adults": 1,
+                "children": 0,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("check_out", response.data)
+
+    def test_reservation_submission_emails_guest_and_staff_when_configured(self):
+        lodge = Lodge.objects.create(name="Email Cottage")
+        check_in = date.today() + timedelta(days=9)
+        with (
+            override_settings(
+                EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+                EMAIL_HOST="smtp.example.com",
+                DEFAULT_FROM_EMAIL="reservations@example.com",
+                RESERVATION_NOTIFICATION_EMAIL="frontdesk@example.com",
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            response = self.client.post(
+                "/api/v1/reservations/",
+                {
+                    "lodge": lodge.slug,
+                    "guest_name": "Email Guest",
+                    "email": "guest@example.com",
+                    "phone": "+256700000000",
+                    "check_in": check_in.isoformat(),
+                    "check_out": (check_in + timedelta(days=2)).isoformat(),
+                    "adults": 1,
+                    "children": 0,
+                },
+                format="json",
+            )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(mail.outbox[0].to, ["guest@example.com"])
+        self.assertEqual(mail.outbox[1].to, ["frontdesk@example.com"])
 
 
 class StaffReservationApprovalTests(TestCase):
@@ -351,6 +463,7 @@ class StaffReservationApprovalTests(TestCase):
 
 class StaffApiTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
         self.staff = get_user_model().objects.create_user(
             username="portal-admin",
@@ -392,9 +505,15 @@ class StaffApiTests(TestCase):
     def test_staff_endpoints_require_staff_token(self):
         response = self.client.get("/api/v1/staff/products/")
         self.assertEqual(response.status_code, 401)
+        response = self.client.get("/api/v1/staff/reservations/calendar/")
+        self.assertEqual(response.status_code, 401)
+        response = self.client.post("/api/v1/staff/lodge-blockouts/", {}, format="json")
+        self.assertEqual(response.status_code, 401)
 
         self.client.force_authenticate(user=self.regular_user)
         response = self.client.get("/api/v1/staff/products/")
+        self.assertEqual(response.status_code, 403)
+        response = self.client.get("/api/v1/staff/reservations/")
         self.assertEqual(response.status_code, 403)
 
     def test_staff_can_create_and_edit_products(self):
@@ -472,6 +591,43 @@ class StaffApiTests(TestCase):
             if product["id"] == response.data["id"]
         )
         self.assertEqual(uploaded_product["image"], response.data["image_url"])
+
+    def test_staff_can_upload_lodge_image_for_public_cottages(self):
+        self.login_as_staff()
+        with (
+            override_settings(
+                CLOUDINARY_NAME="demo",
+                CLOUDINARY_KEY="test-key",
+                CLOUDINARY_SECRET="test-secret",
+            ),
+            patch(
+                "core.staff_api_serializers.cloudinary.uploader.upload",
+                return_value={
+                    "secure_url": "https://res.cloudinary.com/demo/lodge.webp",
+                    "public_id": f"kalitusi/lodges/{self.lodge.pk}",
+                },
+            ) as upload_image,
+        ):
+            response = self.client.patch(
+                f"/api/v1/staff/lodges/{self.lodge.pk}/",
+                {
+                    "image_file": SimpleUploadedFile(
+                        "cottage.webp", b"sample image", content_type="image/webp"
+                    )
+                },
+                format="multipart",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["image_url"],
+            "https://res.cloudinary.com/demo/lodge.webp",
+        )
+        upload_image.assert_called_once()
+
+        public_lodges = self.client.get("/api/v1/lodges/")
+        self.assertEqual(public_lodges.status_code, 200)
+        self.assertEqual(public_lodges.data[0]["image_url"], response.data["image_url"])
 
     def test_staff_product_image_rejects_data_urls(self):
         self.login_as_staff()
@@ -597,6 +753,79 @@ class StaffApiTests(TestCase):
         pending.refresh_from_db()
         self.assertEqual(pending.status, LodgeReservation.Status.PENDING)
 
+    def test_staff_can_edit_reservation_details(self):
+        self.login_as_staff()
+        reservation = LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="Original Guest",
+            phone="+256700000001",
+            check_in=date.today() + timedelta(days=8),
+            check_out=date.today() + timedelta(days=10),
+        )
+        second_lodge = Lodge.objects.create(name="Garden Cottage", capacity=6)
+        check_in = date.today() + timedelta(days=12)
+        check_out = date.today() + timedelta(days=15)
+
+        response = self.client.patch(
+            f"/api/v1/staff/reservations/{reservation.id}/",
+            {
+                "lodge": second_lodge.id,
+                "guest_name": "Updated Guest",
+                "email": "guest@example.com",
+                "phone": "+256700000099",
+                "check_in": check_in.isoformat(),
+                "check_out": check_out.isoformat(),
+                "adults": 3,
+                "children": 2,
+                "note": "Ground-floor room requested",
+                "status": LodgeReservation.Status.CONFIRMED,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["lodge"], second_lodge.id)
+        self.assertEqual(response.data["lodge_name"], second_lodge.name)
+        self.assertEqual(response.data["guest_name"], "Updated Guest")
+        self.assertEqual(response.data["email"], "guest@example.com")
+        self.assertEqual(response.data["phone"], "+256700000099")
+        self.assertEqual(response.data["check_in"], check_in.isoformat())
+        self.assertEqual(response.data["check_out"], check_out.isoformat())
+        self.assertEqual(response.data["adults"], 3)
+        self.assertEqual(response.data["children"], 2)
+        self.assertEqual(response.data["note"], "Ground-floor room requested")
+        self.assertEqual(response.data["status"], LodgeReservation.Status.CONFIRMED)
+
+    def test_staff_reservation_edits_validate_dates_and_lodge_capacity(self):
+        self.login_as_staff()
+        reservation = LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="Guest",
+            phone="+256700000001",
+            check_in=date.today() + timedelta(days=8),
+            check_out=date.today() + timedelta(days=10),
+        )
+        url = f"/api/v1/staff/reservations/{reservation.id}/"
+
+        response = self.client.patch(
+            url,
+            {"adults": 4, "children": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("adults", response.data)
+
+        response = self.client.patch(
+            url,
+            {
+                "check_in": (date.today() + timedelta(days=10)).isoformat(),
+                "check_out": (date.today() + timedelta(days=9)).isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("check_out", response.data)
+
     def test_staff_can_manage_categories_and_lodges(self):
         self.login_as_staff()
         category_response = self.client.post(
@@ -618,3 +847,102 @@ class StaffApiTests(TestCase):
             format="json",
         )
         self.assertEqual(lodge_response.status_code, 201)
+
+    def test_staff_can_create_filter_calendar_and_delete_reservations(self):
+        self.login_as_staff()
+        check_in = date.today() + timedelta(days=14)
+        check_out = check_in + timedelta(days=2)
+        response = self.client.post(
+            "/api/v1/staff/reservations/",
+            {
+                "lodge": self.lodge.id,
+                "guest_name": "Walk-in Guest",
+                "email": "walkin@example.com",
+                "phone": "+256700000008",
+                "check_in": check_in.isoformat(),
+                "check_out": check_out.isoformat(),
+                "adults": 2,
+                "children": 0,
+                "occasion": "Anniversary",
+                "source": LodgeReservation.Source.WALK_IN,
+                "status": LodgeReservation.Status.PENDING,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        reservation_id = response.data["id"]
+        self.assertEqual(response.data["source"], LodgeReservation.Source.WALK_IN)
+        self.assertEqual(response.data["occasion"], "Anniversary")
+
+        listing = self.client.get(
+            "/api/v1/staff/reservations/",
+            {"q": "Walk-in", "source": LodgeReservation.Source.WALK_IN},
+        )
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.data["count"], 1)
+        self.assertEqual(listing.data["results"][0]["id"], reservation_id)
+
+        calendar = self.client.get(
+            "/api/v1/staff/reservations/calendar/",
+            {"start": check_in.isoformat(), "end": check_out.isoformat()},
+        )
+        self.assertEqual(calendar.status_code, 200)
+        self.assertEqual(calendar.data[0]["id"], reservation_id)
+
+        response = self.client.patch(
+            f"/api/v1/staff/reservations/{reservation_id}/",
+            {"status": LodgeReservation.Status.CANCELLED},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.delete(f"/api/v1/staff/reservations/{reservation_id}/")
+        self.assertEqual(response.status_code, 204)
+
+    def test_staff_can_manage_blockouts_and_blockouts_reject_active_stays(self):
+        self.login_as_staff()
+        start = date.today() + timedelta(days=20)
+        end = start + timedelta(days=2)
+        response = self.client.post(
+            "/api/v1/staff/lodge-blockouts/",
+            {
+                "lodge": self.lodge.id,
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "reason": "Maintenance",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        blockout_id = response.data["id"]
+        unavailable = self.client.get(
+            "/api/v1/lodges/",
+            {
+                "check_in": start.isoformat(),
+                "check_out": end.isoformat(),
+                "guests": 2,
+            },
+        )
+        self.assertEqual(unavailable.status_code, 200)
+        self.assertEqual(unavailable.data, [])
+
+        active_check_in = date.today() + timedelta(days=30)
+        active_reservation = LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="Active Guest",
+            phone="+256700000001",
+            check_in=active_check_in,
+            check_out=active_check_in + timedelta(days=2),
+            status=LodgeReservation.Status.CONFIRMED,
+        )
+        response = self.client.post(
+            "/api/v1/staff/lodge-blockouts/",
+            {
+                "lodge": self.lodge.id,
+                "start_date": active_reservation.check_in.isoformat(),
+                "end_date": active_reservation.check_out.isoformat(),
+                "reason": "Closed",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.client.delete(f"/api/v1/staff/lodge-blockouts/{blockout_id}/")

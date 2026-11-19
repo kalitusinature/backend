@@ -60,7 +60,21 @@ class Lodge(models.Model):
     capacity = models.PositiveSmallIntegerField(
         default=2, validators=[MinValueValidator(1), MaxValueValidator(50)]
     )
+    min_nights = models.PositiveSmallIntegerField(
+        default=1, validators=[MinValueValidator(1), MaxValueValidator(365)]
+    )
+    max_nights = models.PositiveSmallIntegerField(
+        default=30, validators=[MinValueValidator(1), MaxValueValidator(365)]
+    )
+    min_advance_days = models.PositiveSmallIntegerField(
+        default=0, validators=[MinValueValidator(0), MaxValueValidator(365)]
+    )
+    max_advance_days = models.PositiveSmallIntegerField(
+        default=365, validators=[MinValueValidator(1), MaxValueValidator(365)]
+    )
+    checkin_weekdays = models.JSONField(default=list, blank=True)
     image_url = models.URLField(max_length=1000, blank=True)
+    image_public_id = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -73,6 +87,28 @@ class Lodge(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class LodgeBlockout(models.Model):
+    lodge = models.ForeignKey(
+        Lodge, on_delete=models.CASCADE, related_name="blockouts"
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    reason = models.CharField(max_length=160, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["start_date", "lodge__name"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_date__gt=models.F("start_date")),
+                name="lodge_blockout_end_after_start",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.lodge} unavailable {self.start_date}–{self.end_date}"
 
 
 class Order(models.Model):
@@ -153,6 +189,13 @@ class LodgeReservation(models.Model):
         CONFIRMED = "confirmed", "Confirmed"
         DECLINED = "declined", "Declined"
         CANCELLED = "cancelled", "Cancelled"
+        COMPLETED = "completed", "Completed"
+
+    class Source(models.TextChoices):
+        WEBSITE = "website", "Website"
+        WALK_IN = "walk_in", "Walk-in"
+        PHONE = "phone", "Phone call"
+        STAFF = "staff", "Admin / staff"
 
     reference = models.CharField(max_length=20, unique=True, editable=False)
     lodge = models.ForeignKey(
@@ -173,7 +216,12 @@ class LodgeReservation(models.Model):
         default=0, validators=[MinValueValidator(0), MaxValueValidator(50)]
     )
     note = models.TextField(blank=True)
+    occasion = models.CharField(max_length=100, blank=True)
+    source = models.CharField(
+        max_length=12, choices=Source.choices, default=Source.WEBSITE, db_index=True
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
