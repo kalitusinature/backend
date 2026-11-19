@@ -342,6 +342,11 @@
         <script>
             (function(){
                 var root=document.getElementById('cjFloatingCart');
+                var pathname=window.location.pathname.replace(/\/+$/, '');
+                if(pathname==='\/checkout'||pathname.endsWith('\/checkout')){
+                    if(root)root.style.display='none';
+                    return;
+                }
                 var trigger=document.getElementById('cjFloatingCartTrigger');
                 var panel=document.getElementById('cjFloatingCartPanel');
                 var itemsNode=document.getElementById('cjFloatingCartItems');
