@@ -149,6 +149,7 @@ class Order(models.Model):
         max_length=12, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID
     )
     note = models.TextField(blank=True)
+    cancellation_reason = models.TextField(blank=True)
     total_ugx = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -217,6 +218,7 @@ class LodgeReservation(models.Model):
         default=0, validators=[MinValueValidator(0), MaxValueValidator(50)]
     )
     note = models.TextField(blank=True)
+    cancellation_reason = models.TextField(blank=True)
     occasion = models.CharField(max_length=100, blank=True)
     source = models.CharField(
         max_length=12, choices=Source.choices, default=Source.WEBSITE, db_index=True

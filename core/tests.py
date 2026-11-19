@@ -542,6 +542,75 @@ class StaffApiTests(TestCase):
             HTTP_AUTHORIZATION=f"Token {response.data['token']}"
         )
 
+    def test_staff_cancellation_reasons_are_saved_and_returned(self):
+        self.login_as_staff()
+        order = Order.objects.create(
+            guest_name="Cancellation Guest",
+            phone="+256700000009",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 4",
+        )
+        missing_order_reason = self.client.patch(
+            f"/api/v1/staff/orders/{order.id}/",
+            {"status": Order.Status.CANCELLED},
+            format="json",
+        )
+        self.assertEqual(missing_order_reason.status_code, 400)
+        self.assertIn("cancellation_reason", missing_order_reason.data)
+        order_response = self.client.patch(
+            f"/api/v1/staff/orders/{order.id}/",
+            {
+                "status": Order.Status.CANCELLED,
+                "cancellation_reason": "Guest changed their plans.",
+            },
+            format="json",
+        )
+        self.assertEqual(order_response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.cancellation_reason, "Guest changed their plans.")
+
+        order_listing = self.client.get("/api/v1/staff/orders/")
+        self.assertEqual(order_listing.status_code, 200)
+        self.assertEqual(
+            order_listing.data[0]["cancellation_reason"],
+            "Guest changed their plans.",
+        )
+
+        check_in = date.today() + timedelta(days=30)
+        reservation = LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="Cancellation Guest",
+            phone="+256700000009",
+            check_in=check_in,
+            check_out=check_in + timedelta(days=2),
+            status=LodgeReservation.Status.CONFIRMED,
+        )
+        missing_reservation_reason = self.client.patch(
+            f"/api/v1/staff/reservations/{reservation.id}/",
+            {"status": LodgeReservation.Status.CANCELLED},
+            format="json",
+        )
+        self.assertEqual(missing_reservation_reason.status_code, 400)
+        self.assertIn("cancellation_reason", missing_reservation_reason.data)
+        reservation_response = self.client.patch(
+            f"/api/v1/staff/reservations/{reservation.id}/",
+            {
+                "status": LodgeReservation.Status.CANCELLED,
+                "cancellation_reason": "Guest requested a cancellation.",
+            },
+            format="json",
+        )
+        self.assertEqual(reservation_response.status_code, 200)
+        reservation.refresh_from_db()
+        self.assertEqual(
+            reservation.cancellation_reason,
+            "Guest requested a cancellation.",
+        )
+        self.assertEqual(
+            reservation_response.data["cancellation_reason"],
+            "Guest requested a cancellation.",
+        )
+
     def test_staff_can_update_profile_and_change_password(self):
         self.login_as_staff()
         old_token = Token.objects.get(user=self.staff).key
@@ -1115,7 +1184,10 @@ class StaffApiTests(TestCase):
 
         response = self.client.patch(
             f"/api/v1/staff/reservations/{reservation_id}/",
-            {"status": LodgeReservation.Status.CANCELLED},
+            {
+                "status": LodgeReservation.Status.CANCELLED,
+                "cancellation_reason": "Guest asked to cancel.",
+            },
             format="json",
         )
         self.assertEqual(response.status_code, 200)

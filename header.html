@@ -1,5 +1,20 @@
 <t t-name="website.cj_header">
     <style>
+        .cj-loading-screen{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 50% 30%,rgba(224,241,239,.9),transparent 58%),rgba(247,250,249,.98);backdrop-filter:blur(8px);font-family:Arial,Helvetica,sans-serif}
+        .cj-loading-screen.is-hidden{display:none}
+        .cj-loading-card{display:grid;width:min(440px,100%);justify-items:center;padding:38px 30px 30px;border:1px solid #dfeae7;border-radius:18px;background:rgba(255,255,255,.95);box-shadow:0 24px 70px rgba(17,54,49,.12);text-align:center}
+        .cj-loading-mark{display:grid;width:56px;height:56px;place-items:center;border:1px solid #d8e9e5;border-radius:17px;color:#fff;background:linear-gradient(145deg,#00999a,#12605d);box-shadow:0 8px 18px rgba(0,139,146,.18);font-family:Georgia,serif;font-size:30px;font-weight:700}
+        .cj-loading-eyebrow{margin-top:15px;color:#947251;font-size:9px;font-weight:750;letter-spacing:2px}
+        .cj-loading-spinner{width:34px;height:34px;margin-top:27px;border:3px solid #e4eee9;border-top-color:#008b92;border-right-color:#c89b56;border-radius:50%;animation:cjLoadingSpin .85s linear infinite}
+        .cj-loading-card h2{margin:21px 0 0;color:#203b38;font-family:Georgia,"Times New Roman",serif;font-size:24px;font-weight:500;letter-spacing:-.4px}
+        .cj-loading-message{margin:8px 0 0;color:#687b75;font-size:12px}
+        .cj-loading-track{width:min(260px,100%);height:4px;overflow:hidden;margin-top:23px;border-radius:99px;background:#e9efec}
+        .cj-loading-track span{display:block;width:38%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#008b92,#c89b56);animation:cjLoadingProgress 1.5s ease-in-out infinite}
+        .cj-loading-note{max-width:330px;min-height:34px;margin:13px 0 0;color:#7b897f;font-size:11px;line-height:1.55}
+        @keyframes cjLoadingSpin{to{transform:rotate(360deg)}}
+        @keyframes cjLoadingProgress{0%{transform:translateX(-120%)}50%{transform:translateX(150%)}100%{transform:translateX(320%)}}
+        @media(max-width:540px){.cj-loading-card{padding:30px 21px 25px}.cj-loading-card h2{font-size:21px}}
+        @media(prefers-reduced-motion:reduce){.cj-loading-spinner,.cj-loading-track span{animation:none}.cj-loading-track span{width:100%}}
         .cj-nav{height:78px;background:#fff;border-bottom:1px solid #eee;display:flex;align-items:center;position:relative;z-index:50}
         .cj-nav-inner{width:min(1180px,calc(100% - 32px));margin:auto;display:flex;align-items:center;justify-content:space-between}
         .cj-logo{color:#008B92;font-size:20px;font-weight:900;text-decoration:none;letter-spacing:-1px;text-transform:uppercase}
@@ -18,6 +33,17 @@
             .cj-cart-link{height:42px}
         }
     </style>
+    <div class="cj-loading-screen" id="cjLoadingScreen" role="status" aria-live="polite" aria-busy="true">
+        <div class="cj-loading-card">
+            <span class="cj-loading-mark" aria-hidden="true">K</span>
+            <span class="cj-loading-eyebrow">KALITUSI NATURE RESORT</span>
+            <span class="cj-loading-spinner" aria-hidden="true"></span>
+            <h2>Getting things ready</h2>
+            <p class="cj-loading-message">Loading your resort experience…</p>
+            <div class="cj-loading-track" aria-hidden="true"><span></span></div>
+            <p class="cj-loading-note" id="cjLoadingNote">Connecting to the resort services…</p>
+        </div>
+    </div>
     <nav class="cj-nav">
         <div class="cj-nav-inner">
             <a class="cj-logo" href="/menu">Kalitusi Resort Nature Hotel</a>
@@ -47,6 +73,89 @@
             var count=0;
             try{var cart=JSON.parse(localStorage.getItem('cjCart'))||[];count=cart.reduce(function(n,i){return n+(i.qty||1);},0);}catch(e){}
             var badge=document.getElementById('cjCartCount');if(badge)badge.textContent=count;
+            var loader=document.getElementById('cjLoadingScreen');
+            var loadingNote=document.getElementById('cjLoadingNote');
+            var startedAt=Date.now();
+            var pageReady=document.readyState==='complete';
+            var pendingRequests=0;
+            var showTimer=null;
+            var hideTimer=null;
+            var slowTimer=null;
+            var visible=true;
+            function setVisible(next){
+                if(!loader||visible===next)return;
+                visible=next;
+                if(next){
+                    loader.classList.remove('is-hidden');
+                    loader.setAttribute('aria-busy','true');
+                    if(loadingNote)loadingNote.textContent='Connecting to the resort services…';
+                    slowTimer=window.setTimeout(function(){
+                        if(visible&amp;&amp;loadingNote)loadingNote.textContent='The first connection can take a little longer while the resort services wake up. Please keep this page open.';
+                    },6000);
+                }else{
+                    loader.classList.add('is-hidden');
+                    loader.setAttribute('aria-busy','false');
+                    if(slowTimer)window.clearTimeout(slowTimer);
+                }
+            }
+            function scheduleHide(){
+                if(!pageReady||pendingRequests>0)return;
+                if(showTimer){window.clearTimeout(showTimer);showTimer=null;}
+                if(hideTimer)window.clearTimeout(hideTimer);
+                var minimumVisible=Math.max(0,700-(Date.now()-startedAt));
+                hideTimer=window.setTimeout(function(){
+                    if(pageReady&amp;&amp;pendingRequests===0)setVisible(false);
+                },Math.max(minimumVisible,180));
+            }
+            function beginRequest(){
+                pendingRequests++;
+                if(hideTimer){window.clearTimeout(hideTimer);hideTimer=null;}
+                if(showTimer){window.clearTimeout(showTimer);showTimer=null;}
+                if(!visible){
+                    showTimer=window.setTimeout(function(){setVisible(true);},150);
+                }
+            }
+            function endRequest(){
+                pendingRequests=Math.max(0,pendingRequests-1);
+                if(pendingRequests===0)scheduleHide();
+            }
+            function markPageReady(){
+                pageReady=true;
+                scheduleHide();
+            }
+            if(pageReady)markPageReady();
+            else window.addEventListener('load',markPageReady,{once:true});
+            if(window.fetch&amp;&amp;!window.CJFetchLoadingWrapped){
+                window.CJFetchLoadingWrapped=true;
+                var originalFetch=window.fetch;
+                window.fetch=function(input,options){
+                    var url=typeof input==='string'?input:(input&amp;&amp;input.url)||'';
+                    if(url.indexOf('/api/v1/')===-1)return originalFetch.apply(this,arguments);
+                    beginRequest();
+                    var complete=false;
+                    function finish(){
+                        if(complete)return;
+                        complete=true;
+                        endRequest();
+                    }
+                    return originalFetch.apply(this,arguments).then(function(response){
+                        finish();
+                        return response;
+                    },function(error){
+                        finish();
+                        throw error;
+                    });
+                };
+            }
+            document.addEventListener('click',function(event){
+                if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+                var link=event.target;
+                while(link&amp;&amp;link.tagName!=='A')link=link.parentNode;
+                if(!link||link.target==='_blank'||link.hasAttribute('download'))return;
+                if(link.hostname===window.location.hostname&amp;&amp;link.pathname!==window.location.pathname){
+                    beginRequest();
+                }
+            },true);
         })();
     </script>
 </t>

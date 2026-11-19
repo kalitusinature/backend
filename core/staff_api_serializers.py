@@ -470,6 +470,7 @@ class StaffOrderSerializer(serializers.ModelSerializer):
             "payment_method",
             "payment_status",
             "note",
+            "cancellation_reason",
             "total_ugx",
             "created_at",
             "items",
@@ -477,9 +478,13 @@ class StaffOrderSerializer(serializers.ModelSerializer):
 
 
 class StaffOrderUpdateSerializer(serializers.ModelSerializer):
+    cancellation_reason = serializers.CharField(
+        required=False, allow_blank=True, max_length=1000
+    )
+
     class Meta:
         model = Order
-        fields = ("status", "payment_status")
+        fields = ("status", "payment_status", "cancellation_reason")
 
     def validate(self, attrs):
         order = self.instance
@@ -487,6 +492,14 @@ class StaffOrderUpdateSerializer(serializers.ModelSerializer):
             return attrs
 
         status_value = attrs.get("status", order.status)
+        if (
+            status_value == Order.Status.CANCELLED
+            and order.status != Order.Status.CANCELLED
+            and not attrs.get("cancellation_reason", order.cancellation_reason).strip()
+        ):
+            raise serializers.ValidationError(
+                {"cancellation_reason": "A reason is required to cancel the order."}
+            )
         allowed_transitions = {
             Order.Status.NEW: {Order.Status.ACCEPTED, Order.Status.CANCELLED},
             Order.Status.ACCEPTED: {
@@ -544,6 +557,7 @@ class StaffReservationSerializer(serializers.ModelSerializer):
             "adults",
             "children",
             "note",
+            "cancellation_reason",
             "occasion",
             "source",
             "created_at",
@@ -605,6 +619,9 @@ class StaffReservationCreateSerializer(serializers.ModelSerializer):
 
 
 class StaffReservationUpdateSerializer(serializers.ModelSerializer):
+    cancellation_reason = serializers.CharField(
+        required=False, allow_blank=True, max_length=1000
+    )
     lodge = serializers.PrimaryKeyRelatedField(
         queryset=Lodge.objects.all(), required=False
     )
@@ -631,6 +648,7 @@ class StaffReservationUpdateSerializer(serializers.ModelSerializer):
             "adults",
             "children",
             "note",
+            "cancellation_reason",
             "occasion",
             "source",
             "created_at",
@@ -650,6 +668,22 @@ class StaffReservationUpdateSerializer(serializers.ModelSerializer):
         reservation = self.instance
         if reservation is None:
             return attrs
+
+        if (
+            attrs.get("status", reservation.status)
+            == LodgeReservation.Status.CANCELLED
+            and reservation.status != LodgeReservation.Status.CANCELLED
+            and not attrs.get(
+                "cancellation_reason", reservation.cancellation_reason
+            ).strip()
+        ):
+            raise serializers.ValidationError(
+                {
+                    "cancellation_reason": (
+                        "A reason is required to cancel the reservation."
+                    )
+                }
+            )
 
         lodge = attrs.get("lodge", reservation.lodge)
         check_in = attrs.get("check_in", reservation.check_in)
