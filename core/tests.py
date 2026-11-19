@@ -362,6 +362,10 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(staff_response.status_code, 200)
         self.assertEqual(staff_response.data[0]["number"], order_response.data["number"])
         self.assertEqual(staff_response.data[0]["email"], "")
+        self.assertEqual(
+            staff_response.data[0]["items"][0]["product_image_url"],
+            self.product.image_url,
+        )
         tracking_response = self.client.post(
             "/api/v1/orders/track/",
             {

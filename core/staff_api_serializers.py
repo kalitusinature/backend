@@ -442,11 +442,18 @@ class StaffProductSerializer(serializers.ModelSerializer):
 
 
 class StaffOrderItemSerializer(serializers.ModelSerializer):
+    product_image_url = serializers.CharField(
+        source="product.image_url",
+        read_only=True,
+        default="",
+    )
+
     class Meta:
         model = OrderItem
         fields = (
             "id",
             "product_name",
+            "product_image_url",
             "unit_price_ugx",
             "quantity",
             "line_total_ugx",
