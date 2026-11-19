@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 
@@ -14,6 +16,8 @@ from rest_framework.views import APIView
 
 from .models import (
     Category,
+    GuestCart,
+    GuestCartItem,
     Lodge,
     LodgeReservation,
     Order,
@@ -24,6 +28,9 @@ from .reservation_rules import validate_lodge_stay
 from .reservation_notifications import notify_new_reservation
 from .serializers import (
     CategorySerializer,
+    GuestCartItemAddSerializer,
+    GuestCartItemQuantitySerializer,
+    GuestCartSerializer,
     LodgeSerializer,
     OrderCreateSerializer,
     OrderReceiptSerializer,
@@ -35,6 +42,146 @@ from .serializers import (
 )
 
 ORDER_TRACKING_RETENTION = timedelta(days=2)
+
+
+class GuestCartAccessMixin:
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    def get_cart(self, request):
+        authorization = request.headers.get("Authorization", "")
+        scheme, separator, token = authorization.partition(" ")
+        if not separator or scheme.lower() != "bearer" or not token.strip():
+            return None
+        digest = hashlib.sha256(token.strip().encode("utf-8")).hexdigest()
+        return (
+            GuestCart.objects.filter(token_digest=digest)
+            .prefetch_related("items__product")
+            .first()
+        )
+
+    def unauthorized(self):
+        return Response(
+            {"detail": "A valid cart token is required."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+
+class GuestCartCreate(APIView):
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    @transaction.atomic
+    def post(self, request):
+        if not isinstance(request.data, dict):
+            raise ValidationError({"detail": "Expected a JSON object."})
+        serializer = GuestCartItemAddSerializer(
+            data=request.data.get("items", []), many=True
+        )
+        serializer.is_valid(raise_exception=True)
+        quantities = {}
+        products = {}
+        for item in serializer.validated_data:
+            product = item["product"]
+            products[product.pk] = product
+            quantities[product.pk] = quantities.get(product.pk, 0) + item["quantity"]
+            if quantities[product.pk] > 99:
+                raise ValidationError(
+                    {"items": "The maximum quantity for an item is 99."}
+                )
+        token = secrets.token_urlsafe(32)
+        cart = GuestCart.objects.create(
+            token_digest=hashlib.sha256(token.encode("utf-8")).hexdigest()
+        )
+        GuestCartItem.objects.bulk_create(
+            [
+                GuestCartItem(cart=cart, product=products[product_id], quantity=quantity)
+                for product_id, quantity in quantities.items()
+            ]
+        )
+        data = GuestCartSerializer(cart).data
+        data["token"] = token
+        return Response(data, status=status.HTTP_201_CREATED)
+
+
+class GuestCartView(GuestCartAccessMixin, APIView):
+    def get(self, request):
+        cart = self.get_cart(request)
+        if cart is None:
+            return self.unauthorized()
+        return Response(GuestCartSerializer(cart).data)
+
+    def delete(self, request):
+        cart = self.get_cart(request)
+        if cart is None:
+            return self.unauthorized()
+        cart.items.all().delete()
+        cart = GuestCart.objects.prefetch_related("items__product").get(pk=cart.pk)
+        return Response(GuestCartSerializer(cart).data)
+
+
+class GuestCartItemCreate(GuestCartAccessMixin, APIView):
+    @transaction.atomic
+    def post(self, request):
+        cart = self.get_cart(request)
+        if cart is None:
+            return self.unauthorized()
+        serializer = GuestCartItemAddSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        product = serializer.validated_data["product"]
+        quantity = serializer.validated_data["quantity"]
+        cart = GuestCart.objects.select_for_update().get(pk=cart.pk)
+        item = GuestCartItem.objects.filter(cart=cart, product=product).first()
+        current_quantity = item.quantity if item else 0
+        if current_quantity + quantity > 99:
+            return Response(
+                {"quantity": "The maximum quantity for an item is 99."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if item:
+            item.quantity += quantity
+            item.save(update_fields=["quantity"])
+        else:
+            GuestCartItem.objects.create(
+                cart=cart, product=product, quantity=quantity
+            )
+        cart.save(update_fields=["updated_at"])
+        return Response(
+            GuestCartSerializer(cart).data, status=status.HTTP_200_OK
+        )
+
+
+class GuestCartItemDetail(GuestCartAccessMixin, APIView):
+    def patch(self, request, product_slug):
+        cart = self.get_cart(request)
+        if cart is None:
+            return self.unauthorized()
+        serializer = GuestCartItemQuantitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = cart.items.filter(product__slug=product_slug).first()
+        if item is None:
+            return Response(
+                {"detail": "This product is not in your cart."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        quantity = serializer.validated_data["quantity"]
+        if quantity == 0:
+            item.delete()
+        else:
+            item.quantity = quantity
+            item.save(update_fields=["quantity"])
+        cart.save(update_fields=["updated_at"])
+        cart = GuestCart.objects.prefetch_related("items__product").get(pk=cart.pk)
+        return Response(GuestCartSerializer(cart).data)
+
+    def delete(self, request, product_slug):
+        cart = self.get_cart(request)
+        if cart is None:
+            return self.unauthorized()
+        cart.items.filter(product__slug=product_slug).delete()
+        cart.save(update_fields=["updated_at"])
+        cart = GuestCart.objects.prefetch_related("items__product").get(pk=cart.pk)
+        return Response(GuestCartSerializer(cart).data)
 
 
 class CategoryList(generics.ListAPIView):
@@ -205,6 +352,7 @@ class OrderCreate(APIView):
         serializer = OrderCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        guest_cart = data.pop("_guest_cart", None)
         items = data.pop("items")
         order = Order.objects.create(**data)
         total = 0
@@ -223,6 +371,8 @@ class OrderCreate(APIView):
             total += line_total
         order.total_ugx = total
         order.save(update_fields=["total_ugx", "updated_at"])
+        if guest_cart:
+            guest_cart.items.all().delete()
         return Response(
             OrderReceiptSerializer(order).data, status=status.HTTP_201_CREATED
         )

@@ -2,6 +2,10 @@ from django.urls import path
 
 from .api_views import (
     CategoryList,
+    GuestCartCreate,
+    GuestCartItemCreate,
+    GuestCartItemDetail,
+    GuestCartView,
     LodgeAvailability,
     LodgeList,
     OrderCreate,
@@ -65,6 +69,14 @@ urlpatterns = [
     ),
     path("categories/", CategoryList.as_view(), name="api_categories"),
     path("products/", ProductList.as_view(), name="api_products"),
+    path("cart/", GuestCartView.as_view(), name="api_cart"),
+    path("cart/create/", GuestCartCreate.as_view(), name="api_cart_create"),
+    path("cart/items/", GuestCartItemCreate.as_view(), name="api_cart_items"),
+    path(
+        "cart/items/<slug:product_slug>/",
+        GuestCartItemDetail.as_view(),
+        name="api_cart_item_detail",
+    ),
     path("lodges/", LodgeList.as_view(), name="api_lodges"),
     path(
         "lodges/<slug:slug>/availability/",

@@ -115,13 +115,20 @@
                         });
                     }
                     var key='cjCart';
+                    var useBackend=Boolean(window.CJCart&amp;&amp;window.location.protocol!=='file:');
+                    var cartToken=null;
                     function getCart(){try{return JSON.parse(localStorage.getItem(key))||[];}catch(e){return[];}}
-                    var cart=getCart();
-                    var subtotal=cart.reduce(function(n,i){return n+i.price*(i.qty||1);},0), total=subtotal;
+                    var cart=[];
                     var summary=document.getElementById('cjSummary');
+                    var placeButton=document.getElementById('cjPlace');
                     var orderType=document.getElementById('cjOrderType');
                     var locationLabel=document.getElementById('cjLocationLabel');
                     var locationInput=document.getElementById('cjLocation');
+                    function escapeHtml(value){
+                        return String(value==null?'':value).replace(/[&<>"']/g,function(character){
+                            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character];
+                        });
+                    }
                     if(orderType){
                         orderType.addEventListener('change',function(){
                             if(orderType.value==='lodge'){
@@ -133,18 +140,52 @@
                             }
                         });
                     }
-                    if(!cart.length){summary.innerHTML='<div class="cj-summary-header"><h2>Order Summary</h2><span class="cj-summary-count">0 items</span></div><p>Your cart is empty.</p><a href="/menu" style="color:#008B92;font-weight:800">Continue ordering</a>';document.getElementById('cjPlace').disabled=true;}
-                    else{
-                        var count=cart.reduce(function(n,i){return n+(i.qty||1);},0);
+                    function renderSummary(items,count,subtotal){
+                        cart=items;
+                        if(!cart.length){
+                            summary.innerHTML='<div class="cj-summary-header"><h2>Order Summary</h2><span class="cj-summary-count">0 items</span></div><p>Your cart is empty.</p><a href="'+(window.location.protocol==='file:'?'menu.html':'/menu')+'" style="color:#008B92;font-weight:800">Continue ordering</a>';
+                            placeButton.disabled=true;
+                            return;
+                        }
                         summary.innerHTML='<div class="cj-summary-header"><h2>Order Summary</h2><span class="cj-summary-count">'+count+(count===1?' item':' items')+'</span></div>'+
-                            cart.map(function(i){
-                                var image=i.image?'<img src="'+i.image+'" alt="'+i.name+'"/>':'<div></div>';
-                                return '<div class="cj-summary-item">'+image+'<div class="cj-summary-item-name">'+i.name+'<br/><span>UGX '+i.price.toLocaleString('en-UG')+' × '+(i.qty||1)+'</span></div><strong>UGX '+(i.price*(i.qty||1)).toLocaleString('en-UG')+'</strong></div>';
+                            cart.map(function(item){
+                                var image='';
+                                if(item.image){
+                                    try{
+                                        var imageUrl=new URL(item.image,window.CJ_API_BASE_URL||window.location.href);
+                                        if(imageUrl.protocol==='https:'||imageUrl.protocol==='http:')image='<img src="'+escapeHtml(imageUrl.href)+'" alt="'+escapeHtml(item.name)+'"/>';
+                                    }catch(error){}
+                                }
+                                return '<div class="cj-summary-item">'+(image||'<div></div>')+'<div class="cj-summary-item-name">'+escapeHtml(item.name)+'<br/><span>UGX '+Number(item.price).toLocaleString('en-UG')+' × '+item.qty+'</span></div><strong>UGX '+(Number(item.price)*item.qty).toLocaleString('en-UG')+'</strong></div>';
                             }).join('')+
                             '<div class="cj-line" style="margin-top:16px"><span>Subtotal</span><strong>UGX '+subtotal.toLocaleString('en-UG')+'</strong></div>'+
                             '<div class="cj-line"><span>Service charge</span><strong>UGX 0</strong></div>'+
-                            '<div class="cj-line cj-total"><span>Total</span><span>UGX '+total.toLocaleString('en-UG')+'</span></div>';
+                            '<div class="cj-line cj-total"><span>Total</span><span>UGX '+subtotal.toLocaleString('en-UG')+'</span></div>';
+                        placeButton.disabled=false;
                     }
+                    function loadCart(){
+                        placeButton.disabled=true;
+                        if(useBackend){
+                            window.CJCart.get().then(function(data){
+                                return window.CJCart.token().then(function(token){
+                                    cartToken=token;
+                                    var items=(data.items||[]).map(function(item){
+                                        return {id:item.product,slug:item.product,name:item.name,price:Number(item.price),image:item.image,qty:Number(item.quantity)};
+                                    });
+                                    renderSummary(items,Number(data.item_count)||0,Number(data.subtotal_ugx)||0);
+                                });
+                            }).catch(function(error){
+                                summary.innerHTML='<div class="cj-summary-header"><h2>Order Summary</h2></div><p>Unable to load your cart: '+escapeHtml(error.message||'Please try again.')+'</p><button type="button" id="cjRetryCheckoutCart">Try again</button>';
+                                document.getElementById('cjRetryCheckoutCart').addEventListener('click',loadCart);
+                            });
+                            return;
+                        }
+                        var items=getCart().map(function(item){
+                            return {id:item.id,slug:item.slug||item.id,name:item.name,price:Number(item.price)||0,image:item.image||'',qty:Number(item.qty)||1};
+                        });
+                        renderSummary(items,items.reduce(function(total,item){return total+item.qty;},0),items.reduce(function(total,item){return total+item.price*item.qty;},0));
+                    }
+                    loadCart();
                     document.getElementById('cjForm').addEventListener('submit',function(e){
                         e.preventDefault();var form=e.target;if(!form.checkValidity()||!cart.length)return;
                         var formData=new FormData(form);
@@ -155,9 +196,10 @@
                             order_type:String(formData.get('order_type')||'dine_in'),
                             location:String(formData.get('location')||'').trim(),
                             payment_method:String(formData.get('payment')||'cash'),
-                            note:String(formData.get('note')||'').trim(),
-                            items:cart.map(function(item){return {product:String(item.slug||item.id),quantity:Number(item.qty||1)};})
+                            note:String(formData.get('note')||'').trim()
                         };
+                        if(cartToken)order.cart_token=cartToken;
+                        else order.items=cart.map(function(item){return {product:String(item.slug||item.id),quantity:Number(item.qty||1)};});
                         var button=document.getElementById('cjPlace');
                         var errorNode=document.getElementById('cjOrderError');
                         button.disabled=true;button.textContent='Sending order…';errorNode.hidden=true;errorNode.textContent='';
@@ -198,7 +240,13 @@
                             }catch(storageError){
                                 trackingReady=false;
                             }
-                            localStorage.removeItem(key);
+                            if(useBackend){
+                                window.CJCart.refresh().catch(function(refreshError){
+                                    if(window.console&amp;&amp;window.console.warn)window.console.warn('Unable to refresh cart after checkout:',refreshError);
+                                });
+                            }else{
+                                localStorage.removeItem(key);
+                            }
                             document.getElementById('cjLayout').style.display='none';
                             document.querySelector('.cj-heading').style.display='none';
                             var trackingMessage=!order.email?' This order is saved for resort staff but cannot be tracked online without an email.':trackingReady?' Tracking is available for two days. Opening My Orders…':' To track within two days, open My Orders and enter your order number and email.';

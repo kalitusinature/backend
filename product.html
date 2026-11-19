@@ -131,11 +131,22 @@
                         updateCount();
                     }
                     function updateCount(){
+                        if(window.CJCart&&window.location.protocol!=='file:')return;
                         var count=getCart().reduce(function(n,i){return n+(i.qty||1);},0);
                         var badge=document.getElementById('cjCartCount');
                         if(badge)badge.textContent=count;
                         var badges=document.querySelectorAll('[id="cjCartCount"]');
                         badges.forEach(function(item){item.textContent=count;});
+                    }
+                    function addToCart(product,quantity){
+                        if(window.CJCart&&window.location.protocol!=='file:'){
+                            return window.CJCart.add(product.slug,quantity);
+                        }
+                        var cart=getCart(),item=cart.find(function(i){return i.id===product.slug;});
+                        if(item)item.qty=(item.qty||1)+quantity;
+                        else cart.push({id:product.slug,name:product.name,price:product.price,image:product.image,qty:quantity});
+                        saveCart(cart);
+                        return Promise.resolve();
                     }
                     function renderProduct(product,products){
                     document.getElementById('cjBreadcrumb').textContent=product.name;
@@ -167,7 +178,7 @@
                         document.getElementById('cjProductTotal').textContent='UGX '+(product.price*qty).toLocaleString('en-UG');
                     }
                     document.getElementById('cjMinus').onclick=function(){qty=Math.max(1,qty-1);updateProductQuantity();};
-                    document.getElementById('cjPlus').onclick=function(){qty++;updateProductQuantity();};
+                    document.getElementById('cjPlus').onclick=function(){qty=Math.min(99,qty+1);updateProductQuantity();};
                     document.querySelectorAll('.cj-option').forEach(function(button){button.onclick=function(){document.querySelectorAll('.cj-option').forEach(function(b){b.classList.remove('active');});button.classList.add('active');};});
                     var modal=document.getElementById('cjRecommendationModal'),selectedRecommendation=null,modalQty=1;
                     var modalClose=document.getElementById('cjModalClose');
@@ -177,7 +188,7 @@
                         if(selectedRecommendation)document.getElementById('cjModalTotal').textContent='UGX '+(selectedRecommendation.price*modalQty).toLocaleString('en-UG');
                     }
                     document.getElementById('cjModalMinus').addEventListener('click',function(){modalQty=Math.max(1,modalQty-1);updateModalQuantity();});
-                    document.getElementById('cjModalPlus').addEventListener('click',function(){modalQty++;updateModalQuantity();});
+                    document.getElementById('cjModalPlus').addEventListener('click',function(){modalQty=Math.min(99,modalQty+1);updateModalQuantity();});
                     function closeRecommendation(){
                         modal.classList.remove('open');
                         modal.setAttribute('aria-hidden','true');
@@ -210,26 +221,32 @@
                     document.addEventListener('keydown',function(e){if(e.key==='Escape'&&modal.classList.contains('open'))closeRecommendation();});
                     document.getElementById('cjModalAdd').addEventListener('click',function(){
                         if(!selectedRecommendation)return;
-                        var cart=getCart(),item=cart.find(function(i){return i.id===selectedRecommendation.slug;});
-                        if(item)item.qty=(item.qty||1)+modalQty;
-                        else cart.push({id:selectedRecommendation.slug,name:selectedRecommendation.name,price:selectedRecommendation.price,image:selectedRecommendation.image,qty:modalQty});
-                        saveCart(cart);
-                        closeRecommendation();
+                        var button=this;
+                        button.disabled=true;
                         var toast=document.getElementById('cjToast');
-                        toast.textContent=selectedRecommendation.name+' added to your order';
-                        toast.classList.add('show');
-                        setTimeout(function(){toast.classList.remove('show');toast.textContent='Added to cart';},1600);
+                        addToCart(selectedRecommendation,modalQty).then(function(){
+                            closeRecommendation();
+                            toast.textContent=selectedRecommendation.name+' added to your order';
+                            toast.classList.add('show');
+                            setTimeout(function(){toast.classList.remove('show');toast.textContent='Added to cart';},1600);
+                        },function(error){
+                            toast.textContent=error.message||'Unable to add this item. Please try again.';
+                            toast.classList.add('show');
+                            setTimeout(function(){toast.classList.remove('show');toast.textContent='Added to cart';},3000);
+                        }).then(function(){button.disabled=false;});
                     });
                     document.getElementById('cjAdd').onclick=function(e){
                         e.preventDefault();
-                        var cart=getCart(),item=cart.find(function(i){return i.id===product.slug});
-                        if(item)item.qty=(item.qty||1)+qty;else cart.push({id:product.slug,name:product.name,price:product.price,image:product.image,qty:qty});
-                        saveCart(cart);
-                        if(window.location.protocol==='file:'){
-                            window.location.assign('cart.html');
-                        }else{
-                            window.location.assign('/cart');
-                        }
+                        var button=this;
+                        button.disabled=true;
+                        addToCart(product,qty).then(function(){
+                            window.location.assign(window.location.protocol==='file:'?'cart.html':'/cart');
+                        },function(error){
+                            var status=document.getElementById('cjProductStatus');
+                            status.textContent=error.message||'Unable to add this item. Please try again.';
+                            status.hidden=false;
+                            button.disabled=false;
+                        });
                     };
                     updateCount();
                     document.getElementById('cjProductStatus').hidden=true;

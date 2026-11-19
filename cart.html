@@ -72,6 +72,63 @@
                         });
                     }
                     var key='cjCart';
+                    if(window.CJCart&amp;&amp;window.location.protocol!=='file:'){
+                        var currentItems=[];
+                        function escapeHtml(value){
+                            return String(value==null?'':value).replace(/[&<>"']/g,function(character){
+                                return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character];
+                            });
+                        }
+                        function renderBackendCart(cart){
+                            var layout=document.getElementById('cjLayout');
+                            currentItems=cart.items||[];
+                            var count=Number(cart.item_count)||0;
+                            var countLabel=document.getElementById('cjItemCount');
+                            if(countLabel)countLabel.textContent=count+(count===1?' item':' items');
+                            if(!currentItems.length){
+                                layout.innerHTML='<div class="cj-items cj-empty"><div class="cj-empty-icon">♡</div><h2>Your cart is empty</h2><p>Add something delicious from the menu.</p><a href="/menu">Browse the menu</a></div>';
+                                return;
+                            }
+                            var subtotal=Number(cart.subtotal_ugx)||0;
+                            layout.innerHTML='<div class="cj-items">'+currentItems.map(function(item){
+                                var image='';
+                                if(item.image){
+                                    try{
+                                        var imageUrl=new URL(item.image,window.CJ_API_BASE_URL||window.location.href);
+                                        if(imageUrl.protocol==='https:'||imageUrl.protocol==='http:')image='<img src="'+escapeHtml(imageUrl.href)+'" alt="'+escapeHtml(item.name)+'"/>';
+                                    }catch(error){}
+                                }
+                                var lineTotal=Number(item.price)*Number(item.quantity);
+                                return '<div class="cj-item">'+image+'<div><h3 class="cj-item-name">'+escapeHtml(item.name)+'</h3><div class="cj-item-price">UGX '+Number(item.price).toLocaleString('en-UG')+'</div><div class="cj-item-subtotal">Item total: UGX '+lineTotal.toLocaleString('en-UG')+'</div></div><div class="cj-item-controls"><div class="cj-qty"><button data-action="minus" data-id="'+escapeHtml(item.product)+'" aria-label="Decrease '+escapeHtml(item.name)+' quantity">−</button><span>'+item.quantity+'</span><button data-action="plus" data-id="'+escapeHtml(item.product)+'" aria-label="Increase '+escapeHtml(item.name)+' quantity" '+(Number(item.quantity)>=99?'disabled':'')+'>+</button></div><button class="cj-remove" data-action="remove" data-id="'+escapeHtml(item.product)+'" title="Remove '+escapeHtml(item.name)+'" aria-label="Remove '+escapeHtml(item.name)+'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 10v6M14 10v6"/></svg></button></div></div>';
+                            }).join('')+'</div><aside class="cj-summary"><h2>Order Summary</h2><div class="cj-line"><span>Subtotal</span><strong>UGX '+subtotal.toLocaleString('en-UG')+'</strong></div><div class="cj-line"><span>Service charge</span><strong>UGX 0</strong></div><div class="cj-line cj-total"><span>Total</span><span>UGX '+subtotal.toLocaleString('en-UG')+'</span></div><a class="cj-checkout" id="cjCheckoutLink" href="/checkout">Proceed to checkout</a></aside>';
+                        }
+                        function loadBackendCart(){
+                            window.CJCart.get().then(renderBackendCart).catch(function(error){
+                                var layout=document.getElementById('cjLayout');
+                                layout.innerHTML='<div class="cj-items cj-empty"><h2>Unable to load your cart</h2><p>'+escapeHtml(error.message||'Please try again.')+'</p><button type="button" id="cjRetryCart">Try again</button></div>';
+                                var countLabel=document.getElementById('cjItemCount');
+                                if(countLabel)countLabel.textContent='Unavailable';
+                                document.getElementById('cjRetryCart').addEventListener('click',loadBackendCart);
+                            });
+                        }
+                        document.getElementById('cjLayout').addEventListener('click',function(event){
+                            var button=event.target.closest('[data-action]');
+                            if(!button)return;
+                            var item=currentItems.find(function(entry){return entry.product===button.dataset.id;});
+                            if(!item)return;
+                            button.disabled=true;
+                            var operation=button.dataset.action==='remove'
+                                ?window.CJCart.remove(item.product)
+                                :window.CJCart.setQuantity(item.product,item.quantity+(button.dataset.action==='plus'?1:-1));
+                            operation.then(renderBackendCart).catch(function(error){
+                                var layout=document.getElementById('cjLayout');
+                                layout.innerHTML='<div class="cj-items cj-empty"><h2>Unable to update your cart</h2><p>'+escapeHtml(error.message||'Please try again.')+'</p><button type="button" id="cjRetryCart">Try again</button></div>';
+                                document.getElementById('cjRetryCart').addEventListener('click',loadBackendCart);
+                            });
+                        });
+                        loadBackendCart();
+                        return;
+                    }
                     function getCart(){try{return JSON.parse(localStorage.getItem(key))||[];}catch(e){return[];}}
                     function saveCart(cart){localStorage.setItem(key,JSON.stringify(cart));render();}
                     function render(){

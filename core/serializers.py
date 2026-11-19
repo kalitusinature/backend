@@ -1,6 +1,17 @@
+import hashlib
+
 from rest_framework import serializers
 
-from .models import Category, Lodge, LodgeReservation, Order, OrderItem, Product
+from .models import (
+    Category,
+    GuestCart,
+    GuestCartItem,
+    Lodge,
+    LodgeReservation,
+    Order,
+    OrderItem,
+    Product,
+)
 from .reservation_rules import validate_lodge_stay
 
 
@@ -29,6 +40,52 @@ class ProductSerializer(serializers.ModelSerializer):
             "image",
             "is_featured",
         )
+
+
+class GuestCartItemSerializer(serializers.ModelSerializer):
+    product = serializers.SlugRelatedField(slug_field="slug", read_only=True)
+    name = serializers.CharField(source="product.name", read_only=True)
+    price = serializers.IntegerField(source="product.price_ugx", read_only=True)
+    image = serializers.CharField(source="product.image_url", read_only=True)
+    line_total_ugx = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GuestCartItem
+        fields = ("product", "name", "price", "image", "quantity", "line_total_ugx")
+
+    def get_line_total_ugx(self, item):
+        return item.product.price_ugx * item.quantity
+
+
+class GuestCartSerializer(serializers.ModelSerializer):
+    items = GuestCartItemSerializer(many=True, read_only=True)
+    item_count = serializers.SerializerMethodField()
+    subtotal_ugx = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GuestCart
+        fields = ("items", "item_count", "subtotal_ugx")
+
+    def get_item_count(self, cart):
+        return sum(item.quantity for item in cart.items.all())
+
+    def get_subtotal_ugx(self, cart):
+        return sum(
+            item.product.price_ugx * item.quantity
+            for item in cart.items.all()
+        )
+
+
+class GuestCartItemAddSerializer(serializers.Serializer):
+    product = serializers.SlugRelatedField(
+        slug_field="slug",
+        queryset=Product.objects.filter(is_available=True, category__is_active=True),
+    )
+    quantity = serializers.IntegerField(min_value=1, max_value=99, default=1)
+
+
+class GuestCartItemQuantitySerializer(serializers.Serializer):
+    quantity = serializers.IntegerField(min_value=0, max_value=99)
 
 
 class LodgeSerializer(serializers.ModelSerializer):
@@ -65,9 +122,46 @@ class OrderCreateSerializer(serializers.Serializer):
         choices=Order.PaymentMethod.choices, default=Order.PaymentMethod.CASH
     )
     note = serializers.CharField(required=False, allow_blank=True, max_length=2000)
-    items = OrderLineInputSerializer(many=True, allow_empty=False)
+    items = OrderLineInputSerializer(many=True, allow_empty=False, required=False)
+    cart_token = serializers.CharField(max_length=64, required=False, write_only=True)
 
     def validate(self, attrs):
+        cart_token = attrs.get("cart_token")
+        has_items = "items" in attrs
+        if bool(cart_token) == has_items:
+            raise serializers.ValidationError(
+                {"items": "Provide either a cart token or an items list."}
+            )
+        if cart_token:
+            cart = (
+                GuestCart.objects.filter(
+                    token_digest=hashlib.sha256(cart_token.encode("utf-8")).hexdigest()
+                )
+                .prefetch_related("items__product__category")
+                .first()
+            )
+            if cart is None:
+                raise serializers.ValidationError(
+                    {"cart_token": "This cart is unavailable. Please refresh your cart."}
+                )
+            cart_items = list(cart.items.all())
+            if not cart_items:
+                raise serializers.ValidationError(
+                    {"cart_token": "Your cart is empty."}
+                )
+            if any(
+                not item.product.is_available or not item.product.category.is_active
+                for item in cart_items
+            ):
+                raise serializers.ValidationError(
+                    {"cart_token": "A cart item is no longer available."}
+                )
+            attrs["items"] = [
+                {"product": item.product, "quantity": item.quantity}
+                for item in cart_items
+            ]
+            attrs["_guest_cart"] = cart
+            attrs.pop("cart_token")
         if attrs["order_type"] == Order.OrderType.DINE_IN and not attrs["location"].strip():
             raise serializers.ValidationError(
                 {"location": "Enter the restaurant table number."}

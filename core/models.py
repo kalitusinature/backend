@@ -112,6 +112,31 @@ class LodgeBlockout(models.Model):
         return f"{self.lodge} unavailable {self.start_date}–{self.end_date}"
 
 
+class GuestCart(models.Model):
+    token_digest = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class GuestCartItem(models.Model):
+    cart = models.ForeignKey(GuestCart, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(99)]
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gte=1, quantity__lte=99),
+                name="guest_cart_quantity_1_to_99",
+            ),
+            models.UniqueConstraint(
+                fields=("cart", "product"), name="unique_guest_cart_product"
+            )
+        ]
+
+
 class Order(models.Model):
     class Status(models.TextChoices):
         NEW = "new", "New"

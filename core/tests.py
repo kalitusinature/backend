@@ -14,6 +14,7 @@ from rest_framework.test import APIClient
 
 from .models import (
     Category,
+    GuestCart,
     Lodge,
     LodgeBlockout,
     LodgeReservation,
@@ -64,6 +65,100 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(order.total_ugx, 24000)
         self.assertEqual(order.payment_status, Order.PaymentStatus.UNPAID)
         self.assertEqual(order.items.get().line_total_ugx, 24000)
+
+    def test_guest_cart_uses_backend_token_and_catalog_prices(self):
+        create_response = self.client.post("/api/v1/cart/create/", {}, format="json")
+        token = create_response.data["token"]
+        stored_cart = GuestCart.objects.get()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+        add_response = self.client.post(
+            "/api/v1/cart/items/",
+            {"product": self.product.slug, "quantity": 2},
+            format="json",
+        )
+        cart_response = self.client.get("/api/v1/cart/")
+
+        self.assertEqual(create_response.status_code, 201)
+        self.assertNotEqual(stored_cart.token_digest, token)
+        self.assertEqual(add_response.status_code, 200)
+        self.assertEqual(cart_response.data["item_count"], 2)
+        self.assertEqual(cart_response.data["subtotal_ugx"], 24000)
+        self.assertEqual(cart_response.data["items"][0]["price"], 12000)
+
+    def test_guest_cart_imports_existing_browser_items_on_creation(self):
+        response = self.client.post(
+            "/api/v1/cart/create/",
+            {"items": [{"product": self.product.slug, "quantity": 3}]},
+            format="json",
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {response.data['token']}"
+        )
+
+        cart_response = self.client.get("/api/v1/cart/")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(cart_response.data["item_count"], 3)
+        self.assertEqual(cart_response.data["subtotal_ugx"], 36000)
+
+    def test_guest_cart_rejects_missing_token(self):
+        response = self.client.get("/api/v1/cart/")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_guest_cart_updates_and_removes_items(self):
+        create_response = self.client.post("/api/v1/cart/create/", {}, format="json")
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {create_response.data['token']}"
+        )
+        self.client.post(
+            "/api/v1/cart/items/",
+            {"product": self.product.slug, "quantity": 2},
+            format="json",
+        )
+
+        update_response = self.client.patch(
+            f"/api/v1/cart/items/{self.product.slug}/",
+            {"quantity": 4},
+            format="json",
+        )
+        self.assertEqual(update_response.data["item_count"], 4)
+
+        remove_response = self.client.delete(
+            f"/api/v1/cart/items/{self.product.slug}/"
+        )
+        self.assertEqual(remove_response.status_code, 200)
+        self.assertEqual(remove_response.data["item_count"], 0)
+
+    def test_guest_cart_order_uses_server_items_and_clears_the_cart(self):
+        create_response = self.client.post("/api/v1/cart/create/", {}, format="json")
+        token = create_response.data["token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.client.post(
+            "/api/v1/cart/items/",
+            {"product": self.product.slug, "quantity": 2},
+            format="json",
+        )
+
+        order_response = self.client.post(
+            "/api/v1/orders/",
+            {
+                "guest_name": "A Guest",
+                "phone": "+256700000000",
+                "order_type": "dine_in",
+                "location": "Table 4",
+                "payment_method": "cash",
+                "cart_token": token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(order_response.status_code, 201)
+        order = Order.objects.get(number=order_response.data["number"])
+        self.assertEqual(order.total_ugx, 24000)
+        self.assertEqual(order.items.get().quantity, 2)
+        self.assertEqual(self.client.get("/api/v1/cart/").data["item_count"], 0)
 
     def test_customer_can_track_order_with_number_and_email_without_private_fields(self):
         order_response = self.client.post(
