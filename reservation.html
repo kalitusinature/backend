@@ -35,7 +35,7 @@
                 .cj-reservation-dialog-content p{margin:0;color:#52615a;line-height:1.6}
                 .cj-reservation-dialog-close{position:absolute;top:15px;right:15px;width:34px;height:34px;border:0;border-radius:50%;background:#f0f4f1;color:#43554b;font-size:22px;cursor:pointer}
                 .cj-reservation-dialog-action{width:100%;margin-top:22px}
-                @media(max-width:620px){.cj-reservation-container{width:calc(100% - 24px);margin:24px auto 56px}.cj-reservation-grid{grid-template-columns:1fr}.cj-reservation-field.full{grid-column:auto}}
+                @media(max-width:620px){.cj-reservation-container{width:calc(100% - 24px);margin:24px auto 56px}.cj-reservation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cj-reservation-field.full,.cj-reservation-grid>.cj-reservation-field:not(.cj-reservation-date-field){grid-column:1/-1}.cj-reservation-date-field{min-width:0}.cj-reservation-date-field input{min-width:0;padding:12px 8px;font-size:13px}}
             </style>
             <main class="cj-reservation-page">
                 <t t-call="website.cj_header"/>
@@ -52,11 +52,11 @@
                                     </select>
                                     <small class="cj-reservation-help" id="cjLodgeHelp">Choose your preferred stay.</small>
                                 </div>
-                                <div class="cj-reservation-field">
+                                <div class="cj-reservation-field cj-reservation-date-field">
                                     <label for="cjCheckIn">Check-in</label>
                                     <input id="cjCheckIn" name="check_in" type="date" required="required"/>
                                 </div>
-                                <div class="cj-reservation-field">
+                                <div class="cj-reservation-field cj-reservation-date-field">
                                     <label for="cjCheckOut">Check-out</label>
                                     <input id="cjCheckOut" name="check_out" type="date" required="required"/>
                                 </div>
