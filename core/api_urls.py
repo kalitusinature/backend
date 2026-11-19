@@ -2,6 +2,7 @@ from django.urls import path
 
 from .api_views import (
     CategoryList,
+    LodgeAvailability,
     LodgeList,
     OrderCreate,
     OrderTrack,
@@ -33,6 +34,11 @@ urlpatterns = [
     path("categories/", CategoryList.as_view(), name="api_categories"),
     path("products/", ProductList.as_view(), name="api_products"),
     path("lodges/", LodgeList.as_view(), name="api_lodges"),
+    path(
+        "lodges/<slug:slug>/availability/",
+        LodgeAvailability.as_view(),
+        name="api_lodge_availability",
+    ),
     path("orders/", OrderCreate.as_view(), name="api_orders"),
     path("orders/track/", OrderTrack.as_view(), name="api_order_track"),
     path("reservations/", ReservationCreate.as_view(), name="api_reservations"),

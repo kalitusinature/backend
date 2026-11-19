@@ -385,6 +385,41 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(duplicate.status_code, 400)
         self.assertIn("lodge", duplicate.data)
 
+    def test_lodge_calendar_marks_booked_and_blocked_checkin_dates_unavailable(self):
+        lodge = Lodge.objects.create(name="Calendar Cottage", capacity=4)
+        month_start = (date.today().replace(day=1) + timedelta(days=32)).replace(day=1)
+        booked_check_in = month_start + timedelta(days=10)
+        LodgeReservation.objects.create(
+            lodge=lodge,
+            guest_name="Booked Guest",
+            phone="+256700000001",
+            check_in=booked_check_in,
+            check_out=booked_check_in + timedelta(days=2),
+            status=LodgeReservation.Status.PENDING,
+        )
+        blocked_start = month_start + timedelta(days=15)
+        LodgeBlockout.objects.create(
+            lodge=lodge,
+            start_date=blocked_start,
+            end_date=blocked_start + timedelta(days=2),
+            reason="Maintenance",
+        )
+
+        response = self.client.get(
+            f"/api/v1/lodges/{lodge.slug}/availability/",
+            {
+                "month": month_start.strftime("%Y-%m"),
+                "nights": 2,
+                "guests": 2,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(booked_check_in.isoformat(), response.data["unavailable_dates"])
+        self.assertIn((booked_check_in - timedelta(days=1)).isoformat(), response.data["unavailable_dates"])
+        self.assertIn((blocked_start - timedelta(days=1)).isoformat(), response.data["unavailable_dates"])
+        self.assertIn((booked_check_in + timedelta(days=2)).isoformat(), response.data["available_dates"])
+
     def test_public_reservation_enforces_lodge_stay_rules(self):
         lodge = Lodge.objects.create(name="Minimum Stay Lodge", min_nights=2)
         response = self.client.post(

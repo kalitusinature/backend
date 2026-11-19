@@ -68,6 +68,29 @@
     }
     .field textarea { min-height: 96px; resize: vertical; }
     .help { display: block; margin-top: 6px; color: #69736f; font-size: 12px; line-height: 1.45; }
+    .availability { margin: 8px 0 0; padding: 18px; border: 1px solid #e1e8e5; border-radius: 10px; background: #f9fbfa; }
+    .availability-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .availability-heading h2 { margin: 0 0 4px; font-size: 18px; }
+    .availability-heading p { margin: 0; color: #69736f; font-size: 12px; }
+    .month-controls { display: flex; gap: 6px; }
+    .month-controls button, .availability-day { border: 1px solid #d5dfda; border-radius: 7px; background: #fff; cursor: pointer; }
+    .month-controls button { width: 36px; height: 36px; color: #254537; font-size: 18px; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+    .calendar-weekday { padding: 6px 0; color: #69736f; font-size: 11px; font-weight: 700; text-align: center; }
+    .calendar-empty { min-height: 38px; }
+    .availability-day { min-height: 38px; color: #17633a; border-color: #b7d9c0; background: #eaf7ef; }
+    .availability-day:hover:not(:disabled), .availability-day.is-selected { color: #fff; border-color: #008b92; background: #008b92; }
+    .availability-day:disabled { color: #9e4b42; border-color: #efd1cd; background: #fff0ee; cursor: not-allowed; text-decoration: line-through; }
+    .availability-day.is-past:disabled { color: #929b96; border-color: #e4e9e6; background: #edf0ee; }
+    .calendar-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; color: #69736f; font-size: 11px; }
+    .calendar-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; background: #eaf7ef; border: 1px solid #b7d9c0; }
+    .legend-dot.unavailable { background: #fff0ee; border-color: #efd1cd; }
+    .success-dialog { width: min(460px, calc(100% - 32px)); padding: 28px; border: 0; border-radius: 14px; color: #17201f; box-shadow: 0 24px 80px rgba(21,35,31,.25); }
+    .success-dialog::backdrop { background: rgba(15, 30, 25, .55); }
+    .success-dialog h2 { margin: 0 0 10px; font-size: 24px; }
+    .success-dialog p { color: #52615a; line-height: 1.6; }
+    .success-dialog .submit { margin-top: 10px; }
     .submit {
       width: 100%;
       min-height: 52px;
@@ -95,6 +118,10 @@
       .page { padding: 24px 12px 56px; }
       .grid { grid-template-columns: 1fr; }
       .field.full { grid-column: auto; }
+      .availability { padding: 12px; }
+      .availability-day, .calendar-empty { min-height: 34px; }
+      .calendar-grid { gap: 3px; }
+      .calendar-weekday { font-size: 9px; }
     }
   </style>
 </head>
@@ -109,7 +136,7 @@
   <main class="page">
     <section class="card" aria-labelledby="reservation-title">
       <h1 id="reservation-title">Request a cottage stay</h1>
-      <p class="intro">Send us your preferred dates and guest details. Your request will be reviewed by our team; your stay is not confirmed until staff contacts you.</p>
+      <p class="intro">Choose an available check-in date. Booked and unavailable dates are disabled. Your request is not confirmed until our staff contacts you.</p>
       <form id="reservation-form">
         <div class="grid">
           <div class="field full">
@@ -120,12 +147,35 @@
             <small class="help" id="lodge-help">Choose your preferred stay.</small>
           </div>
           <div class="field">
+            <label for="nights">Number of nights</label>
+            <input id="nights" name="nights" type="number" min="1" value="1" required disabled>
+          </div>
+          <div class="field">
             <label for="check-in">Check-in</label>
-            <input id="check-in" name="check_in" type="date" required>
+            <input id="check-in" name="check_in" type="date" required readonly>
           </div>
           <div class="field">
             <label for="check-out">Check-out</label>
-            <input id="check-out" name="check_out" type="date" required>
+            <input id="check-out" name="check_out" type="date" required readonly>
+          </div>
+          <div class="field full">
+            <section class="availability" aria-labelledby="calendar-title">
+              <div class="availability-heading">
+                <div>
+                  <h2 id="calendar-title">Choose a cottage to see dates</h2>
+                  <p id="calendar-status" role="status" aria-live="polite">Booked dates will be marked unavailable.</p>
+                </div>
+                <div class="month-controls">
+                  <button type="button" id="previous-month" aria-label="Previous month">‹</button>
+                  <button type="button" id="next-month" aria-label="Next month">›</button>
+                </div>
+              </div>
+              <div class="calendar-grid" id="availability-calendar" role="group" aria-label="Available check-in dates"></div>
+              <div class="calendar-legend" aria-label="Calendar legend">
+                <span><i class="legend-dot"></i> Available check-in</span>
+                <span><i class="legend-dot unavailable"></i> Booked or unavailable</span>
+              </div>
+            </section>
           </div>
           <div class="field">
             <label for="guest-name">Full name</label>
@@ -162,34 +212,55 @@
       <a class="back-link" href="https://kalitusi-nature-resort.odoo.com/cottages">Back to cottages</a>
     </section>
   </main>
+  <dialog class="success-dialog" id="success-dialog" aria-labelledby="success-title">
+    <h2 id="success-title">Thank you for booking!</h2>
+    <p id="success-details"></p>
+    <p>Our staff will contact you about payment to confirm your booking. Your stay is not confirmed until the team contacts you.</p>
+    <button class="submit" id="close-success" type="button">Done</button>
+  </dialog>
   <script>
     (function () {
       var apiBase = (window.CJ_API_BASE_URL || window.location.origin + '/api/v1').replace(/\/+$/, '');
       var form = document.getElementById('reservation-form');
       var lodgeSelect = document.getElementById('lodge');
       var lodgeHelp = document.getElementById('lodge-help');
+      var nightsInput = document.getElementById('nights');
       var checkIn = document.getElementById('check-in');
       var checkOut = document.getElementById('check-out');
       var adultsInput = document.getElementById('adults');
       var childrenInput = document.getElementById('children');
       var submitButton = document.getElementById('submit');
       var message = document.getElementById('message');
+      var calendarTitle = document.getElementById('calendar-title');
+      var calendarStatus = document.getElementById('calendar-status');
+      var calendar = document.getElementById('availability-calendar');
+      var successDialog = document.getElementById('success-dialog');
+      var successTitle = document.getElementById('success-title');
+      var successDetails = document.getElementById('success-details');
       var lodges = [];
+      var availableDates = [];
+      var availabilityRequestId = 0;
+      var isSubmitting = false;
       var requestedSlug = new URLSearchParams(window.location.search).get('lodge') || '';
 
       function localDateValue(date) {
         return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
       }
 
-      function nextDate(value) {
+      function addDays(value, days) {
         var date = new Date(value + 'T12:00:00');
-        date.setDate(date.getDate() + 1);
+        date.setDate(date.getDate() + days);
         return localDateValue(date);
       }
 
       var today = localDateValue(new Date());
+      var calendarMonth = today.slice(0, 7);
       checkIn.min = today;
       checkOut.min = today;
+
+      function updateSubmitState() {
+        submitButton.disabled = isSubmitting || !lodgeSelect.value || !checkIn.value || !checkOut.value;
+      }
 
       function showMessage(state, text) {
         message.dataset.state = state;
@@ -215,79 +286,208 @@
         return 'The reservation service returned HTTP ' + status + '. Please try again.';
       }
 
-      function loadLodges(preserveMessage) {
-        var selectedSlug = lodgeSelect.value || requestedSlug;
-        var query = new URLSearchParams();
-        if (checkIn.value && checkOut.value && checkOut.value > checkIn.value) {
-          query.set('check_in', checkIn.value);
-          query.set('check_out', checkOut.value);
-          query.set('guests', String(Number(adultsInput.value || 1) + Number(childrenInput.value || 0)));
+      function getJson(url, options) {
+        return fetch(url, options).then(function (response) {
+          return response.text().then(function (text) {
+            var data = null;
+            try { data = text ? JSON.parse(text) : null; } catch (parseError) {}
+            if (!response.ok) throw new Error(errorText(data, response.status));
+            if (data === null) throw new Error('The reservation service returned an invalid response.');
+            return data;
+          });
+        });
+      }
+
+      function renderCalendar() {
+        var daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        var parts = calendarMonth.split('-');
+        var year = Number(parts[0]);
+        var month = Number(parts[1]);
+        var firstDate = new Date(year, month - 1, 1, 12);
+        var daysInMonth = new Date(year, month, 0).getDate();
+        var mondayOffset = (firstDate.getDay() + 6) % 7;
+        var available = new Set(availableDates);
+        calendar.replaceChildren();
+        calendarTitle.textContent = new Intl.DateTimeFormat('en', {
+          month: 'long',
+          year: 'numeric'
+        }).format(firstDate);
+        daysOfWeek.forEach(function (day) {
+          var heading = document.createElement('span');
+          heading.className = 'calendar-weekday';
+          heading.textContent = day;
+          calendar.appendChild(heading);
+        });
+        for (var blank = 0; blank < mondayOffset; blank += 1) {
+          var empty = document.createElement('span');
+          empty.className = 'calendar-empty';
+          empty.setAttribute('aria-hidden', 'true');
+          calendar.appendChild(empty);
         }
-        var url = apiBase + '/lodges/' + (query.toString() ? '?' + query.toString() : '');
+        for (var dayNumber = 1; dayNumber <= daysInMonth; dayNumber += 1) {
+          var value = year + '-' + String(month).padStart(2, '0') + '-' + String(dayNumber).padStart(2, '0');
+          var isAvailable = available.has(value);
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'availability-day';
+          button.textContent = String(dayNumber);
+          button.disabled = !isAvailable;
+          button.setAttribute('aria-label', value + (isAvailable ? ', available for check-in' : ', booked or unavailable'));
+          if (value === checkIn.value) button.classList.add('is-selected');
+          if (value < today) button.classList.add('is-past');
+          if (isAvailable) {
+            button.addEventListener('click', function (selectedDate) {
+              return function () {
+                checkIn.value = selectedDate;
+                checkOut.value = addDays(selectedDate, Number(nightsInput.value));
+                checkOut.min = addDays(selectedDate, 1);
+                hideMessage();
+                renderCalendar();
+                updateSubmitState();
+              };
+            }(value));
+          }
+          calendar.appendChild(button);
+        }
+      }
+
+      function loadAvailability() {
+        var selectedLodge = lodgeSelect.value;
+        var requestId = ++availabilityRequestId;
+        availableDates = [];
+        if (!selectedLodge) {
+          calendarStatus.textContent = 'Choose a cottage to see available check-in dates.';
+          renderCalendar();
+          updateSubmitState();
+          return;
+        }
+        var guests = Number(adultsInput.value || 1) + Number(childrenInput.value || 0);
+        var query = new URLSearchParams({
+          month: calendarMonth,
+          nights: nightsInput.value || '1',
+          guests: String(guests)
+        });
+        calendarStatus.textContent = 'Checking availability…';
+        renderCalendar();
+        getJson(apiBase + '/lodges/' + encodeURIComponent(selectedLodge) + '/availability/?' + query.toString(), {
+          headers: { Accept: 'application/json' }
+        }).then(function (data) {
+          if (requestId !== availabilityRequestId) return;
+          if (!Array.isArray(data.available_dates)) {
+            throw new Error('The resort returned invalid availability data.');
+          }
+          availableDates = data.available_dates;
+          if (checkIn.value.slice(0, 7) === calendarMonth && !availableDates.includes(checkIn.value)) {
+            checkIn.value = '';
+            checkOut.value = '';
+            showMessage('error', 'That check-in date is no longer available. Please choose another date.');
+          }
+          calendarStatus.textContent = availableDates.length
+            ? availableDates.length + ' available check-in date' + (availableDates.length === 1 ? '' : 's') + ' for ' + data.nights + ' night' + (data.nights === 1 ? '' : 's') + '. Booked dates are disabled.'
+            : 'No check-in dates are available for this month and stay length.';
+          renderCalendar();
+          updateSubmitState();
+        }).catch(function (error) {
+          if (requestId !== availabilityRequestId) return;
+          availableDates = [];
+          calendarStatus.textContent = 'Could not load available dates.';
+          renderCalendar();
+          updateSubmitState();
+          showMessage('error', error.message || 'Could not load availability. Please try again.');
+        });
+      }
+
+      function chooseLodge(slug) {
+        availabilityRequestId += 1;
+        var lodge = lodges.find(function (item) { return item.slug === slug; });
+        checkIn.value = '';
+        checkOut.value = '';
+        availableDates = [];
+        hideMessage();
+        if (!lodge) {
+          nightsInput.disabled = true;
+          lodgeHelp.textContent = 'Choose your preferred stay.';
+          calendarStatus.textContent = 'Choose a cottage to see available check-in dates.';
+          renderCalendar();
+          updateSubmitState();
+          return;
+        }
+        nightsInput.min = lodge.min_nights;
+        nightsInput.max = lodge.max_nights;
+        nightsInput.value = lodge.min_nights;
+        nightsInput.disabled = false;
+        lodgeHelp.textContent = 'Sleeps up to ' + lodge.capacity + ' guests. Minimum stay: ' + lodge.min_nights + ' night' + (lodge.min_nights === 1 ? '' : 's') + '.';
+        loadAvailability();
+      }
+
+      function loadLodges() {
+        var selectedSlug = lodgeSelect.value || requestedSlug;
         lodgeSelect.disabled = true;
         submitButton.disabled = true;
         lodgeSelect.replaceChildren(new Option('Loading available stays…', ''));
-        fetch(url, { headers: { Accept: 'application/json' } })
-          .then(function (response) {
-            return response.text().then(function (text) {
-              var data = null;
-              try { data = text ? JSON.parse(text) : null; } catch (parseError) {}
-              if (!response.ok) throw new Error(errorText(data, response.status));
-              if (!Array.isArray(data)) throw new Error('The resort returned an invalid cottage list.');
-              return data;
-            });
-          })
+        getJson(apiBase + '/lodges/', { headers: { Accept: 'application/json' } })
           .then(function (data) {
+            if (!Array.isArray(data)) throw new Error('The resort returned an invalid cottage list.');
             lodges = data;
             lodgeSelect.replaceChildren(new Option(data.length ? 'Choose a cottage or lodge' : 'No stays currently available', ''));
             data.forEach(function (lodge) {
               lodgeSelect.add(new Option(lodge.name + ' · sleeps ' + lodge.capacity, lodge.slug));
             });
             var matchingLodge = data.find(function (lodge) { return lodge.slug === selectedSlug; });
-            if (matchingLodge) lodgeSelect.value = matchingLodge.slug;
             lodgeSelect.disabled = data.length === 0;
-            submitButton.disabled = data.length === 0;
             if (!data.length) {
-              lodgeHelp.textContent = query.toString()
-                ? 'No active stays are available for those dates. Try different dates.'
-                : 'No active cottages are listed yet. Please contact the resort.';
+              lodgeHelp.textContent = 'No active cottages are listed yet. Please contact the resort.';
+              calendarStatus.textContent = 'No cottage inventory is available.';
+              renderCalendar();
+            } else if (selectedSlug && !matchingLodge) {
+              lodgeHelp.textContent = 'That cottage is not currently listed.';
+              showMessage('error', 'That cottage is not currently listed. Please choose another stay.');
+            } else if (matchingLodge) {
+              lodgeSelect.value = matchingLodge.slug;
+              chooseLodge(matchingLodge.slug);
             } else {
-              lodgeHelp.textContent = matchingLodge
-                ? 'Your selected cottage is ready.'
-                : 'Choose an active cottage or lodge from the list.';
-              if (selectedSlug && !matchingLodge) {
-                showMessage('error', 'That cottage is not currently listed as available. Please choose another stay.');
-              } else if (!preserveMessage) {
-                hideMessage();
-              }
+              lodgeHelp.textContent = 'Choose a cottage or lodge to see its calendar.';
+              calendarStatus.textContent = 'Choose a cottage to see available check-in dates.';
+              renderCalendar();
             }
             requestedSlug = '';
+            updateSubmitState();
           })
           .catch(function (error) {
             lodges = [];
             lodgeSelect.replaceChildren(new Option('Could not load stays', ''));
             lodgeSelect.disabled = true;
-            submitButton.disabled = true;
             lodgeHelp.textContent = 'Please check your connection and reload this page.';
+            calendarStatus.textContent = 'Could not load cottage inventory.';
+            renderCalendar();
+            updateSubmitState();
             showMessage('error', error.message || 'Could not load cottages. Please try again.');
           });
       }
 
-      checkIn.addEventListener('change', function () {
-        checkOut.min = checkIn.value ? nextDate(checkIn.value) : today;
-        if (checkOut.value && !(checkOut.value > checkIn.value)) checkOut.value = '';
-        hideMessage();
-        loadLodges();
-      });
-      checkOut.addEventListener('change', function () {
-        hideMessage();
-        loadLodges();
-      });
-      adultsInput.addEventListener('change', function () { loadLodges(); });
-      childrenInput.addEventListener('change', function () { loadLodges(); });
-      lodgeSelect.addEventListener('change', hideMessage);
+      function changeMonth(offset) {
+        var parts = calendarMonth.split('-');
+        var next = new Date(Number(parts[0]), Number(parts[1]) - 1 + offset, 1, 12);
+        calendarMonth = localDateValue(next).slice(0, 7);
+        loadAvailability();
+      }
 
-      form.addEventListener('submit', function (event) {
+      lodgeSelect.addEventListener('change', function () { chooseLodge(lodgeSelect.value); });
+      nightsInput.addEventListener('change', function () {
+        var lodge = lodges.find(function (item) { return item.slug === lodgeSelect.value; });
+        if (lodge) {
+          nightsInput.value = String(Math.max(lodge.min_nights, Math.min(lodge.max_nights, Number(nightsInput.value) || lodge.min_nights)));
+        }
+        if (checkIn.value) checkOut.value = addDays(checkIn.value, Number(nightsInput.value));
+        loadAvailability();
+      });
+      adultsInput.addEventListener('change', loadAvailability);
+      childrenInput.addEventListener('change', loadAvailability);
+      document.getElementById('previous-month').addEventListener('click', function () { changeMonth(-1); });
+      document.getElementById('next-month').addEventListener('click', function () { changeMonth(1); });
+      document.getElementById('close-success').addEventListener('click', function () { successDialog.close(); });
+
+      form.addEventListener('submit', async function (event) {
         event.preventDefault();
         if (!form.reportValidity()) return;
         var formData = new FormData(form);
@@ -304,53 +504,68 @@
           showMessage('error', 'This stay allows up to ' + selectedLodge.capacity + ' guests. Adjust the guest count or choose another stay.');
           return;
         }
+        if (!checkIn.value || !checkOut.value || checkOut.value <= checkIn.value) {
+          showMessage('error', 'Choose an available check-in date from the calendar.');
+          return;
+        }
         var payload = {
           lodge: selectedLodge.slug,
           guest_name: String(formData.get('guest_name') || '').trim(),
           phone: String(formData.get('phone') || '').trim(),
           email: String(formData.get('email') || '').trim(),
-          check_in: String(formData.get('check_in') || ''),
-          check_out: String(formData.get('check_out') || ''),
+          check_in: checkIn.value,
+          check_out: checkOut.value,
           adults: adults,
           children: children,
           occasion: String(formData.get('occasion') || '').trim(),
           note: String(formData.get('note') || '').trim()
         };
+        var availabilityQuery = new URLSearchParams({
+          check_in: payload.check_in,
+          check_out: payload.check_out,
+          guests: String(adults + children)
+        });
         submitButton.disabled = true;
         submitButton.textContent = 'Sending request…';
+        isSubmitting = true;
         hideMessage();
-        fetch(apiBase + '/reservations/', {
-          method: 'POST',
-          headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        })
-          .then(function (response) {
-            return response.text().then(function (text) {
-              var data = null;
-              try { data = text ? JSON.parse(text) : null; } catch (parseError) {}
-              if (!response.ok) throw new Error(errorText(data, response.status));
-              if (!data || !data.reference) throw new Error('The resort returned an invalid reservation receipt.');
-              return data;
-            });
-          })
-          .then(function (receipt) {
-            form.reset();
-            checkIn.min = today;
-            checkOut.min = today;
-            requestedSlug = '';
-            showMessage('success', 'Request ' + receipt.reference + ' received for ' + receipt.lodge_name + ' (' + receipt.check_in + ' to ' + receipt.check_out + '). Status: ' + (receipt.status_label || 'Pending review') + '. The resort will contact you to confirm.');
-            loadLodges(true);
-          })
-          .catch(function (error) {
-            showMessage('error', error.message || 'Could not send your reservation request. Please try again.');
-          })
-          .finally(function () {
-            submitButton.textContent = 'Send reservation request';
-            submitButton.disabled = lodges.length === 0;
+        try {
+          var availableLodges = await getJson(apiBase + '/lodges/?' + availabilityQuery.toString(), {
+            headers: { Accept: 'application/json' }
           });
+          if (!Array.isArray(availableLodges) || !availableLodges.some(function (lodge) { return lodge.slug === selectedLodge.slug; })) {
+            throw new Error('Those dates have just become unavailable. Please choose another date.');
+          }
+          var receipt = await getJson(apiBase + '/reservations/', {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!receipt.reference) throw new Error('The resort returned an invalid reservation receipt.');
+          successTitle.textContent = 'Thank you for booking ' + receipt.lodge_name + '!';
+          successDetails.textContent = 'Request ' + receipt.reference + ' · ' + receipt.check_in + ' to ' + receipt.check_out + ' · Status: ' + (receipt.status_label || 'Pending review') + '.';
+          if (typeof successDialog.showModal === 'function') successDialog.showModal();
+          else showMessage('success', successTitle.textContent + ' Our staff will contact you about payment to confirm your booking. Reference: ' + receipt.reference + '.');
+          checkIn.value = '';
+          checkOut.value = '';
+          document.getElementById('guest-name').value = '';
+          document.getElementById('phone').value = '';
+          document.getElementById('email').value = '';
+          document.getElementById('occasion').value = '';
+          document.getElementById('note').value = '';
+          calendarMonth = receipt.check_in.slice(0, 7);
+          loadAvailability();
+        } catch (error) {
+          showMessage('error', error.message || 'Could not send your reservation request. Please try again.');
+        } finally {
+          isSubmitting = false;
+          submitButton.textContent = 'Send reservation request';
+          updateSubmitState();
+        }
       });
 
       loadLodges();
+      renderCalendar();
     })();
   </script>
 </body>

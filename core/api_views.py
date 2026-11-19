@@ -1,4 +1,5 @@
-from datetime import timedelta
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -99,6 +100,101 @@ class LodgeList(generics.ListAPIView):
                 available_ids.append(lodge.pk)
             queryset = queryset.filter(pk__in=available_ids)
         return queryset
+
+
+class LodgeAvailability(APIView):
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    def get(self, request, slug):
+        lodge = get_object_or_404(Lodge, slug=slug, is_active=True)
+        month_value = request.query_params.get(
+            "month", timezone.localdate().strftime("%Y-%m")
+        )
+        try:
+            month_start = datetime.strptime(month_value, "%Y-%m").date()
+        except ValueError as error:
+            raise ValidationError({"month": "Use YYYY-MM format."}) from error
+        if month_start.strftime("%Y-%m") != month_value:
+            raise ValidationError({"month": "Use YYYY-MM format."})
+
+        try:
+            nights = int(request.query_params.get("nights", lodge.min_nights))
+        except ValueError as error:
+            raise ValidationError({"nights": "Provide a valid number of nights."}) from error
+        if nights < lodge.min_nights or nights > lodge.max_nights:
+            raise ValidationError(
+                {
+                    "nights": (
+                        f"Choose between {lodge.min_nights} and "
+                        f"{lodge.max_nights} nights."
+                    )
+                }
+            )
+
+        try:
+            guests = int(request.query_params.get("guests", "1"))
+        except ValueError as error:
+            raise ValidationError({"guests": "Provide a valid guest count."}) from error
+        if guests < 1 or guests > lodge.capacity:
+            raise ValidationError(
+                {"guests": f"Guest count must be between 1 and {lodge.capacity}."}
+            )
+
+        days_in_month = monthrange(month_start.year, month_start.month)[1]
+        search_end = date(
+            month_start.year, month_start.month, days_in_month
+        ) + timedelta(days=lodge.max_nights)
+        reservation_periods = list(
+            LodgeReservation.objects.filter(
+                lodge=lodge,
+                status__in=(
+                    LodgeReservation.Status.PENDING,
+                    LodgeReservation.Status.CONFIRMED,
+                ),
+                check_in__lt=search_end,
+                check_out__gt=month_start,
+            ).values_list("pk", "check_in", "check_out")
+        )
+        blockout_periods = list(
+            lodge.blockouts.filter(
+                start_date__lt=search_end,
+                end_date__gt=month_start,
+            ).values_list("start_date", "end_date")
+        )
+
+        available_dates = []
+        unavailable_dates = []
+        for day in range(days_in_month):
+            check_in = month_start + timedelta(days=day)
+            try:
+                validate_lodge_stay(
+                    lodge=lodge,
+                    check_in=check_in,
+                    check_out=check_in + timedelta(days=nights),
+                    adults=guests,
+                    children=0,
+                    status=LodgeReservation.Status.PENDING,
+                    reservation_periods=reservation_periods,
+                    blockout_periods=blockout_periods,
+                )
+            except ValidationError:
+                unavailable_dates.append(check_in.isoformat())
+            else:
+                available_dates.append(check_in.isoformat())
+
+        return Response(
+            {
+                "lodge": lodge.slug,
+                "month": month_value,
+                "nights": nights,
+                "min_nights": lodge.min_nights,
+                "max_nights": lodge.max_nights,
+                "capacity": lodge.capacity,
+                "available_dates": available_dates,
+                "unavailable_dates": unavailable_dates,
+            }
+        )
 
 
 class OrderCreate(APIView):
