@@ -10,6 +10,12 @@ from .api_views import (
     ReservationCreate,
 )
 from .staff_api_views import (
+    StaffAccount,
+    StaffAccountDetail,
+    StaffAccountListCreate,
+    StaffAccountPasswordChange,
+    StaffAccountPasswordReset,
+    StaffAccountPasswordVerify,
     StaffCategoryDetail,
     StaffCategoryListCreate,
     StaffDashboard,
@@ -31,6 +37,32 @@ from .staff_api_views import (
 urlpatterns = [
     path("auth/token/", StaffLogin.as_view(), name="staff_api_login"),
     path("auth/logout/", StaffLogout.as_view(), name="staff_api_logout"),
+    path("staff/account/", StaffAccount.as_view(), name="staff_api_account"),
+    path(
+        "staff/account/password/",
+        StaffAccountPasswordChange.as_view(),
+        name="staff_api_account_password",
+    ),
+    path(
+        "staff/account/password/verify/",
+        StaffAccountPasswordVerify.as_view(),
+        name="staff_api_account_password_verify",
+    ),
+    path(
+        "staff/accounts/",
+        StaffAccountListCreate.as_view(),
+        name="staff_api_accounts",
+    ),
+    path(
+        "staff/accounts/<int:pk>/",
+        StaffAccountDetail.as_view(),
+        name="staff_api_account_detail",
+    ),
+    path(
+        "staff/accounts/<int:pk>/reset-password/",
+        StaffAccountPasswordReset.as_view(),
+        name="staff_api_account_password_reset",
+    ),
     path("categories/", CategoryList.as_view(), name="api_categories"),
     path("products/", ProductList.as_view(), name="api_products"),
     path("lodges/", LodgeList.as_view(), name="api_lodges"),

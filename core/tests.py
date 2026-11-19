@@ -19,6 +19,7 @@ from .models import (
     LodgeReservation,
     Order,
     Product,
+    StaffProfile,
 )
 
 
@@ -540,6 +541,169 @@ class StaffApiTests(TestCase):
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Token {response.data['token']}"
         )
+
+    def test_staff_can_update_profile_and_change_password(self):
+        self.login_as_staff()
+        old_token = Token.objects.get(user=self.staff).key
+
+        response = self.client.get("/api/v1/staff/account/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["must_change_password"])
+
+        response = self.client.patch(
+            "/api/v1/staff/account/",
+            {"first_name": "Resort", "last_name": "Manager", "email": "manager@example.com"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["first_name"], "Resort")
+        self.assertEqual(response.data["email"], "manager@example.com")
+
+        response = self.client.post(
+            "/api/v1/staff/account/password/verify/",
+            {"current_password": "wrong-password"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        response = self.client.post(
+            "/api/v1/staff/account/password/verify/",
+            {"current_password": "staff-password"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 204)
+
+        response = self.client.post(
+            "/api/v1/staff/account/password/",
+            {
+                "current_password": "staff-password",
+                "new_password": "SecureStaffPassphrase!47",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotEqual(response.data["token"], old_token)
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.check_password("SecureStaffPassphrase!47"))
+        self.assertNotIn(old_token, Token.objects.values_list("key", flat=True))
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {response.data['token']}")
+        self.assertEqual(self.client.get("/api/v1/staff/dashboard/").status_code, 200)
+        self.assertEqual(self.client.get("/api/v1/staff/accounts/").status_code, 403)
+
+    def test_superuser_can_create_staff_with_forced_temporary_password(self):
+        superuser = get_user_model().objects.create_superuser(
+            username="portal-owner",
+            email="owner@example.com",
+            password="owner-password",
+        )
+        owner_client = APIClient()
+        login = owner_client.post(
+            "/api/v1/auth/token/",
+            {"username": "portal-owner", "password": "owner-password"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, 200)
+        owner_client.credentials(HTTP_AUTHORIZATION=f"Token {login.data['token']}")
+
+        response = owner_client.post(
+            "/api/v1/staff/accounts/",
+            {
+                "username": "new-server",
+                "email": "server@example.com",
+                "first_name": "Dining",
+                "last_name": "Staff",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        staff_data = response.data["staff"]
+        temporary_password = response.data["temporary_password"]
+        self.assertEqual(staff_data["username"], "new-server")
+        self.assertTrue(staff_data["must_change_password"])
+        self.assertFalse(staff_data["is_superuser"])
+        self.assertTrue(get_user_model().objects.get(username="new-server").is_staff)
+        self.assertTrue(superuser.is_superuser)
+
+        new_staff_client = APIClient()
+        login = new_staff_client.post(
+            "/api/v1/auth/token/",
+            {"username": "new-server", "password": temporary_password},
+            format="json",
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertTrue(login.data["must_change_password"])
+        new_staff_client.credentials(HTTP_AUTHORIZATION=f"Token {login.data['token']}")
+        self.assertEqual(
+            new_staff_client.get("/api/v1/staff/dashboard/").status_code,
+            403,
+        )
+        self.assertEqual(new_staff_client.get("/api/v1/staff/account/").status_code, 200)
+
+        changed = new_staff_client.post(
+            "/api/v1/staff/account/password/",
+            {
+                "current_password": temporary_password,
+                "new_password": "NewServerPassphrase!29",
+            },
+            format="json",
+        )
+        self.assertEqual(changed.status_code, 200)
+        profile = StaffProfile.objects.get(user__username="new-server")
+        self.assertFalse(profile.must_change_password)
+        new_staff_client.credentials(HTTP_AUTHORIZATION=f"Token {changed.data['token']}")
+        self.assertEqual(
+            new_staff_client.get("/api/v1/staff/dashboard/").status_code,
+            200,
+        )
+
+    def test_superuser_can_reset_password_and_deactivate_staff(self):
+        owner = get_user_model().objects.create_superuser(
+            username="account-owner",
+            email="owner@example.com",
+            password="owner-password",
+        )
+        owner_client = APIClient()
+        login = owner_client.post(
+            "/api/v1/auth/token/",
+            {"username": owner.username, "password": "owner-password"},
+            format="json",
+        )
+        owner_client.credentials(HTTP_AUTHORIZATION=f"Token {login.data['token']}")
+        staff = get_user_model().objects.create_user(
+            username="team-member",
+            password="initial-password",
+            is_staff=True,
+        )
+        staff_token = Token.objects.create(user=staff)
+        staff_client = APIClient()
+        staff_client.credentials(HTTP_AUTHORIZATION=f"Token {staff_token.key}")
+
+        response = owner_client.post(
+            f"/api/v1/staff/accounts/{staff.pk}/reset-password/",
+            {},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["staff"]["must_change_password"])
+        self.assertFalse(Token.objects.filter(user=staff).exists())
+        self.assertEqual(staff_client.get("/api/v1/staff/dashboard/").status_code, 401)
+
+        response = owner_client.patch(
+            f"/api/v1/staff/accounts/{staff.pk}/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        staff.refresh_from_db()
+        self.assertFalse(staff.is_active)
+
+        response = owner_client.patch(
+            f"/api/v1/staff/accounts/{owner.pk}/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(get_user_model().objects.filter(pk=staff.pk).exists())
 
     def test_staff_login_rejects_non_staff_users(self):
         response = self.client.post(

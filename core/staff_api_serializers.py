@@ -4,6 +4,8 @@ import uuid
 import cloudinary
 import cloudinary.uploader
 from django.conf import settings
+from django.contrib.auth import get_user_model, password_validation
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
@@ -21,6 +23,7 @@ from .reservation_rules import validate_lodge_stay
 MAX_IMAGE_BYTES = 1_572_864
 IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 def _new_image_public_id(resource: str) -> str:
@@ -124,6 +127,94 @@ def _delete_cloudinary_image(public_id):
 class StaffLoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+
+class StaffAccountSerializer(serializers.ModelSerializer):
+    must_change_password = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "is_superuser",
+            "must_change_password",
+        )
+        read_only_fields = ("username", "is_superuser", "must_change_password")
+
+    def get_must_change_password(self, user):
+        profile = getattr(user, "staff_profile", None)
+        return bool(profile and profile.must_change_password)
+
+
+class StaffUserSerializer(serializers.ModelSerializer):
+    must_change_password = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "is_active",
+            "is_superuser",
+            "date_joined",
+            "last_login",
+            "must_change_password",
+        )
+        read_only_fields = fields
+
+    def get_must_change_password(self, user):
+        profile = getattr(user, "staff_profile", None)
+        return bool(profile and profile.must_change_password)
+
+
+class StaffCreateSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+
+    def validate_username(self, value):
+        if User._default_manager.filter(username=value).exists():
+            raise serializers.ValidationError("A user with this username already exists.")
+        return value
+
+
+class StaffCurrentPasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_current_password(self, value):
+        if not self.context["request"].user.check_password(value):
+            raise serializers.ValidationError("The current password is incorrect.")
+        return value
+
+
+class StaffAccountPasswordSerializer(StaffCurrentPasswordSerializer):
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        user = self.context["request"].user
+        if attrs["current_password"] == attrs["new_password"]:
+            raise serializers.ValidationError(
+                {"new_password": "Choose a password different from your current one."}
+            )
+        try:
+            password_validation.validate_password(attrs["new_password"], user=user)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(
+                {"new_password": error.messages}
+            ) from error
+        return attrs
+
+
+class StaffStatusSerializer(serializers.Serializer):
+    is_active = serializers.BooleanField()
 
 
 class StaffCategorySerializer(serializers.ModelSerializer):

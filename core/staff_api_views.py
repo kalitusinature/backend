@@ -1,25 +1,39 @@
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, get_user_model
 from django.db import transaction
 from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
+from django.utils.crypto import get_random_string
 from rest_framework import generics, status
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from .models import Category, Lodge, LodgeBlockout, LodgeReservation, Order, Product
+from .models import (
+    Category,
+    Lodge,
+    LodgeBlockout,
+    LodgeReservation,
+    Order,
+    Product,
+    StaffProfile,
+)
 from .reservation_notifications import (
     notify_new_reservation,
     notify_reservation_status,
 )
 from .reservation_rules import validate_lodge_stay
 from .staff_api_serializers import (
+    StaffAccountPasswordSerializer,
+    StaffAccountSerializer,
     StaffCategorySerializer,
+    StaffCreateSerializer,
+    StaffCurrentPasswordSerializer,
     StaffLoginSerializer,
     StaffLodgeBlockoutSerializer,
     StaffLodgeSerializer,
@@ -29,12 +43,35 @@ from .staff_api_serializers import (
     StaffReservationCreateSerializer,
     StaffReservationSerializer,
     StaffReservationUpdateSerializer,
+    StaffStatusSerializer,
+    StaffUserSerializer,
 )
+
+
+User = get_user_model()
+
+
+class StaffApiPermission(IsAdminUser):
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        needs_password_change = StaffProfile.objects.filter(
+            user=request.user,
+            must_change_password=True,
+        ).exists()
+        return not needs_password_change or getattr(
+            view, "allow_password_change", False
+        )
+
+
+class StaffSuperuserPermission(StaffApiPermission):
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) and request.user.is_superuser
 
 
 class StaffApiMixin:
     authentication_classes = (TokenAuthentication,)
-    permission_classes = (IsAdminUser,)
+    permission_classes = (StaffApiPermission,)
 
 
 class StaffReservationPagination(PageNumberPagination):
@@ -77,14 +114,153 @@ class StaffLogin(APIView):
                 {"detail": "Invalid staff credentials."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        profile, _ = StaffProfile.objects.get_or_create(user=user)
         token, _ = Token.objects.get_or_create(user=user)
-        return Response({"token": token.key, "username": user.get_username()})
+        return Response(
+            {
+                "token": token.key,
+                "username": user.get_username(),
+                "must_change_password": profile.must_change_password,
+            }
+        )
 
 
 class StaffLogout(StaffApiMixin, APIView):
+    allow_password_change = True
+
     def post(self, request):
         request.auth.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StaffAccount(StaffApiMixin, APIView):
+    allow_password_change = True
+
+    def get(self, request):
+        StaffProfile.objects.get_or_create(user=request.user)
+        return Response(StaffAccountSerializer(request.user).data)
+
+    def patch(self, request):
+        StaffProfile.objects.get_or_create(user=request.user)
+        serializer = StaffAccountSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class StaffAccountPasswordChange(StaffApiMixin, APIView):
+    allow_password_change = True
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = StaffAccountPasswordSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        request.user.set_password(serializer.validated_data["new_password"])
+        request.user.save(update_fields=("password",))
+
+        profile, _ = StaffProfile.objects.get_or_create(user=request.user)
+        profile.must_change_password = False
+        profile.save(update_fields=("must_change_password", "updated_at"))
+
+        Token.objects.filter(user=request.user).delete()
+        token = Token.objects.create(user=request.user)
+        return Response({"token": token.key})
+
+
+class StaffAccountPasswordVerify(StaffApiMixin, APIView):
+    allow_password_change = True
+
+    def post(self, request):
+        serializer = StaffCurrentPasswordSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StaffAccountListCreate(StaffApiMixin, APIView):
+    permission_classes = (StaffSuperuserPermission,)
+
+    def get(self, request):
+        users = User._default_manager.filter(is_staff=True).select_related(
+            "staff_profile"
+        )
+        return Response(StaffUserSerializer(users.order_by("username"), many=True).data)
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = StaffCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        temporary_password = get_random_string(24)
+        user = User._default_manager.create_user(
+            password=temporary_password,
+            is_staff=True,
+            **serializer.validated_data,
+        )
+        StaffProfile.objects.create(user=user, must_change_password=True)
+        return Response(
+            {
+                "staff": StaffUserSerializer(user).data,
+                "temporary_password": temporary_password,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class StaffAccountDetail(StaffApiMixin, APIView):
+    permission_classes = (StaffSuperuserPermission,)
+
+    @transaction.atomic
+    def patch(self, request, pk):
+        user = get_object_or_404(User, pk=pk, is_staff=True)
+        if user.is_superuser:
+            raise PermissionDenied("Superuser accounts cannot be deactivated here.")
+        if user.pk == request.user.pk:
+            raise PermissionDenied("You cannot deactivate your own account.")
+
+        serializer = StaffStatusSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user.is_active = serializer.validated_data["is_active"]
+        user.save(update_fields=("is_active",))
+        if not user.is_active:
+            Token.objects.filter(user=user).delete()
+        StaffProfile.objects.get_or_create(user=user)
+        return Response(StaffUserSerializer(user).data)
+
+
+class StaffAccountPasswordReset(StaffApiMixin, APIView):
+    permission_classes = (StaffSuperuserPermission,)
+
+    @transaction.atomic
+    def post(self, request, pk):
+        user = get_object_or_404(User, pk=pk, is_staff=True)
+        if user.is_superuser:
+            raise PermissionDenied("Superuser passwords must be changed by their owner.")
+        if user.pk == request.user.pk:
+            raise PermissionDenied("Use Change password for your own account.")
+
+        temporary_password = get_random_string(24)
+        user.set_password(temporary_password)
+        user.save(update_fields=("password",))
+
+        profile, _ = StaffProfile.objects.get_or_create(user=user)
+        profile.must_change_password = True
+        profile.save(update_fields=("must_change_password", "updated_at"))
+        Token.objects.filter(user=user).delete()
+        return Response(
+            {
+                "staff": StaffUserSerializer(user).data,
+                "temporary_password": temporary_password,
+            }
+        )
 
 
 class StaffDashboard(StaffApiMixin, APIView):
