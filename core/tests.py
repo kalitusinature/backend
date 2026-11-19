@@ -32,6 +32,17 @@ class PublicOrderingApiTests(TestCase):
             is_available=True,
         )
 
+    def test_backend_reservation_page_renders_with_lodge_preselection_support(self):
+        response = self.client.get(
+            "/reservation/",
+            {"lodge": "lake-cottage"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Request a cottage stay")
+        self.assertContains(response, 'id="reservation-form"')
+        self.assertContains(response, "new URLSearchParams(window.location.search)")
+
     def test_order_uses_catalog_price_and_creates_unpaid_order(self):
         response = self.client.post(
             "/api/v1/orders/",

@@ -39,6 +39,7 @@
             <script>
                 (function(){
                     var apiBase=(window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1').replace(/\/+$/,'');
+                    var reservationBase=(window.CJ_RESERVATION_BASE_URL||apiBase.replace(/\/api\/v1$/,'')).replace(/\/+$/,'');
                     var grid=document.getElementById('cjCottagesGrid');
                     var status=document.getElementById('cjCottagesStatus');
                     function showStatus(state,text){
@@ -94,10 +95,7 @@
                         var bookingLink=document.createElement('a');
                         bookingLink.className='cj-cottage-book';
                         bookingLink.textContent='Book Now';
-                        bookingLink.href='/reservation?lodge='+encodeURIComponent(lodge.slug);
-                        if(window.location.protocol==='file:'){
-                            bookingLink.href='reservation.html?lodge='+encodeURIComponent(lodge.slug);
-                        }
+                        bookingLink.href=reservationBase+'/reservation/?lodge='+encodeURIComponent(lodge.slug);
                         body.appendChild(bookingLink);
                         card.appendChild(photo);
                         card.appendChild(body);

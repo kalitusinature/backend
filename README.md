@@ -96,7 +96,7 @@ Customers who provide an email are sent to the Odoo My Orders page after checkou
 
 `POST /api/v1/orders/track/` accepts an order number and email and returns the matching order's status and item totals. A non-matching pair returns `404`; an expired lookup returns `410`. The response excludes the guest name, phone, and email. The endpoint is rate-limited to 600 lookups per hour per client.
 
-The standalone Odoo page templates in this repository, including `my-orders.html`, must also be copied into and published from the Odoo Website editor; pushing them to GitHub does not update Odoo pages automatically.
+The standalone Odoo page templates in this repository, including `cottages.html` and `my-orders.html`, must also be copied into and published from the Odoo Website editor; pushing them to GitHub does not update Odoo pages automatically.
 
 ### Request a lodge reservation
 
@@ -118,6 +118,8 @@ The standalone Odoo page templates in this repository, including `my-orders.html
 ```
 
 New requests are `pending`; a `201` response includes a unique reservation reference and booking status. Email is required. The server validates stay dates, lodge capacity and policies, blockouts, and pending/confirmed overlaps. Reservation notifications use Django's SMTP backend when configured.
+
+The customer reservation form is hosted by Django at `/reservation/` on the backend domain. The Odoo cottages page's **Book Now** links open that backend page and pass the lodge slug in the `lodge` query parameter. There is no need to create a `/reservation` page in Odoo. After updating `cottages.html`, publish that template in Odoo so its links point to the backend form.
 
 ## Staff portal
 
