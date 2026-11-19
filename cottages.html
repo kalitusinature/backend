@@ -22,6 +22,20 @@
                 .cj-cottages-status[data-state="error"]{color:#9e271d}
                 .cj-cottages-empty{grid-column:1/-1;padding:34px 22px;text-align:center;border:1px dashed #b9c8c1;border-radius:10px;background:#fff;color:#5d6965;line-height:1.6}
                 .cj-cottages-empty p{margin:0}
+                .cj-loading-screen{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 50% 30%,rgba(224,241,239,.9),transparent 58%),rgba(247,250,249,.98);backdrop-filter:blur(8px);font-family:Arial,Helvetica,sans-serif}
+                .cj-loading-screen.is-hidden{display:none}
+                .cj-loading-card{display:grid;width:min(440px,100%);justify-items:center;padding:38px 30px 30px;border:1px solid #dfeae7;border-radius:18px;background:rgba(255,255,255,.95);box-shadow:0 24px 70px rgba(17,54,49,.12);text-align:center}
+                .cj-loading-mark{display:grid;width:56px;height:56px;place-items:center;border:1px solid #d8e9e5;border-radius:17px;color:#fff;background:linear-gradient(145deg,#00999a,#12605d);box-shadow:0 8px 18px rgba(0,139,146,.18);font-family:Georgia,serif;font-size:30px;font-weight:700}
+                .cj-loading-eyebrow{margin-top:15px;color:#947251;font-size:9px;font-weight:750;letter-spacing:2px}
+                .cj-loading-spinner{width:34px;height:34px;margin-top:27px;border:3px solid #e4eee9;border-top-color:#008b92;border-right-color:#c89b56;border-radius:50%;animation:cjLoadingSpin .85s linear infinite}
+                .cj-loading-card h2{margin:21px 0 0;color:#203b38;font-family:Georgia,"Times New Roman",serif;font-size:24px;font-weight:500;letter-spacing:-.4px}
+                .cj-loading-message{margin:8px 0 0;color:#687b75;font-size:12px}
+                .cj-loading-track{width:min(260px,100%);height:4px;overflow:hidden;margin-top:23px;border-radius:99px;background:#e9efec}
+                .cj-loading-track span{display:block;width:38%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#008b92,#c89b56);animation:cjLoadingProgress 1.5s ease-in-out infinite}
+                @keyframes cjLoadingSpin{to{transform:rotate(360deg)}}
+                @keyframes cjLoadingProgress{0%{transform:translateX(-120%)}50%{transform:translateX(150%)}100%{transform:translateX(320%)}}
+                @media(max-width:540px){.cj-loading-card{padding:30px 21px 25px}.cj-loading-card h2{font-size:21px}}
+                @media(prefers-reduced-motion:reduce){.cj-loading-spinner,.cj-loading-track span{animation:none}.cj-loading-track span{width:100%}}
                 @media(max-width:850px){.cj-cottages-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
                 @media(max-width:580px){.cj-cottages-container{width:calc(100% - 24px);margin:26px auto 56px}.cj-cottages-grid{grid-template-columns:1fr}.cj-cottage-photo{height:210px}}
             </style>
@@ -38,6 +52,28 @@
             </main>
             <script>
                 (function(){
+                    if(!document.getElementById('cjLoadingScreen')){
+                        var loader=document.createElement('div');
+                        loader.id='cjLoadingScreen';
+                        loader.className='cj-loading-screen';
+                        loader.setAttribute('role','status');
+                        loader.setAttribute('aria-live','polite');
+                        loader.setAttribute('aria-busy','true');
+                        loader.innerHTML='<div class="cj-loading-card"><span class="cj-loading-mark" aria-hidden="true">K</span><span class="cj-loading-eyebrow">KALITUSI NATURE RESORT</span><span class="cj-loading-spinner" aria-hidden="true"></span><h2>Getting things ready</h2><p class="cj-loading-message">Loading cottages and lodges…</p><div class="cj-loading-track" aria-hidden="true"><span></span></div></div>';
+                        document.body.appendChild(loader);
+                    }else{
+                        var loader=document.getElementById('cjLoadingScreen');
+                    }
+                    var startedAt=Date.now();
+                    var hideTimer=null;
+                    function hideLoader(){
+                        if(hideTimer)window.clearTimeout(hideTimer);
+                        var delay=Math.max(180,700-(Date.now()-startedAt));
+                        hideTimer=window.setTimeout(function(){
+                            loader.classList.add('is-hidden');
+                            loader.setAttribute('aria-busy','false');
+                        },delay);
+                    }
                     var apiBase=(window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1').replace(/\/+$/,'');
                     var reservationBase=(window.CJ_RESERVATION_BASE_URL||apiBase.replace(/\/api\/v1$/,'')).replace(/\/+$/,'');
                     var grid=document.getElementById('cjCottagesGrid');
@@ -117,14 +153,17 @@
                         grid.replaceChildren();
                         if(!lodges.length){
                             addEmptyState('No cottages or lodges are currently available. Please check back later.');
+                            hideLoader();
                             return;
                         }
                         lodges.forEach(function(lodge){
                             grid.appendChild(createCard(lodge));
                         });
+                        hideLoader();
                     }).catch(function(error){
                         grid.replaceChildren();
                         showStatus('error',error.message||'Could not load cottages. Please refresh and try again.');
+                        hideLoader();
                     });
                 })();
             </script>
