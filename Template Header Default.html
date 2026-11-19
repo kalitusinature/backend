@@ -11,15 +11,51 @@
             .cj-loading-message{margin:8px 0 0;color:#687b75;font-size:12px}
             .cj-loading-track{width:min(260px,100%);height:4px;overflow:hidden;margin-top:23px;border-radius:99px;background:#e9efec}
             .cj-loading-track span{display:block;width:38%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#008b92,#c89b56);animation:cjLoadingProgress 1.5s ease-in-out infinite}
-            .cj-loading-note{max-width:330px;min-height:34px;margin:13px 0 0;color:#7b897f;font-size:11px;line-height:1.55}
             .cj-default-cart-link{position:relative;display:inline-flex!important;min-width:42px;min-height:42px;align-items:center;justify-content:center;padding:8px 11px!important;border-radius:999px;color:#12605d!important}
             .cj-default-cart-link:hover{background:#e8f4f1;color:#008b92!important}
             .cj-default-cart-icon{display:block;width:21px;height:21px}
             .cj-default-cart-count{position:absolute;top:-2px;right:-4px;display:grid;min-width:18px;height:18px;place-items:center;padding:0 4px;border:2px solid #fff;border-radius:999px;color:#fff;background:#008b92;font-size:10px;font-weight:800;line-height:1}
+            .cj-floating-cart{position:fixed;right:24px;bottom:calc(22px + env(safe-area-inset-bottom));z-index:1080;font-family:Arial,Helvetica,sans-serif}
+            .cj-floating-cart-trigger{position:relative;display:grid;width:58px;height:58px;place-items:center;padding:0;border:1px solid rgba(255,255,255,.35);border-radius:50%;color:#fff;background:linear-gradient(135deg,#087d79,#125c59);box-shadow:0 12px 30px rgba(8,76,72,.25);cursor:pointer;transition:transform .18s ease,box-shadow .18s ease}
+            .cj-floating-cart-trigger:hover,.cj-floating-cart-trigger.is-updated{transform:translateY(-2px);box-shadow:0 16px 36px rgba(8,76,72,.34)}
+            .cj-floating-cart-trigger:focus-visible,.cj-floating-cart button:focus-visible,.cj-floating-cart a:focus-visible{outline:3px solid #d5ab64;outline-offset:3px}
+            .cj-floating-cart-icon{width:24px;height:24px}
+            .cj-floating-cart-count{position:absolute;top:-5px;right:-5px;display:grid;min-width:22px;height:22px;place-items:center;padding:0 5px;border:2px solid #fff;border-radius:999px;color:#155d59;background:#d5ab64;font-size:11px;font-weight:900}
+            .cj-floating-cart-panel{position:absolute;right:0;bottom:72px;display:flex;width:min(390px,calc(100vw - 28px));max-height:min(70vh,560px);flex-direction:column;overflow:hidden;border:1px solid #e3ebe7;border-radius:18px;background:#fff;box-shadow:0 22px 65px rgba(12,46,43,.22);color:#203b38}
+            .cj-floating-cart-panel[hidden]{display:none}
+            .cj-floating-cart-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #edf1ef}
+            .cj-floating-cart-header h2{margin:0;font-family:Georgia,"Times New Roman",serif;font-size:21px;font-weight:500}
+            .cj-floating-cart-header p{margin:4px 0 0;color:#73837d;font-size:12px}
+            .cj-floating-cart-close{width:34px;height:34px;border:0;border-radius:50%;color:#52655e;background:#f1f5f3;font-size:23px;line-height:1;cursor:pointer}
+            .cj-floating-cart-items{min-height:92px;overflow:auto;padding:6px 16px}
+            .cj-floating-cart-item{display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:11px;align-items:center;padding:12px 2px;border-bottom:1px solid #edf1ef}
+            .cj-floating-cart-item:last-child{border-bottom:0}
+            .cj-floating-cart-item-image{width:58px;height:58px;border-radius:10px;object-fit:cover;background:#edf3f0}
+            .cj-floating-cart-item-name{display:block;overflow:hidden;color:#263c38;font-size:13px;font-weight:750;text-overflow:ellipsis;white-space:nowrap}
+            .cj-floating-cart-item-price{display:block;margin-top:4px;color:#74817b;font-size:12px}
+            .cj-floating-cart-item-total{display:block;margin-top:3px;color:#126b66;font-size:12px;font-weight:800}
+            .cj-floating-cart-controls{display:flex;align-items:center;gap:7px}
+            .cj-floating-cart-qty{min-width:20px;text-align:center;font-size:12px;font-weight:800}
+            .cj-floating-cart-qty-button,.cj-floating-cart-remove{display:grid;width:29px;height:29px;place-items:center;border:1px solid #dce5e1;border-radius:8px;color:#126b66;background:#fff;font-size:17px;font-weight:700;cursor:pointer}
+            .cj-floating-cart-qty-button:disabled{opacity:.42;cursor:not-allowed}
+            .cj-floating-cart-remove{border-color:#f0dcda;color:#b34842;font-size:15px}
+            .cj-floating-cart-message{margin:0;padding:24px 12px;color:#75837d;font-size:13px;text-align:center}
+            .cj-floating-cart-footer{padding:15px 19px 18px;border-top:1px solid #edf1ef;background:#fbfcfb}
+            .cj-floating-cart-subtotal{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:#73817c;font-size:13px}
+            .cj-floating-cart-subtotal strong{color:#203b38;font-size:16px}
+            .cj-floating-cart-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+            .cj-floating-cart-actions a{display:grid;min-height:43px;place-items:center;border-radius:10px;text-decoration:none;font-size:13px;font-weight:800}
+            .cj-floating-cart-view{border:1px solid #dce7e2;color:#17635f;background:#fff}
+            .cj-floating-cart-checkout{color:#fff;background:#087d79}
+            .cj-floating-cart-checkout[hidden]{display:none}
+            @keyframes cjFloatingCartPulse{50%{transform:scale(1.05)}}
+            .cj-floating-cart-count.is-pulsing{animation:cjFloatingCartPulse .32s ease}
             @keyframes cjLoadingSpin{to{transform:rotate(360deg)}}
             @keyframes cjLoadingProgress{0%{transform:translateX(-120%)}50%{transform:translateX(150%)}100%{transform:translateX(320%)}}
             @media(max-width:540px){.cj-loading-card{padding:30px 21px 25px}.cj-loading-card h2{font-size:21px}}
+            @media(max-width:620px){.cj-floating-cart{right:12px;bottom:calc(12px + env(safe-area-inset-bottom))}.cj-floating-cart-trigger{width:52px;height:52px}.cj-floating-cart-panel{bottom:63px;max-height:68vh}.cj-floating-cart-header{padding:15px 16px}.cj-floating-cart-items{padding:4px 12px}.cj-floating-cart-item{grid-template-columns:50px minmax(0,1fr) auto;gap:8px}.cj-floating-cart-item-image{width:50px;height:50px}.cj-floating-cart-controls{gap:5px}}
             @media(prefers-reduced-motion:reduce){.cj-loading-spinner,.cj-loading-track span{animation:none}.cj-loading-track span{width:100%}}
+            @media(prefers-reduced-motion:reduce){.cj-floating-cart-trigger,.cj-floating-cart-count.is-pulsing{animation:none;transition:none}}
         </style>
         <div class="cj-loading-screen" id="cjLoadingScreen" role="status" aria-live="polite" aria-busy="true">
             <div class="cj-loading-card">
@@ -29,19 +65,16 @@
                 <h2>Getting things ready</h2>
                 <p class="cj-loading-message">Loading your resort experience…</p>
                 <div class="cj-loading-track" aria-hidden="true"><span></span></div>
-                <p class="cj-loading-note" id="cjLoadingNote">Connecting to the resort services…</p>
             </div>
         </div>
         <script>
             (function(){
                 var loader=document.getElementById('cjLoadingScreen');
-                var loadingNote=document.getElementById('cjLoadingNote');
                 var startedAt=Date.now();
                 var pageReady=document.readyState==='complete';
                 var pendingRequests=0;
                 var showTimer=null;
                 var hideTimer=null;
-                var slowTimer=null;
                 var visible=true;
                 function setVisible(next){
                     if(!loader||visible===next)return;
@@ -49,14 +82,9 @@
                     if(next){
                         loader.classList.remove('is-hidden');
                         loader.setAttribute('aria-busy','true');
-                        if(loadingNote)loadingNote.textContent='Connecting to the resort services…';
-                        slowTimer=window.setTimeout(function(){
-                            if(visible&amp;&amp;loadingNote)loadingNote.textContent='The first connection can take a little longer while the resort services wake up. Please keep this page open.';
-                        },6000);
                     }else{
                         loader.classList.add('is-hidden');
                         loader.setAttribute('aria-busy','false');
-                        if(slowTimer)window.clearTimeout(slowTimer);
                     }
                 }
                 function scheduleHide(){
@@ -91,7 +119,7 @@
                     var originalFetch=window.fetch;
                     window.fetch=function(input,options){
                         var url=typeof input==='string'?input:(input&amp;&amp;input.url)||'';
-                        if(url.indexOf('/api/v1/')===-1)return originalFetch.apply(this,arguments);
+                        if(url.indexOf('/api/v1/')===-1||url.indexOf('/cart/')!==-1)return originalFetch.apply(this,arguments);
                         beginRequest();
                         var complete=false;
                         function finish(){
@@ -211,7 +239,7 @@
                     }catch(error){return Promise.reject(new Error('Browser storage is unavailable for your cart.'));}
                     if(token)return Promise.resolve(token);
                     if(tokenPromise)return tokenPromise;
-                    if(!createIfMissing&&!legacyItems.length)return Promise.resolve(null);
+                    if(!createIfMissing&amp;&amp;!legacyItems.length)return Promise.resolve(null);
                     var createOptions={method:'POST',headers:{Accept:'application/json'}};
                     if(legacyItems.length){
                         createOptions.headers['Content-Type']='application/json';
@@ -251,6 +279,7 @@
                         return window.fetch(apiBase+path,options).then(parseResponse);
                     }).then(function(cart){
                         updateCartCount(cart,false);
+                        window.dispatchEvent(new CustomEvent('cjCartUpdated',{detail:{cart:cart,path:path,method:options.method||'GET'}}));
                         try{localStorage.setItem('cjCartUpdatedAt',String(Date.now()));}catch(error){}
                         return cart;
                     });
@@ -282,6 +311,157 @@
                         });
                     }
                 });
+            })();
+        </script>
+        <div class="cj-floating-cart" id="cjFloatingCart">
+            <button class="cj-floating-cart-trigger" id="cjFloatingCartTrigger" type="button" aria-expanded="false" aria-controls="cjFloatingCartPanel" aria-label="Open shopping cart">
+                <svg class="cj-floating-cart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="9" cy="20" r="1"/>
+                    <circle cx="19" cy="20" r="1"/>
+                    <path d="M3 4h2l2.4 11h11l2-7H6"/>
+                </svg>
+                <span class="cj-floating-cart-count" id="cjFloatingCartCount">0</span>
+            </button>
+            <section class="cj-floating-cart-panel" id="cjFloatingCartPanel" role="dialog" aria-modal="false" aria-labelledby="cjFloatingCartTitle" hidden="hidden">
+                <header class="cj-floating-cart-header">
+                    <div><h2 id="cjFloatingCartTitle">Your cart</h2><p id="cjFloatingCartItemCount">0 items</p></div>
+                    <button class="cj-floating-cart-close" id="cjFloatingCartClose" type="button" aria-label="Close cart">×</button>
+                </header>
+                <div class="cj-floating-cart-items" id="cjFloatingCartItems" aria-live="polite">
+                    <p class="cj-floating-cart-message">Loading your cart…</p>
+                </div>
+                <footer class="cj-floating-cart-footer">
+                    <div class="cj-floating-cart-subtotal"><span>Subtotal</span><strong id="cjFloatingCartSubtotal">UGX 0</strong></div>
+                    <div class="cj-floating-cart-actions">
+                        <a class="cj-floating-cart-view" href="/cart">View cart</a>
+                        <a class="cj-floating-cart-checkout" id="cjFloatingCartCheckout" href="/checkout" hidden="hidden">Checkout</a>
+                    </div>
+                </footer>
+            </section>
+        </div>
+        <script>
+            (function(){
+                var root=document.getElementById('cjFloatingCart');
+                var trigger=document.getElementById('cjFloatingCartTrigger');
+                var panel=document.getElementById('cjFloatingCartPanel');
+                var itemsNode=document.getElementById('cjFloatingCartItems');
+                var countNode=document.getElementById('cjFloatingCartCount');
+                var currentItems=[];
+                function escapeHtml(value){
+                    return String(value==null?'':value).replace(/[&amp;&lt;&gt;"']/g,function(character){
+                        return {'&amp;':'&amp;amp;','&lt;':'&amp;lt;','&gt;':'&amp;gt;','"':'&amp;quot;',"'":'&amp;#39;'}[character];
+                    });
+                }
+                function formatMoney(value){return 'UGX '+Number(value||0).toLocaleString('en-UG');}
+                function localCart(){
+                    var legacy=[];
+                    try{legacy=JSON.parse(localStorage.getItem('cjCart')||'[]');}catch(error){}
+                    var items=Array.isArray(legacy)?legacy.map(function(item){
+                        return {product:String(item&amp;&amp;(item.slug||item.id)||''),name:item&amp;&amp;item.name||'',price:Number(item&amp;&amp;item.price)||0,image:item&amp;&amp;item.image||'',quantity:Number(item&amp;&amp;item.qty)||1};
+                    }):[];
+                    items=items.filter(function(item){return Boolean(item.product);});
+                    return {
+                        items:items,
+                        item_count:items.reduce(function(total,item){return total+item.quantity;},0),
+                        subtotal_ugx:items.reduce(function(total,item){return total+item.price*item.quantity;},0)
+                    };
+                }
+                function render(cart){
+                    cart=cart||{items:[],item_count:0,subtotal_ugx:0};
+                    currentItems=cart.items||[];
+                    var count=Number(cart.item_count)||0;
+                    var subtotal=Number(cart.subtotal_ugx)||0;
+                    var countText=count+' item'+(count===1?'':'s');
+                    countNode.textContent=String(count);
+                    document.getElementById('cjFloatingCartItemCount').textContent=countText;
+                    document.getElementById('cjFloatingCartSubtotal').textContent=formatMoney(subtotal);
+                    trigger.setAttribute('aria-label','Open shopping cart, '+countText+', '+formatMoney(subtotal));
+                    document.getElementById('cjFloatingCartCheckout').hidden=count===0;
+                    if(!currentItems.length){
+                        itemsNode.innerHTML='&lt;p class="cj-floating-cart-message">Your cart is empty. &lt;a href="/menu">Browse the menu&lt;/a>&lt;/p>';
+                        return;
+                    }
+                    itemsNode.innerHTML=currentItems.map(function(item){
+                        var image='';
+                        if(item.image){
+                            try{
+                                var imageUrl=new URL(item.image,window.CJ_API_BASE_URL||window.location.href);
+                                if(imageUrl.protocol==='https:'||imageUrl.protocol==='http:')image='&lt;img class="cj-floating-cart-item-image" src="'+escapeHtml(imageUrl.href)+'" alt=""/>';
+                            }catch(error){}
+                        }
+                        var lineTotal=Number(item.price)*Number(item.quantity);
+                        return '&lt;article class="cj-floating-cart-item">'+(image||'&lt;span class="cj-floating-cart-item-image" aria-hidden="true">&lt;/span>')+'&lt;div>&lt;span class="cj-floating-cart-item-name">'+escapeHtml(item.name)+'&lt;/span>&lt;span class="cj-floating-cart-item-price">'+formatMoney(item.price)+' each&lt;/span>&lt;span class="cj-floating-cart-item-total">'+formatMoney(lineTotal)+'&lt;/span>&lt;/div>&lt;div class="cj-floating-cart-controls">&lt;button class="cj-floating-cart-qty-button" type="button" data-action="minus" data-product="'+escapeHtml(item.product)+'" aria-label="Decrease '+escapeHtml(item.name)+' quantity">−&lt;/button>&lt;span class="cj-floating-cart-qty">'+item.quantity+'&lt;/span>&lt;button class="cj-floating-cart-qty-button" type="button" data-action="plus" data-product="'+escapeHtml(item.product)+'" aria-label="Increase '+escapeHtml(item.name)+' quantity" '+(Number(item.quantity)>=99?'disabled':'')+'>+&lt;/button>&lt;button class="cj-floating-cart-remove" type="button" data-action="remove" data-product="'+escapeHtml(item.product)+'" aria-label="Remove '+escapeHtml(item.name)+'">×&lt;/button>&lt;/div>&lt;/article>';
+                    }).join('');
+                }
+                function loadCart(){
+                    if(window.CJCart)window.CJCart.get().then(render).catch(function(error){
+                        itemsNode.innerHTML='&lt;p class="cj-floating-cart-message">'+escapeHtml(error.message||'Unable to load your cart.')+' &lt;button type="button" id="cjFloatingCartRetry">Retry&lt;/button>&lt;/p>';
+                    });
+                    else render(localCart());
+                }
+                function setOpen(open){
+                    panel.hidden=!open;
+                    trigger.setAttribute('aria-expanded',String(open));
+                    if(open)loadCart();
+                }
+                trigger.addEventListener('click',function(){setOpen(panel.hidden);});
+                document.getElementById('cjFloatingCartClose').addEventListener('click',function(){setOpen(false);trigger.focus();});
+                document.addEventListener('click',function(event){
+                    if(!panel.hidden&amp;&amp;!root.contains(event.target))setOpen(false);
+                });
+                document.addEventListener('keydown',function(event){
+                    if(event.key==='Escape'&amp;&amp;!panel.hidden){setOpen(false);trigger.focus();}
+                });
+                itemsNode.addEventListener('click',function(event){
+                    if(event.target.closest('#cjFloatingCartRetry')){loadCart();return;}
+                    var button=event.target.closest('button[data-action]');
+                    if(!button)return;
+                    var item=currentItems.find(function(entry){return entry.product===button.dataset.product;});
+                    if(!item)return;
+                    button.disabled=true;
+                    if(window.CJCart){
+                        var operation=button.dataset.action==='remove'
+                            ?window.CJCart.remove(item.product)
+                            :window.CJCart.setQuantity(item.product,item.quantity+(button.dataset.action==='plus'?1:-1));
+                        operation.then(render).catch(function(error){
+                            itemsNode.innerHTML='&lt;p class="cj-floating-cart-message">'+escapeHtml(error.message||'Unable to update your cart.')+' &lt;button type="button" id="cjFloatingCartRetry">Retry&lt;/button>&lt;/p>';
+                        });
+                        return;
+                    }
+                    var local=localCart(),localItem=local.items.find(function(entry){return entry.product===item.product;});
+                    if(!localItem)return;
+                    if(button.dataset.action==='remove'||(button.dataset.action==='minus'&amp;&amp;localItem.quantity&lt;=1)){
+                        local.items=local.items.filter(function(entry){return entry.product!==item.product;});
+                    }else{
+                        localItem.quantity=Math.min(99,localItem.quantity+(button.dataset.action==='plus'?1:-1));
+                    }
+                    local.item_count=local.items.reduce(function(total,entry){return total+entry.quantity;},0);
+                    local.subtotal_ugx=local.items.reduce(function(total,entry){return total+entry.price*entry.quantity;},0);
+                    try{
+                        localStorage.setItem('cjCart',JSON.stringify(local.items.map(function(entry){return {id:entry.product,name:entry.name,price:entry.price,image:entry.image,qty:entry.quantity};})));
+                        render(local);
+                    }catch(error){
+                        itemsNode.innerHTML='&lt;p class="cj-floating-cart-message">Unable to save your cart. Please check browser storage.&lt;/p>';
+                    }
+                });
+                window.addEventListener('cjCartUpdated',function(event){
+                    var detail=event.detail||{};
+                    render(detail.cart||detail);
+                    if(detail.method==='POST'&amp;&amp;detail.path==='/cart/items/'){
+                        countNode.classList.remove('is-pulsing');
+                        void countNode.offsetWidth;
+                        countNode.classList.add('is-pulsing');
+                    }
+                });
+                loadCart();
+                if(window.location.protocol==='file:'){
+                    document.querySelectorAll('.cj-floating-cart a[href]').forEach(function(link){
+                        var href=link.getAttribute('href');
+                        if(href.startsWith('/menu'))link.setAttribute('href','menu.html'+href.slice(5));
+                        else if(href.startsWith('/cart'))link.setAttribute('href','cart.html');
+                        else if(href.startsWith('/checkout'))link.setAttribute('href','checkout.html');
+                    });
+                }
             })();
         </script>
         <t t-call="website.template_header_mobile"/>
