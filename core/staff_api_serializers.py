@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 import cloudinary
 import cloudinary.uploader
@@ -20,6 +21,10 @@ from .reservation_rules import validate_lodge_stay
 MAX_IMAGE_BYTES = 1_572_864
 IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 logger = logging.getLogger(__name__)
+
+
+def _new_image_public_id(resource: str) -> str:
+    return f"kalitusi/{resource}/{uuid.uuid4()}"
 
 
 def _configure_cloudinary():
@@ -70,7 +75,7 @@ def _upload_cloudinary_image(image, public_id):
         result = cloudinary.uploader.upload(
             image,
             public_id=public_id,
-            overwrite=True,
+            overwrite=False,
             invalidate=True,
             resource_type="image",
         )
@@ -186,7 +191,7 @@ class StaffLodgeSerializer(serializers.ModelSerializer):
         lodge = super().create(validated_data)
         if image_file:
             result = _upload_cloudinary_image(
-                image_file, f"kalitusi/lodges/{lodge.pk}"
+                image_file, _new_image_public_id("lodges")
             )
             lodge.image_url = result["secure_url"]
             lodge.image_public_id = result["public_id"]
@@ -200,7 +205,7 @@ class StaffLodgeSerializer(serializers.ModelSerializer):
         if image_file:
             lodge = super().update(instance, validated_data)
             result = _upload_cloudinary_image(
-                image_file, f"kalitusi/lodges/{lodge.pk}"
+                image_file, _new_image_public_id("lodges")
             )
             lodge.image_url = result["secure_url"]
             lodge.image_public_id = result["public_id"]
@@ -302,7 +307,7 @@ class StaffProductSerializer(serializers.ModelSerializer):
         product = super().create(validated_data)
         if image_file:
             result = _upload_cloudinary_image(
-                image_file, f"kalitusi/products/{product.pk}"
+                image_file, _new_image_public_id("products")
             )
             product.image_url = result["secure_url"]
             product.image_public_id = result["public_id"]
@@ -319,7 +324,7 @@ class StaffProductSerializer(serializers.ModelSerializer):
         if image_file:
             product = super().update(instance, validated_data)
             result = _upload_cloudinary_image(
-                image_file, f"kalitusi/products/{product.pk}"
+                image_file, _new_image_public_id("products")
             )
             product.image_url = result["secure_url"]
             product.image_public_id = result["public_id"]

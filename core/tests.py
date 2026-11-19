@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from unittest.mock import patch
+import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -627,8 +628,15 @@ class StaffApiTests(TestCase):
                 format="multipart",
             )
         self.assertEqual(response.status_code, 201)
-        self.assertTrue(response.data["image_url"].startswith("https://res.cloudinary.com/"))
+        self.assertTrue(
+            response.data["image_url"].startswith("https://res.cloudinary.com/")
+        )
         upload_image.assert_called_once()
+        public_id = upload_image.call_args.kwargs["public_id"]
+        self.assertTrue(public_id.startswith("kalitusi/products/"))
+        asset_uuid = public_id.rsplit("/", 1)[-1]
+        self.assertEqual(str(uuid.UUID(asset_uuid)), asset_uuid)
+        self.assertFalse(upload_image.call_args.kwargs["overwrite"])
 
         public_products = self.client.get("/api/v1/products/")
         uploaded_product = next(
@@ -648,9 +656,11 @@ class StaffApiTests(TestCase):
             ),
             patch(
                 "core.staff_api_serializers.cloudinary.uploader.upload",
-                return_value={
-                    "secure_url": "https://res.cloudinary.com/demo/lodge.webp",
-                    "public_id": f"kalitusi/lodges/{self.lodge.pk}",
+                side_effect=lambda image, **options: {
+                    "secure_url": (
+                        f"https://res.cloudinary.com/demo/{options['public_id']}.webp"
+                    ),
+                    "public_id": options["public_id"],
                 },
             ) as upload_image,
         ):
@@ -665,11 +675,15 @@ class StaffApiTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.data["image_url"],
-            "https://res.cloudinary.com/demo/lodge.webp",
+        self.assertTrue(
+            response.data["image_url"].startswith("https://res.cloudinary.com/")
         )
         upload_image.assert_called_once()
+        public_id = upload_image.call_args.kwargs["public_id"]
+        self.assertTrue(public_id.startswith("kalitusi/lodges/"))
+        asset_uuid = public_id.rsplit("/", 1)[-1]
+        self.assertEqual(str(uuid.UUID(asset_uuid)), asset_uuid)
+        self.assertFalse(upload_image.call_args.kwargs["overwrite"])
 
         public_lodges = self.client.get("/api/v1/lodges/")
         self.assertEqual(public_lodges.status_code, 200)

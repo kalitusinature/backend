@@ -114,6 +114,10 @@ CORS_ALLOWED_ORIGINS = [
 ]
 if "https://kalitusinature.github.io" not in CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS.append("https://kalitusinature.github.io")
+if DEBUG:
+    for origin in ("http://localhost:5173", "http://127.0.0.1:5173"):
+        if origin not in CORS_ALLOWED_ORIGINS:
+            CORS_ALLOWED_ORIGINS.append(origin)
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(

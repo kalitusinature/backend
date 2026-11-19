@@ -22,12 +22,25 @@
                 .cj-reservation-message[data-state="error"]{background:#fff0ee;color:#9e271d}
                 .cj-reservation-message[data-state="success"]{background:#eaf7ef;color:#17633a}
                 .cj-reservation-back{display:inline-block;margin-top:20px;color:#007a80;font-weight:700;text-decoration:none}
+                .cj-reservation-success[hidden],.cj-reservation-card[hidden]{display:none!important}
+                .cj-reservation-success{text-align:center}
+                .cj-reservation-success-mark{display:grid;place-items:center;width:58px;height:58px;margin:0 auto 18px;border-radius:50%;background:#eaf7ef;color:#17633a;font-size:30px;font-weight:800}
+                .cj-reservation-success-label{display:block;margin-bottom:8px;color:#008b92;font-size:11px;font-weight:800;letter-spacing:1.2px}
+                .cj-reservation-success h1{margin-bottom:14px}
+                .cj-reservation-success-details{padding:16px;margin:20px 0;border:1px solid #dcebe1;border-radius:9px;background:#f5fbf7;color:#284b39;line-height:1.7;overflow-wrap:anywhere}
+                .cj-reservation-dialog{width:min(440px,calc(100% - 32px));padding:0;border:0;border-radius:14px;color:#17201f;box-shadow:0 24px 80px rgba(21,35,31,.25)}
+                .cj-reservation-dialog::backdrop{background:rgba(15,30,25,.55)}
+                .cj-reservation-dialog-content{position:relative;padding:30px}
+                .cj-reservation-dialog-content h2{margin:0 32px 10px 0;font-size:24px}
+                .cj-reservation-dialog-content p{margin:0;color:#52615a;line-height:1.6}
+                .cj-reservation-dialog-close{position:absolute;top:15px;right:15px;width:34px;height:34px;border:0;border-radius:50%;background:#f0f4f1;color:#43554b;font-size:22px;cursor:pointer}
+                .cj-reservation-dialog-action{width:100%;margin-top:22px}
                 @media(max-width:620px){.cj-reservation-container{width:calc(100% - 24px);margin:24px auto 56px}.cj-reservation-grid{grid-template-columns:1fr}.cj-reservation-field.full{grid-column:auto}}
             </style>
             <main class="cj-reservation-page">
                 <t t-call="website.cj_header"/>
                 <div class="cj-reservation-container">
-                    <section class="cj-reservation-card" aria-labelledby="cjReservationTitle">
+                    <section class="cj-reservation-card" id="cjReservationCard" aria-labelledby="cjReservationTitle">
                         <h1 id="cjReservationTitle">Request a cottage stay</h1>
                         <p class="cj-reservation-intro">Send us your preferred dates and guest details. Your request will be reviewed by our team; your stay is not confirmed until staff contacts you.</p>
                         <form id="cjReservationForm">
@@ -81,8 +94,24 @@
                         </form>
                         <a class="cj-reservation-back" href="/cottages">Back to cottages</a>
                     </section>
+                    <section class="cj-reservation-card cj-reservation-success" id="cjReservationSuccess" aria-labelledby="cjReservationSuccessTitle" hidden="hidden" tabindex="-1">
+                        <div class="cj-reservation-success-mark" aria-hidden="true">✓</div>
+                        <span class="cj-reservation-success-label">REQUEST RECEIVED</span>
+                        <h1 id="cjReservationSuccessTitle">Thank you for your request</h1>
+                        <p class="cj-reservation-intro">Your reservation request has been received. Our team will contact you to confirm.</p>
+                        <p class="cj-reservation-success-details" id="cjReservationSuccessDetails"></p>
+                        <a class="cj-reservation-back" href="/cottages">Back to cottages</a>
+                    </section>
                 </div>
             </main>
+            <dialog class="cj-reservation-dialog" id="cjAvailabilityDialog" aria-labelledby="cjAvailabilityDialogTitle" aria-describedby="cjAvailabilityDialogMessage">
+                <div class="cj-reservation-dialog-content">
+                    <button class="cj-reservation-dialog-close" id="cjAvailabilityDialogClose" type="button" aria-label="Close">×</button>
+                    <h2 id="cjAvailabilityDialogTitle">No cottages available</h2>
+                    <p id="cjAvailabilityDialogMessage"></p>
+                    <button class="cj-reservation-submit cj-reservation-dialog-action" id="cjAvailabilityDialogAction" type="button">Choose different dates</button>
+                </div>
+            </dialog>
             <script>
                 (function(){
                     var apiBase=(window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1').replace(/\/+$/,'');
@@ -95,7 +124,13 @@
                     var childrenInput=document.getElementById('cjChildren');
                     var submitButton=document.getElementById('cjReservationSubmit');
                     var message=document.getElementById('cjReservationMessage');
+                    var reservationCard=document.getElementById('cjReservationCard');
+                    var successPage=document.getElementById('cjReservationSuccess');
+                    var successDetails=document.getElementById('cjReservationSuccessDetails');
+                    var availabilityDialog=document.getElementById('cjAvailabilityDialog');
+                    var availabilityDialogMessage=document.getElementById('cjAvailabilityDialogMessage');
                     var lodges=[];
+                    var lodgeRequestId=0;
                     var requestedSlug=new URLSearchParams(window.location.search).get('lodge')||'';
                     function localDateValue(date){
                         var year=date.getFullYear();
@@ -116,6 +151,21 @@
                         message.hidden=true;
                         delete message.dataset.state;
                     }
+                    function showAvailabilityDialog(text){
+                        availabilityDialogMessage.textContent=text;
+                        if(typeof availabilityDialog.showModal==='function'){
+                            if(!availabilityDialog.open)availabilityDialog.showModal();
+                        }else{
+                            availabilityDialog.setAttribute('open','open');
+                        }
+                    }
+                    function closeAvailabilityDialog(){
+                        if(typeof availabilityDialog.close==='function'&&availabilityDialog.open){
+                            availabilityDialog.close();
+                        }else{
+                            availabilityDialog.removeAttribute('open');
+                        }
+                    }
                     function errorText(data,status){
                         if(data&&typeof data.detail==='string')return data.detail;
                         if(data&&typeof data==='object'){
@@ -127,7 +177,8 @@
                         }
                         return 'The reservation service returned HTTP '+status+'. Please try again.';
                     }
-                    function loadLodges(preserveMessage){
+                    function loadLodges(){
+                        var requestId=++lodgeRequestId;
                         var selectedSlug=lodgeSelect.value||requestedSlug;
                         var query=new URLSearchParams();
                         if(checkIn.value&&checkOut.value&&checkOut.value>checkIn.value){
@@ -148,8 +199,9 @@
                                 return data;
                             });
                         }).then(function(data){
+                            if(requestId!==lodgeRequestId)return;
                             lodges=data;
-                            lodgeSelect.replaceChildren(new Option(data.length?'Choose a cottage or lodge':'No stays currently available',''));
+                            lodgeSelect.replaceChildren(new Option(data.length?'Choose a cottage or lodge':query.toString()?'Choose different dates':'No stays currently available',''));
                             data.forEach(function(lodge){
                                 lodgeSelect.add(new Option(lodge.name+' · sleeps '+lodge.capacity,lodge.slug));
                             });
@@ -158,14 +210,23 @@
                             lodgeSelect.disabled=data.length===0;
                             submitButton.disabled=data.length===0;
                             if(!data.length){
-                                lodgeHelp.textContent=query.toString()?'No active stays are available for those dates. Try different dates.':'No active cottages are listed yet. Please contact the resort.';
+                                if(query.toString()){
+                                    lodgeHelp.textContent='';
+                                    showAvailabilityDialog('No cottage or lodge reservations are available for your selected dates. Choose different dates and check again.');
+                                }else{
+                                    lodgeHelp.textContent='No active cottages are listed yet. Please contact the resort.';
+                                }
                             }else{
                                 lodgeHelp.textContent=matchingLodge?'Your selected cottage is ready.':'Choose an active cottage or lodge from the list.';
-                                if(selectedSlug&&!matchingLodge)showMessage('error','That cottage is not currently listed as available. Please choose another stay.');
-                                else if(!preserveMessage)hideMessage();
+                                if(selectedSlug&&!matchingLodge&&query.toString()){
+                                    lodgeHelp.textContent='';
+                                    showAvailabilityDialog('The selected cottage is not available for your chosen dates. Choose different dates or select another cottage.');
+                                }else if(selectedSlug&&!matchingLodge)showMessage('error','That cottage is not currently listed as available. Please choose another stay.');
+                                else hideMessage();
                             }
                             requestedSlug='';
                         }).catch(function(error){
+                            if(requestId!==lodgeRequestId)return;
                             lodges=[];
                             lodgeSelect.replaceChildren(new Option('Could not load stays',''));
                             lodgeSelect.disabled=true;
@@ -175,18 +236,25 @@
                         });
                     }
                     checkIn.addEventListener('change',function(){
+                        closeAvailabilityDialog();
                         checkOut.min=checkIn.value||today;
                         if(checkOut.value&&!(checkOut.value>checkIn.value))checkOut.value='';
                         hideMessage();
                         loadLodges();
                     });
                     checkOut.addEventListener('change',function(){
+                        closeAvailabilityDialog();
                         hideMessage();
                         loadLodges();
                     });
-                    adultsInput.addEventListener('change',function(){loadLodges();});
-                    childrenInput.addEventListener('change',function(){loadLodges();});
-                    lodgeSelect.addEventListener('change',hideMessage);
+                    adultsInput.addEventListener('change',function(){closeAvailabilityDialog();loadLodges();});
+                    childrenInput.addEventListener('change',function(){closeAvailabilityDialog();loadLodges();});
+                    lodgeSelect.addEventListener('change',function(){closeAvailabilityDialog();hideMessage();});
+                    document.getElementById('cjAvailabilityDialogClose').addEventListener('click',closeAvailabilityDialog);
+                    document.getElementById('cjAvailabilityDialogAction').addEventListener('click',closeAvailabilityDialog);
+                    availabilityDialog.addEventListener('click',function(event){
+                        if(event.target===availabilityDialog)closeAvailabilityDialog();
+                    });
                     form.addEventListener('submit',function(event){
                         event.preventDefault();
                         if(!form.reportValidity())return;
@@ -230,14 +298,17 @@
                                 return data;
                             });
                         }).then(function(receipt){
-                            form.reset();
-                            checkIn.min=today;
-                            checkOut.min=today;
-                            requestedSlug='';
-                            showMessage('success','Request '+receipt.reference+' received for '+receipt.lodge_name+' ('+receipt.check_in+' to '+receipt.check_out+'). Status: '+(receipt.status_label||'Pending review')+'. The resort will contact you to confirm.');
-                            loadLodges(true);
+                            successDetails.textContent='Request '+receipt.reference+' received for '+receipt.lodge_name+' ('+receipt.check_in+' to '+receipt.check_out+'). Status: '+(receipt.status_label||'Pending review')+'. The resort will contact you to confirm.';
+                            reservationCard.hidden=true;
+                            successPage.hidden=false;
+                            successPage.focus();
                         }).catch(function(error){
-                            showMessage('error',error.message||'Could not send your reservation request. Please try again.');
+                            var errorMessage=error.message||'Could not send your reservation request. Please try again.';
+                            if(/already has a request|unavailable for part|not available for those dates/i.test(errorMessage)){
+                                showAvailabilityDialog('The selected cottage is no longer available for these dates. Choose different dates or another cottage.');
+                            }else{
+                                showMessage('error',errorMessage);
+                            }
                         }).finally(function(){
                             submitButton.textContent='Send reservation request';
                             submitButton.disabled=lodges.length===0;
