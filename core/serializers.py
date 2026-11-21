@@ -89,6 +89,8 @@ class GuestCartItemQuantitySerializer(serializers.Serializer):
 
 
 class LodgeSerializer(serializers.ModelSerializer):
+    images = serializers.SerializerMethodField()
+
     class Meta:
         model = Lodge
         fields = (
@@ -101,7 +103,19 @@ class LodgeSerializer(serializers.ModelSerializer):
             "max_nights",
             "checkin_weekdays",
             "image_url",
+            "images",
         )
+
+    def get_images(self, lodge):
+        prefetched = getattr(lodge, "_prefetched_objects_cache", {})
+        if "images" in prefetched:
+            image_items = list(lodge.images.all())
+        else:
+            image_items = list(lodge.images.order_by("sort_order", "id"))
+        urls = [image.image_url for image in image_items if image.image_url]
+        if not urls and lodge.image_url:
+            urls = [lodge.image_url]
+        return urls
 
 
 class OrderLineInputSerializer(serializers.Serializer):

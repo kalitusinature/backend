@@ -1,4 +1,4 @@
-<t t-name="website.cottages">
+﻿<t t-name="website.cottages">
     <t t-call="website.layout">
         <div id="wrap" class="oe_structure oe_empty">
             <style>
@@ -8,20 +8,53 @@
                 .cj-cottages-heading h1{font-size:clamp(32px,5vw,46px);letter-spacing:-1px;margin:0 0 12px}
                 .cj-cottages-heading p{color:#5d6965;line-height:1.6;margin:0}
                 .cj-cottages-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
-                .cj-cottage-card{overflow:hidden;background:#fff;border:1px solid #e1e8e5;border-radius:12px;box-shadow:0 12px 30px rgba(21,35,31,.07);display:flex;flex-direction:column}
-                .cj-cottage-photo{height:220px;background:#e8efec;display:grid;place-items:center;overflow:hidden;color:#62716a;font-size:14px}
-                .cj-cottage-photo img{width:100%;height:100%;object-fit:cover}
+                .cj-cottage-card{overflow:hidden;background:#fff;border:1px solid #e1e8e5;border-radius:12px;box-shadow:0 12px 30px rgba(21,35,31,.07);display:flex;flex-direction:column;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease}
+                .cj-cottage-card:hover,.cj-cottage-card:focus-within{transform:translateY(-2px);box-shadow:0 16px 34px rgba(21,35,31,.1)}
+                .cj-cottage-photo{position:relative;height:220px;background:#e8efec;overflow:hidden;color:#62716a;font-size:14px}
+                .cj-cottage-photo-empty{position:absolute;inset:0;display:grid;place-items:center;padding:16px;text-align:center}
+                .cj-cottage-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s ease}
+                .cj-cottage-photo img.is-active{opacity:1}
+                .cj-cottage-photo-count{position:absolute;right:10px;bottom:10px;z-index:2;padding:5px 9px;border-radius:999px;background:rgba(23,32,31,.62);color:#fff;font-size:12px;font-weight:700;letter-spacing:.2px}
                 .cj-cottage-body{padding:22px;display:flex;flex:1;flex-direction:column;align-items:flex-start}
                 .cj-cottage-body h2{font-size:22px;margin:0 0 10px}
-                .cj-cottage-description{color:#5d6965;line-height:1.6;margin:0 0 14px;white-space:pre-line}
-                .cj-cottage-capacity{font-size:14px;font-weight:700;color:#35433e;margin:0 0 20px}
-                .cj-cottage-policy{font-size:13px;color:#5d6965;margin:-10px 0 20px}
-                .cj-cottage-book{display:inline-flex;align-items:center;justify-content:center;min-height:46px;margin-top:auto;padding:0 20px;border-radius:7px;background:#008b92;color:#fff;text-decoration:none;font-weight:800}
-                .cj-cottage-book:hover{background:#006f75;color:#fff}
+                .cj-cottage-description{color:#5d6965;line-height:1.6;margin:0 0 14px;white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+                .cj-cottage-capacity{font-size:14px;font-weight:700;color:#35433e;margin:0 0 8px}
+                .cj-cottage-policy{font-size:13px;color:#5d6965;margin:0 0 20px}
+                .cj-cottage-book{display:inline-flex;align-items:center;justify-content:center;min-height:46px;margin-top:auto;padding:0 20px;border-radius:7px;background:#008b92;color:#fff;text-decoration:none;font-weight:800;border:0}
+                .cj-cottage-book:hover,.cj-cottage-book:focus{background:#006f75;color:#fff}
                 .cj-cottages-status{margin:0 auto 22px;max-width:720px;text-align:center;color:#5d6965;line-height:1.6}
                 .cj-cottages-status[data-state="error"]{color:#9e271d}
                 .cj-cottages-empty{grid-column:1/-1;padding:34px 22px;text-align:center;border:1px dashed #b9c8c1;border-radius:10px;background:#fff;color:#5d6965;line-height:1.6}
                 .cj-cottages-empty p{margin:0}
+
+                .cj-lodge-modal{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(17,27,24,.62);backdrop-filter:blur(4px)}
+                .cj-lodge-modal.is-open{display:flex}
+                .cj-lodge-modal-dialog{position:relative;width:min(980px,100%);max-height:calc(100vh - 40px);overflow:auto;background:#fff;border-radius:16px;box-shadow:0 30px 80px rgba(10,20,18,.28)}
+                .cj-lodge-modal-close{position:absolute;top:12px;right:12px;z-index:3;width:40px;height:40px;border:0;border-radius:999px;background:rgba(255,255,255,.92);color:#17201f;font-size:24px;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+                .cj-lodge-modal-close:hover{background:#fff}
+                .cj-lodge-modal-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr)}
+                .cj-lodge-modal-gallery{position:relative;min-height:320px;background:#e8efec}
+                .cj-lodge-modal-gallery-main{position:relative;height:100%;min-height:320px;overflow:hidden}
+                .cj-lodge-modal-gallery-main img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .7s ease}
+                .cj-lodge-modal-gallery-main img.is-active{opacity:1}
+                .cj-lodge-modal-gallery-empty{position:absolute;inset:0;display:grid;place-items:center;color:#62716a}
+                .cj-lodge-modal-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:40px;height:40px;border:0;border-radius:999px;background:rgba(255,255,255,.9);color:#17201f;font-size:22px;cursor:pointer}
+                .cj-lodge-modal-nav.prev{left:12px}
+                .cj-lodge-modal-nav.next{right:12px}
+                .cj-lodge-modal-dots{position:absolute;left:0;right:0;bottom:12px;z-index:2;display:flex;justify-content:center;gap:7px;padding:0 12px}
+                .cj-lodge-modal-dot{width:9px;height:9px;padding:0;border:0;border-radius:999px;background:rgba(255,255,255,.55);cursor:pointer}
+                .cj-lodge-modal-dot.is-active{background:#fff}
+                .cj-lodge-modal-body{padding:28px 28px 24px}
+                .cj-lodge-modal-body h2{margin:0 0 12px;font-size:30px;letter-spacing:-.5px}
+                .cj-lodge-modal-desc{margin:0 0 18px;color:#5d6965;line-height:1.7;white-space:pre-line}
+                .cj-lodge-modal-meta{display:grid;gap:10px;margin:0 0 20px}
+                .cj-lodge-modal-meta-item{padding:12px 14px;border:1px solid #e1e8e5;border-radius:10px;background:#f8fbfa}
+                .cj-lodge-modal-meta-item strong{display:block;margin-bottom:3px;font-size:13px;color:#35433e}
+                .cj-lodge-modal-meta-item span{color:#5d6965;font-size:14px;line-height:1.5}
+                .cj-lodge-modal-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+                .cj-lodge-modal-hint{margin:14px 0 0;color:#7a8884;font-size:13px}
+                body.cj-modal-open{overflow:hidden}
+
                 .cj-loading-screen{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 50% 30%,rgba(224,241,239,.9),transparent 58%),rgba(247,250,249,.98);backdrop-filter:blur(8px);font-family:Arial,Helvetica,sans-serif}
                 .cj-loading-screen.is-hidden{display:none}
                 .cj-loading-card{display:grid;width:min(440px,100%);justify-items:center;padding:38px 30px 30px;border:1px solid #dfeae7;border-radius:18px;background:rgba(255,255,255,.95);box-shadow:0 24px 70px rgba(17,54,49,.12);text-align:center}
@@ -34,9 +67,10 @@
                 .cj-loading-track span{display:block;width:38%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#008b92,#c89b56);animation:cjLoadingProgress 1.5s ease-in-out infinite}
                 @keyframes cjLoadingSpin{to{transform:rotate(360deg)}}
                 @keyframes cjLoadingProgress{0%{transform:translateX(-120%)}50%{transform:translateX(150%)}100%{transform:translateX(320%)}}
+                @media(max-width:900px){.cj-lodge-modal-grid{grid-template-columns:1fr}.cj-lodge-modal-gallery,.cj-lodge-modal-gallery-main{min-height:280px}.cj-lodge-modal-body{padding:22px}}
+                @media(max-width:580px){.cj-cottages-container{width:calc(100% - 24px);margin:26px auto 56px}.cj-cottages-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.cj-cottage-photo{height:170px}.cj-cottage-body{padding:14px}.cj-cottage-body h2{font-size:17px}.cj-cottage-description{font-size:13px}.cj-cottage-capacity,.cj-cottage-policy{font-size:12px}.cj-cottage-book{width:100%;padding:0 10px;font-size:13px}.cj-lodge-modal{padding:10px}.cj-lodge-modal-dialog{max-height:calc(100vh - 20px);border-radius:14px}.cj-lodge-modal-body h2{font-size:24px}}
                 @media(max-width:540px){.cj-loading-card{padding:30px 21px 25px}.cj-loading-card h2{font-size:21px}}
-                @media(prefers-reduced-motion:reduce){.cj-loading-spinner,.cj-loading-track span{animation:none}.cj-loading-track span{width:100%}}
-                @media(max-width:580px){.cj-cottages-container{width:calc(100% - 24px);margin:26px auto 56px}.cj-cottages-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.cj-cottage-photo{height:170px}.cj-cottage-body{padding:14px}.cj-cottage-body h2{font-size:17px}.cj-cottage-description{font-size:13px}.cj-cottage-capacity,.cj-cottage-policy{font-size:12px}.cj-cottage-book{width:100%;padding:0 10px;font-size:13px}}
+                @media(prefers-reduced-motion:reduce){.cj-loading-spinner,.cj-loading-track span{animation:none}.cj-loading-track span{width:100%}.cj-cottage-photo img,.cj-lodge-modal-gallery-main img{transition:none}}
             </style>
             <main class="cj-cottages-page">
                 <t t-call="website.cj_header"/>
@@ -48,6 +82,29 @@
                     <p class="cj-cottages-status" id="cjCottagesStatus" role="status" aria-live="polite">Loading available stays…</p>
                     <div class="cj-cottages-grid" id="cjCottagesGrid"></div>
                 </section>
+
+                <div class="cj-lodge-modal" id="cjLodgeModal" aria-hidden="true">
+                    <div class="cj-lodge-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="cjLodgeModalTitle">
+                        <button type="button" class="cj-lodge-modal-close" id="cjLodgeModalClose" aria-label="Close details">&#215;</button>
+                        <div class="cj-lodge-modal-grid">
+                            <div class="cj-lodge-modal-gallery">
+                                <div class="cj-lodge-modal-gallery-main" id="cjLodgeModalGallery"></div>
+                                <button type="button" class="cj-lodge-modal-nav prev" id="cjLodgeModalPrev" aria-label="Previous image">&#8249;</button>
+                                <button type="button" class="cj-lodge-modal-nav next" id="cjLodgeModalNext" aria-label="Next image">&#8250;</button>
+                                <div class="cj-lodge-modal-dots" id="cjLodgeModalDots"></div>
+                            </div>
+                            <div class="cj-lodge-modal-body">
+                                <h2 id="cjLodgeModalTitle"></h2>
+                                <p class="cj-lodge-modal-desc" id="cjLodgeModalDesc"></p>
+                                <div class="cj-lodge-modal-meta" id="cjLodgeModalMeta"></div>
+                                <div class="cj-lodge-modal-actions">
+                                    <a class="cj-cottage-book" id="cjLodgeModalBook" href="#">Book Now</a>
+                                </div>
+                                <p class="cj-lodge-modal-hint" id="cjLodgeModalHint"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </main>
             <script>
                 (function(){
@@ -60,9 +117,8 @@
                         loader.setAttribute('aria-busy','true');
                         loader.innerHTML='<div class="cj-loading-card"><span class="cj-loading-mark" aria-hidden="true">K</span><span class="cj-loading-eyebrow">KALITUSI NATURE RESORT</span><span class="cj-loading-spinner" aria-hidden="true"></span><h2>Getting things ready</h2><p class="cj-loading-message">Loading cottages and lodges…</p><div class="cj-loading-track" aria-hidden="true"><span></span></div></div>';
                         document.body.appendChild(loader);
-                    }else{
-                        var loader=document.getElementById('cjLoadingScreen');
                     }
+                    var loader=document.getElementById('cjLoadingScreen');
                     var startedAt=Date.now();
                     var hideTimer=null;
                     function hideLoader(){
@@ -73,10 +129,25 @@
                             loader.setAttribute('aria-busy','false');
                         },delay);
                     }
+
                     var apiBase=(window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1').replace(/\/+$/,'');
                     var reservationBase=(window.CJ_RESERVATION_BASE_URL||apiBase.replace(/\/api\/v1$/,'')).replace(/\/+$/,'');
                     var grid=document.getElementById('cjCottagesGrid');
                     var status=document.getElementById('cjCottagesStatus');
+
+                    var modal=document.getElementById('cjLodgeModal');
+                    var modalGallery=document.getElementById('cjLodgeModalGallery');
+                    var modalDots=document.getElementById('cjLodgeModalDots');
+                    var modalTitle=document.getElementById('cjLodgeModalTitle');
+                    var modalDesc=document.getElementById('cjLodgeModalDesc');
+                    var modalMeta=document.getElementById('cjLodgeModalMeta');
+                    var modalBook=document.getElementById('cjLodgeModalBook');
+                    var modalHint=document.getElementById('cjLodgeModalHint');
+                    var modalPrev=document.getElementById('cjLodgeModalPrev');
+                    var modalNext=document.getElementById('cjLodgeModalNext');
+                    var modalClose=document.getElementById('cjLodgeModalClose');
+                    var modalState={images:[],index:0,timer:null,name:''};
+
                     function showStatus(state,text){
                         status.dataset.state=state;
                         status.textContent=text;
@@ -90,28 +161,190 @@
                         empty.appendChild(paragraph);
                         grid.appendChild(empty);
                     }
+                    function getLodgeImages(lodge){
+                        var imgs=[];
+                        function pushValue(v){
+                            if(!v) return;
+                            if(typeof v==='string'){ imgs.push(v); return; }
+                            if(v.image_url) imgs.push(v.image_url);
+                            else if(v.url) imgs.push(v.url);
+                            else if(v.image) imgs.push(v.image);
+                            else if(v.src) imgs.push(v.src);
+                            else if(v.file) imgs.push(v.file);
+                        }
+                        if(Array.isArray(lodge.images)){ lodge.images.forEach(pushValue); }
+                        if(!imgs.length && Array.isArray(lodge.image_urls)){ lodge.image_urls.forEach(pushValue); }
+                        if(!imgs.length && Array.isArray(lodge.gallery)){ lodge.gallery.forEach(pushValue); }
+                        if(!imgs.length && Array.isArray(lodge.photos)){ lodge.photos.forEach(pushValue); }
+                        if(!imgs.length && lodge.image_url){ imgs.push(lodge.image_url); }
+                        return imgs.filter(function(v){ return typeof v==='string' && v; });
+                    }
+                    function reservationHref(lodge){
+                        if(lodge && lodge.slug) return reservationBase+'/reservation/?lodge='+encodeURIComponent(lodge.slug);
+                        return reservationBase+'/reservation/';
+                    }
+                    function setActiveImage(container,index){
+                        var images=container.querySelectorAll('img');
+                        if(!images.length) return;
+                        var i=((index%images.length)+images.length)%images.length;
+                        for(var n=0;n<images.length;n++){
+                            if(n===i) images[n].classList.add('is-active');
+                            else images[n].classList.remove('is-active');
+                        }
+                        container._activeIndex=i;
+                    }
+                    function startCarousel(container,images,altBase,intervalMs){
+                        container.replaceChildren();
+                        container._activeIndex=0;
+                        if(!images || !images.length){
+                            var empty=document.createElement('div');
+                            empty.className=container.id==='cjLodgeModalGallery'?'cj-lodge-modal-gallery-empty':'cj-cottage-photo-empty';
+                            empty.textContent='Photo coming soon';
+                            container.appendChild(empty);
+                            return null;
+                        }
+                        images.forEach(function(src,idx){
+                            var img=document.createElement('img');
+                            img.src=src;
+                            img.alt=(altBase||'Cottage')+' photo '+(idx+1);
+                            img.loading=idx===0?'eager':'lazy';
+                            if(idx===0) img.classList.add('is-active');
+                            img.addEventListener('error',function(){
+                                img.remove();
+                                var imgs=container.querySelectorAll('img');
+                                if(!imgs.length){
+                                    container.replaceChildren();
+                                    var emptyErr=document.createElement('div');
+                                    emptyErr.className=container.id==='cjLodgeModalGallery'?'cj-lodge-modal-gallery-empty':'cj-cottage-photo-empty';
+                                    emptyErr.textContent='Photo unavailable';
+                                    container.appendChild(emptyErr);
+                                }else{
+                                    setActiveImage(container,Math.min(container._activeIndex||0,imgs.length-1));
+                                }
+                            },{once:true});
+                            container.appendChild(img);
+                        });
+                        if(images.length<2) return null;
+                        return window.setInterval(function(){
+                            var imgs=container.querySelectorAll('img');
+                            if(imgs.length<2) return;
+                            setActiveImage(container,(container._activeIndex||0)+1);
+                        },intervalMs||3200);
+                    }
+
+                    function renderModalDots(){
+                        modalDots.replaceChildren();
+                        if(modalState.images.length<2){ modalPrev.hidden=true; modalNext.hidden=true; return; }
+                        modalPrev.hidden=false; modalNext.hidden=false;
+                        modalState.images.forEach(function(_,idx){
+                            var dot=document.createElement('button');
+                            dot.type='button';
+                            dot.className='cj-lodge-modal-dot'+(idx===modalState.index?' is-active':'');
+                            dot.setAttribute('aria-label','View image '+(idx+1));
+                            dot.addEventListener('click',function(){
+                                modalState.index=idx;
+                                setActiveImage(modalGallery,idx);
+                                renderModalDots();
+                                restartModalTimer();
+                            });
+                            modalDots.appendChild(dot);
+                        });
+                    }
+                    function restartModalTimer(){
+                        if(modalState.timer){ window.clearInterval(modalState.timer); modalState.timer=null; }
+                        if(modalState.images.length<2) return;
+                        modalState.timer=window.setInterval(function(){
+                            modalState.index=(modalState.index+1)%modalState.images.length;
+                            setActiveImage(modalGallery,modalState.index);
+                            renderModalDots();
+                        },3500);
+                    }
+                    function closeModal(){
+                        modal.classList.remove('is-open');
+                        modal.setAttribute('aria-hidden','true');
+                        document.body.classList.remove('cj-modal-open');
+                        if(modalState.timer){ window.clearInterval(modalState.timer); modalState.timer=null; }
+                    }
+                    function appendMeta(label,value){
+                        if(value==null || value==='') return;
+                        var item=document.createElement('div');
+                        item.className='cj-lodge-modal-meta-item';
+                        var strong=document.createElement('strong');
+                        strong.textContent=label;
+                        var span=document.createElement('span');
+                        span.textContent=String(value);
+                        item.appendChild(strong);
+                        item.appendChild(span);
+                        modalMeta.appendChild(item);
+                    }
+                    function openModal(lodge,images){
+                        modalState.images=images.slice();
+                        modalState.index=0;
+                        modalState.name=lodge.name||'Cottage';
+                        modalTitle.textContent=lodge.name||'Cottage';
+                        modalDesc.textContent=lodge.description||'More details will be available soon.';
+                        modalDesc.style.display=lodge.description?'':'none';
+                        modalMeta.replaceChildren();
+                        var cap=lodge.capacity!=null?('Sleeps up to '+lodge.capacity+' guest'+(Number(lodge.capacity)===1?'':'s')):'';
+                        appendMeta('Capacity',cap);
+                        var minN=lodge.min_nights!=null?('Minimum stay: '+lodge.min_nights+' night'+(Number(lodge.min_nights)===1?'':'s')):'';
+                        appendMeta('Stay policy',minN);
+                        var price=lodge.price_per_night!=null?lodge.price_per_night:(lodge.nightly_rate!=null?lodge.nightly_rate:lodge.price);
+                        if(price!=null && price!=='') appendMeta('Rate',String(price));
+                        if(Array.isArray(lodge.amenities) && lodge.amenities.length){
+                            appendMeta('Amenities',lodge.amenities.join(', '));
+                        }else if(typeof lodge.amenities==='string' && lodge.amenities){
+                            appendMeta('Amenities',lodge.amenities);
+                        }
+                        modalBook.href=reservationHref(lodge);
+                        modalGallery.replaceChildren();
+                        startCarousel(modalGallery,modalState.images,modalState.name,3500);
+                        setActiveImage(modalGallery,0);
+                        renderModalDots();
+                        modalHint.textContent=modalState.images.length>1?('Showing '+modalState.images.length+' photos. Images rotate automatically; use arrows or dots to browse.'):'';
+                        modal.classList.add('is-open');
+                        modal.setAttribute('aria-hidden','false');
+                        document.body.classList.add('cj-modal-open');
+                        restartModalTimer();
+                        modalClose.focus();
+                    }
+
+                    modalClose.addEventListener('click',closeModal);
+                    modal.addEventListener('click',function(e){ if(e.target===modal) closeModal(); });
+                    document.addEventListener('keydown',function(e){ if(e.key==='Escape' && modal.classList.contains('is-open')) closeModal(); });
+                    modalPrev.addEventListener('click',function(){
+                        if(modalState.images.length<2) return;
+                        modalState.index=(modalState.index-1+modalState.images.length)%modalState.images.length;
+                        setActiveImage(modalGallery,modalState.index); renderModalDots(); restartModalTimer();
+                    });
+                    modalNext.addEventListener('click',function(){
+                        if(modalState.images.length<2) return;
+                        modalState.index=(modalState.index+1)%modalState.images.length;
+                        setActiveImage(modalGallery,modalState.index); renderModalDots(); restartModalTimer();
+                    });
+
                     function createCard(lodge){
+                        var images=getLodgeImages(lodge);
                         var card=document.createElement('article');
                         card.className='cj-cottage-card';
+                        card.tabIndex=0;
+                        card.setAttribute('role','button');
+                        card.setAttribute('aria-label','View details for '+(lodge.name||'cottage'));
+
                         var photo=document.createElement('div');
                         photo.className='cj-cottage-photo';
-                        if(lodge.image_url){
-                            var image=document.createElement('img');
-                            image.src=lodge.image_url;
-                            image.alt=lodge.name+' cottage';
-                            image.loading='lazy';
-                            image.addEventListener('error',function(){
-                                photo.replaceChildren();
-                                photo.textContent='Photo unavailable';
-                            },{once:true});
-                            photo.appendChild(image);
-                        }else{
-                            photo.textContent='Photo coming soon';
+                        startCarousel(photo,images,lodge.name||'Cottage',3200);
+                        if(images.length>1){
+                            var count=document.createElement('span');
+                            count.className='cj-cottage-photo-count';
+                            count.textContent=images.length+' photos';
+                            photo.appendChild(count);
                         }
+
                         var body=document.createElement('div');
                         body.className='cj-cottage-body';
                         var heading=document.createElement('h2');
-                        heading.textContent=lodge.name;
+                        heading.textContent=lodge.name||'Cottage';
                         body.appendChild(heading);
                         if(lodge.description){
                             var description=document.createElement('p');
@@ -121,21 +354,31 @@
                         }
                         var capacity=document.createElement('p');
                         capacity.className='cj-cottage-capacity';
-                        capacity.textContent='Sleeps up to '+lodge.capacity+' guest'+(lodge.capacity===1?'':'s');
+                        capacity.textContent='Sleeps up to '+(lodge.capacity!=null?lodge.capacity:'?')+' guest'+(Number(lodge.capacity)===1?'':'s');
                         body.appendChild(capacity);
                         var policy=document.createElement('p');
                         policy.className='cj-cottage-policy';
-                        policy.textContent='Minimum stay: '+lodge.min_nights+' night'+(lodge.min_nights===1?'':'s');
+                        policy.textContent='Minimum stay: '+(lodge.min_nights!=null?lodge.min_nights:'?')+' night'+(Number(lodge.min_nights)===1?'':'s');
                         body.appendChild(policy);
                         var bookingLink=document.createElement('a');
                         bookingLink.className='cj-cottage-book';
                         bookingLink.textContent='Book Now';
-                        bookingLink.href=reservationBase+'/reservation/?lodge='+encodeURIComponent(lodge.slug);
+                        bookingLink.href=reservationHref(lodge);
+                        bookingLink.addEventListener('click',function(e){ e.stopPropagation(); });
                         body.appendChild(bookingLink);
+
+                        function open(){ openModal(lodge,images); }
+                        card.addEventListener('click',open);
+                        card.addEventListener('keydown',function(e){
+                            if(e.target.closest && e.target.closest('a,button')) return;
+                            if(e.key==='Enter' || e.key===' '){ e.preventDefault(); open(); }
+                        });
+
                         card.appendChild(photo);
                         card.appendChild(body);
                         return card;
                     }
+
                     fetch(apiBase+'/lodges/',{headers:{Accept:'application/json'}}).then(function(response){
                         return response.text().then(function(text){
                             var data=null;

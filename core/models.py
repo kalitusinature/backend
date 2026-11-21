@@ -86,8 +86,35 @@ class Lodge(models.Model):
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
+    def sync_cover_image(self):
+        primary = self.images.order_by("sort_order", "id").first()
+        image_url = primary.image_url if primary else ""
+        image_public_id = primary.image_public_id if primary else ""
+        if self.image_url != image_url or self.image_public_id != image_public_id:
+            type(self).objects.filter(pk=self.pk).update(
+                image_url=image_url, image_public_id=image_public_id
+            )
+            self.image_url = image_url
+            self.image_public_id = image_public_id
+
     def __str__(self):
         return self.name
+
+
+class LodgeImage(models.Model):
+    lodge = models.ForeignKey(
+        Lodge, on_delete=models.CASCADE, related_name="images"
+    )
+    image_url = models.URLField(max_length=1000)
+    image_public_id = models.CharField(max_length=255, blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+    def __str__(self):
+        return f"{self.lodge} image"
 
 
 class LodgeBlockout(models.Model):

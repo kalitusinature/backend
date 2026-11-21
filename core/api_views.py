@@ -209,7 +209,7 @@ class LodgeList(generics.ListAPIView):
     serializer_class = LodgeSerializer
 
     def get_queryset(self):
-        queryset = Lodge.objects.filter(is_active=True)
+        queryset = Lodge.objects.filter(is_active=True).prefetch_related("images")
         check_in_value = self.request.query_params.get("check_in")
         check_out_value = self.request.query_params.get("check_out")
         if bool(check_in_value) != bool(check_out_value):
@@ -254,7 +254,9 @@ class LodgeAvailability(APIView):
     permission_classes = (AllowAny,)
 
     def get(self, request, slug):
-        lodge = get_object_or_404(Lodge, slug=slug, is_active=True)
+        lodge = get_object_or_404(
+            Lodge.objects.prefetch_related("images"), slug=slug, is_active=True
+        )
         month_value = request.query_params.get(
             "month", timezone.localdate().strftime("%Y-%m")
         )

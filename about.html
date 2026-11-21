@@ -1,0 +1,328 @@
+<t name="About Us" t-name="website.about_us">
+  <t t-call="website.layout" pageName.f="about_us">
+    <div id="wrap" class="oe_structure">
+      <style>
+        .kal-about {
+          --bg: #f6f4ee;
+          --surface: #ffffff;
+          --surface-alt: #eef3ea;
+          --text: #1f2a24;
+          --muted: #5b675f;
+          --primary: #244d3b;
+          --primary-dark: #183528;
+          --accent: #c89b5c;
+          --border: rgba(31, 42, 36, 0.12);
+          --shadow: 0 20px 45px rgba(24, 53, 40, 0.12);
+          --radius: 20px;
+          --radius-sm: 14px;
+          --container: 1200px;
+          color: var(--text);
+          background: var(--bg);
+          font-family: "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+          line-height: 1.6;
+        }
+        .kal-about * { box-sizing: border-box; }
+        .kal-about a { color: inherit; text-decoration: none; }
+        .kal-about img { max-width: 100%; display: block; }
+        .kal-about .container {
+          width: min(calc(100% - 2rem), var(--container));
+          margin: 0 auto;
+        }
+        .kal-about .eyebrow {
+          display: inline-block;
+          font-size: 0.78rem;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          font-weight: 700;
+          color: var(--accent);
+          margin-bottom: 0.75rem;
+        }
+        .kal-about .section { padding: 5.5rem 0; }
+        .kal-about .section-header { max-width: 760px; margin-bottom: 2.5rem; }
+        .kal-about .section-header.center { margin-left: auto; margin-right: auto; text-align: center; }
+        .kal-about h1, .kal-about h2, .kal-about h3 { color: var(--primary-dark); line-height: 1.15; margin: 0 0 1rem; }
+        .kal-about h1 { font-size: clamp(2.6rem, 5vw, 4.5rem); letter-spacing: -0.02em; }
+        .kal-about h2 { font-size: clamp(2rem, 3vw, 3rem); }
+        .kal-about h3 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+        .kal-about p.lead { font-size: 1.1rem; color: var(--muted); margin: 0; }
+        .kal-about p { margin: 0 0 1rem; }
+        .kal-about .btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          padding: 0.95rem 1.4rem;
+          border-radius: 999px;
+          font-weight: 600;
+          border: 1px solid transparent;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+        }
+        .kal-about .btn:hover { transform: translateY(-1px); }
+        .kal-about .btn-primary {
+          background: var(--accent);
+          color: #1e1a14;
+          box-shadow: 0 10px 24px rgba(200, 155, 92, 0.28);
+        }
+        .kal-about .btn-primary:hover { background: #d6aa69; }
+        .kal-about .btn-secondary {
+          background: rgba(255,255,255,0.12);
+          color: #fff;
+          border-color: rgba(255,255,255,0.35);
+          backdrop-filter: blur(4px);
+        }
+        .kal-about .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+        .kal-about .btn-outline {
+          border-color: var(--primary);
+          color: var(--primary);
+          background: transparent;
+        }
+        .kal-about .btn-outline:hover { background: rgba(36,77,59,0.08); }
+
+        .kal-about .hero {
+          position: relative;
+          min-height: 72vh;
+          display: flex;
+          align-items: center;
+          color: #fff;
+          overflow: hidden;
+          background: #183528;
+        }
+        .kal-about .hero .s_parallax_bg_wrap,
+        .kal-about .hero .s_parallax_bg { position: absolute; inset: 0; }
+        .kal-about .hero .s_parallax_bg { background-size: cover; background-repeat: no-repeat; }
+        .kal-about .hero .o_we_bg_filter {
+          position: absolute; inset: 0; z-index: 1;
+          background: linear-gradient(180deg, rgba(12,28,21,0.35), rgba(12,28,21,0.6));
+        }
+        .kal-about .hero-content {
+          position: relative; z-index: 2;
+          padding: 7rem 0 5rem;
+          max-width: 760px;
+        }
+        .kal-about .hero h1, .kal-about .hero p { color: #fff; }
+        .kal-about .hero p { font-size: clamp(1.05rem, 2vw, 1.25rem); color: rgba(255,255,255,0.92); max-width: 680px; margin-bottom: 2rem; }
+        .kal-about .hero-actions { display: flex; flex-wrap: wrap; gap: 0.9rem; }
+
+        .kal-about .split {
+          display: grid;
+          grid-template-columns: 1.05fr 0.95fr;
+          gap: 2rem;
+          align-items: center;
+        }
+        .kal-about .image-stack { position: relative; min-height: 430px; }
+        .kal-about .image-card {
+          position: absolute;
+          overflow: hidden;
+          border-radius: var(--radius);
+          box-shadow: var(--shadow);
+        }
+        .kal-about .image-card.large { inset: 0 3rem 2rem 0; }
+        .kal-about .image-card.small { width: 46%; right: 0; bottom: 0; border: 6px solid var(--bg); }
+        .kal-about .image-card img { width: 100%; height: 100%; object-fit: cover; }
+
+        .kal-about .grid-3 {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 1.5rem;
+        }
+        .kal-about .grid-4 {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 1.25rem;
+        }
+        .kal-about .card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--radius);
+          overflow: hidden;
+          box-shadow: 0 8px 24px rgba(24, 53, 40, 0.06);
+        }
+        .kal-about .card-body { padding: 1.4rem; }
+        .kal-about .card p { color: var(--muted); margin: 0; }
+        .kal-about .icon-badge {
+          width: 48px; height: 48px; border-radius: 14px;
+          display: inline-flex; align-items: center; justify-content: center;
+          background: var(--surface-alt); color: var(--primary);
+          font-weight: 700; margin-bottom: 1rem;
+        }
+        .kal-about .feature {
+          padding: 1.5rem;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+        }
+        .kal-about .feature p { color: var(--muted); margin: 0; font-size: 0.98rem; }
+
+        .kal-about .story-list {
+          list-style: none; padding: 0; margin: 1.25rem 0 0;
+          display: grid; gap: 0.8rem;
+        }
+        .kal-about .story-list li { position: relative; padding-left: 1.8rem; color: var(--text); }
+        .kal-about .story-list li::before {
+          content: "✓"; position: absolute; left: 0; top: 0; color: var(--primary); font-weight: 700;
+        }
+
+        .kal-about .highlight-band {
+          background: linear-gradient(160deg, var(--primary-dark), var(--primary));
+          color: #fff;
+          border-radius: 28px;
+          padding: 2.5rem;
+          box-shadow: var(--shadow);
+        }
+        .kal-about .highlight-band h2, .kal-about .highlight-band h3, .kal-about .highlight-band p { color: #fff; }
+        .kal-about .highlight-band p { color: rgba(255,255,255,0.85); }
+        .kal-about .stats {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 1rem;
+          margin-top: 1.5rem;
+        }
+        .kal-about .stat {
+          padding: 1rem 1.1rem;
+          border: 1px solid rgba(255,255,255,0.18);
+          border-radius: 16px;
+          background: rgba(255,255,255,0.08);
+        }
+        .kal-about .stat strong { display: block; font-size: 1.1rem; margin-bottom: 0.2rem; }
+        .kal-about .stat span { color: rgba(255,255,255,0.82); font-size: 0.95rem; }
+
+        .kal-about .gallery {
+          display: grid;
+          grid-template-columns: 1.2fr 0.8fr;
+          gap: 1rem;
+        }
+        .kal-about .gallery-col { display: grid; gap: 1rem; }
+        .kal-about .gallery img {
+          width: 100%; height: 100%; min-height: 220px; object-fit: cover; border-radius: 16px;
+        }
+        .kal-about .gallery .tall { min-height: 456px; }
+
+        .kal-about .cta-banner {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 28px;
+          padding: 2.5rem;
+          display: grid;
+          grid-template-columns: 1.5fr auto;
+          gap: 1.5rem;
+          align-items: center;
+          box-shadow: 0 10px 30px rgba(24,53,40,0.06);
+        }
+        .kal-about .cta-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end; }
+
+        @media (max-width: 980px) {
+          .kal-about .split, .kal-about .gallery, .kal-about .cta-banner { grid-template-columns: 1fr; }
+          .kal-about .grid-3 { grid-template-columns: 1fr 1fr; }
+          .kal-about .grid-4, .kal-about .stats { grid-template-columns: 1fr 1fr; }
+          .kal-about .cta-actions { justify-content: flex-start; }
+          .kal-about .image-stack { min-height: 380px; }
+        }
+        @media (max-width: 700px) {
+          .kal-about .section { padding: 4rem 0; }
+          .kal-about .hero { min-height: auto; }
+          .kal-about .hero-content { padding: 6rem 0 4rem; }
+          .kal-about .grid-3, .kal-about .grid-4, .kal-about .stats { grid-template-columns: 1fr; }
+          .kal-about .gallery .tall { min-height: 260px; }
+          .kal-about .image-stack { min-height: 320px; }
+          .kal-about .image-card.large { inset: 0 1.5rem 1.5rem 0; }
+          .kal-about .highlight-band, .kal-about .cta-banner { padding: 1.75rem; }
+        }
+      </style>
+
+      <div class="kal-about">
+        <section class="hero s_cover parallax o_colored_level pt0 pb0" data-scroll-background-ratio="0" data-snippet="s_cover" data-name="About Hero">
+          <span class="s_parallax_bg_wrap">
+            <span class="s_parallax_bg oe_img_bg o_bg_img_center" style="background-image: url(&quot;https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&amp;fit=crop&amp;w=1800&amp;q=80&quot;); background-position: 50% 50%;"/>
+          </span>
+          <div class="o_we_bg_filter bg-black-50"/>
+          <div class="container s_allow_columns">
+            <div class="hero-content">
+              <span class="eyebrow">About Kalitusi Nature Resort</span>
+              <h1>A place where nature, comfort, and hospitality meet.</h1>
+              <p>At Kalitusi Nature Resort, we believe the best moments are unhurried — shaped by fresh air, beautiful surroundings, and the simple joy of feeling at home in nature.</p>
+              <div class="hero-actions">
+                <a class="btn btn-primary o_translate_inline" href="https://wa.me/256772957573">Plan Your Visit</a>
+                <a class="btn btn-secondary o_translate_inline" href="/cottages">Explore Our Cottages</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section o_colored_level" data-name="Our Story">
+          <div class="container split">
+            <div>
+              <span class="eyebrow">Our Story</span>
+              <div class="section-header">
+                <h2>Created for rest, connection, and memorable escapes.</h2>
+                <p class="lead">Kalitusi Nature Resort was envisioned as a peaceful retreat where guests can slow down, reconnect with nature, and enjoy warm, thoughtful hospitality. Every stay is designed to feel refreshing, comfortable, and truly welcoming.</p>
+              </div>
+              <p>From quiet mornings surrounded by greenery to relaxing evenings shared with family and friends, we offer an environment that invites you to breathe deeply and enjoy the beauty around you.</p>
+              <ul class="story-list">
+                <li>A calm, scenic setting that encourages relaxation and reflection</li>
+                <li>Comfortable spaces designed for couples, families, and groups</li>
+                <li>Genuine hospitality that makes every guest feel valued and at ease</li>
+              </ul>
+            </div>
+            <div class="image-stack" aria-hidden="true">
+              <div class="image-card large">
+                <img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&amp;fit=crop&amp;w=1200&amp;q=80" alt="Lush natural surroundings at Kalitusi Nature Resort"/>
+              </div>
+              <div class="image-card small">
+                <img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&amp;fit=crop&amp;w=800&amp;q=80" alt="Peaceful landscape view"/>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section o_colored_level" style="padding-top: 2rem;" data-name="Mission and Values">
+          <div class="container">
+            <div class="section-header center">
+              <span class="eyebrow">Our Purpose</span>
+              <h2>Guided by nature, comfort, and care.</h2>
+              <p class="lead">Everything we do is centered on creating a serene experience where guests can relax, explore, and make lasting memories.</p>
+            </div>
+            <div class="grid-3">
+              <article class="card">
+                <div class="card-body">
+                  <div class="icon-badge">01</div>
+                  <h3>Our Mission</h3>
+                  <p>To provide a peaceful nature retreat that blends comfort, beauty, and warm hospitality for every guest who visits.</p>
+                </div>
+              </article>
+              <article class="card">
+                <div class="card-body">
+                  <div class="icon-badge">02</div>
+                  <h3>Our Vision</h3>
+                  <p>To be a cherished destination for relaxation, meaningful gatherings, and unforgettable experiences in nature.</p>
+                </div>
+              </article>
+              <article class="card">
+                <div class="card-body">
+                  <div class="icon-badge">03</div>
+                  <h3>Our Promise</h3>
+                  <p>To welcome you with care, maintain a serene environment, and make your time with us truly restorative.</p>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="section o_colored_level" data-name="About CTA">
+          <div class="container">
+            <div class="cta-banner">
+              <div>
+                <span class="eyebrow">Visit Kalitusi</span>
+                <h2>Come experience the joy of nature with us.</h2>
+                <p class="lead" style="color: var(--muted);">Plan your stay, explore our cottages, or get in touch to learn more about what makes Kalitusi Nature Resort special.</p>
+              </div>
+              <div class="cta-actions">
+                <a class="btn btn-primary o_translate_inline" href="https://wa.me/256772957573">Contact Us on WhatsApp</a>
+                <a class="btn btn-outline o_translate_inline" href="/cottages">View Cottages</a>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </t>
+</t>

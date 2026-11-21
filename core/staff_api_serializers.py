@@ -13,6 +13,7 @@ from .models import (
     Category,
     Lodge,
     LodgeBlockout,
+    LodgeImage,
     LodgeReservation,
     Order,
     OrderItem,
@@ -223,8 +224,25 @@ class StaffCategorySerializer(serializers.ModelSerializer):
         fields = ("id", "name", "slug", "description", "sort_order", "is_active")
 
 
+class LodgeImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LodgeImage
+        fields = ("id", "image_url", "sort_order")
+        read_only_fields = fields
+
+
 class StaffLodgeSerializer(serializers.ModelSerializer):
     image_file = ImageFileField(required=False, write_only=True)
+    image_files = serializers.ListField(
+        child=ImageFileField(), required=False, allow_empty=True, write_only=True
+    )
+    remove_image_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
+    images = LodgeImageSerializer(many=True, read_only=True)
     checkin_weekdays = serializers.ListField(
         child=serializers.IntegerField(min_value=0, max_value=6),
         required=False,
@@ -246,9 +264,12 @@ class StaffLodgeSerializer(serializers.ModelSerializer):
             "checkin_weekdays",
             "image_url",
             "image_file",
+            "image_files",
+            "remove_image_ids",
+            "images",
             "is_active",
         )
-        read_only_fields = ("id", "slug")
+        read_only_fields = ("id", "slug", "images")
 
     def validate(self, attrs):
         instance = self.instance
@@ -272,40 +293,74 @@ class StaffLodgeSerializer(serializers.ModelSerializer):
             )
         if len(weekdays) != len(set(weekdays)):
             errors["checkin_weekdays"] = "Each check-in weekday may only be selected once."
+        remove_ids = attrs.get("remove_image_ids") or []
+        if remove_ids and len(remove_ids) != len(set(remove_ids)):
+            errors["remove_image_ids"] = "Duplicate image IDs are not allowed."
+        if instance and remove_ids:
+            valid_ids = set(instance.images.values_list("id", flat=True))
+            invalid = [image_id for image_id in remove_ids if image_id not in valid_ids]
+            if invalid:
+                errors["remove_image_ids"] = "One or more images do not belong to this lodge."
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
 
-    @transaction.atomic
-    def create(self, validated_data):
-        image_file = validated_data.pop("image_file", None)
-        lodge = super().create(validated_data)
-        if image_file:
+    def _extract_uploads(self, validated_data):
+        uploads = []
+        single = validated_data.pop("image_file", None)
+        if single:
+            uploads.append(single)
+        uploads.extend(validated_data.pop("image_files", None) or [])
+        return uploads
+
+    def _create_uploaded_images(self, lodge, uploads):
+        if not uploads:
+            return
+        existing_max = (
+            lodge.images.order_by("-sort_order", "-id")
+            .values_list("sort_order", flat=True)
+            .first()
+        )
+        next_order = (existing_max or 0) + 1
+        for index, image_file in enumerate(uploads):
             result = _upload_cloudinary_image(
                 image_file, _new_image_public_id("lodges")
             )
-            lodge.image_url = result["secure_url"]
-            lodge.image_public_id = result["public_id"]
-            lodge.save(update_fields=("image_url", "image_public_id"))
+            LodgeImage.objects.create(
+                lodge=lodge,
+                image_url=result["secure_url"],
+                image_public_id=result.get("public_id", ""),
+                sort_order=next_order + index,
+            )
+
+    def _remove_images(self, lodge, remove_ids):
+        if not remove_ids:
+            return
+        images = list(lodge.images.filter(id__in=remove_ids))
+        lodge.images.filter(id__in=[image.id for image in images]).delete()
+        for image in images:
+            if image.image_public_id:
+                public_id = image.image_public_id
+                transaction.on_commit(lambda public_id=public_id: _delete_cloudinary_image(public_id))
+
+    @transaction.atomic
+    def create(self, validated_data):
+        uploads = self._extract_uploads(validated_data)
+        validated_data.pop("remove_image_ids", None)
+        lodge = super().create(validated_data)
+        self._create_uploaded_images(lodge, uploads)
+        lodge.sync_cover_image()
         return lodge
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        image_file = validated_data.pop("image_file", None)
+        uploads = self._extract_uploads(validated_data)
+        remove_ids = validated_data.pop("remove_image_ids", None) or []
         old_public_id = instance.image_public_id
-        if image_file:
-            lodge = super().update(instance, validated_data)
-            result = _upload_cloudinary_image(
-                image_file, _new_image_public_id("lodges")
-            )
-            lodge.image_url = result["secure_url"]
-            lodge.image_public_id = result["public_id"]
-            lodge.save(update_fields=("image_url", "image_public_id"))
-            if old_public_id and old_public_id != lodge.image_public_id:
-                transaction.on_commit(
-                    lambda: _delete_cloudinary_image(old_public_id)
-                )
-            return lodge
+
+        # Ignore direct cover URL edits when managed image records are involved.
+        if uploads or remove_ids or instance.images.exists():
+            validated_data.pop("image_url", None)
 
         image_url_changed = (
             "image_url" in validated_data
@@ -315,7 +370,15 @@ class StaffLodgeSerializer(serializers.ModelSerializer):
             validated_data["image_public_id"] = ""
 
         lodge = super().update(instance, validated_data)
-        if image_url_changed and old_public_id:
+
+        if remove_ids:
+            self._remove_images(lodge, remove_ids)
+        if uploads:
+            self._create_uploaded_images(lodge, uploads)
+        if uploads or remove_ids or lodge.images.exists():
+            lodge.sync_cover_image()
+
+        if image_url_changed and old_public_id and not lodge.images.exists():
             transaction.on_commit(lambda: _delete_cloudinary_image(old_public_id))
         return lodge
 

@@ -347,12 +347,12 @@ class StaffCategoryDetail(StaffApiMixin, generics.RetrieveUpdateAPIView):
 
 
 class StaffLodgeListCreate(StaffApiMixin, generics.ListCreateAPIView):
-    queryset = Lodge.objects.all()
+    queryset = Lodge.objects.prefetch_related("images").all()
     serializer_class = StaffLodgeSerializer
 
 
 class StaffLodgeDetail(StaffApiMixin, generics.RetrieveUpdateAPIView):
-    queryset = Lodge.objects.all()
+    queryset = Lodge.objects.prefetch_related("images").all()
     serializer_class = StaffLodgeSerializer
     http_method_names = ("get", "patch", "put", "options", "head")
 

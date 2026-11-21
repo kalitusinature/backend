@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, Lodge, LodgeReservation, Order, OrderItem, Product
+from .models import Category, Lodge, LodgeImage, LodgeReservation, Order, OrderItem, Product
 
 
 @admin.register(Category)
@@ -28,12 +28,28 @@ class ProductAdmin(admin.ModelAdmin):
     autocomplete_fields = ("category",)
 
 
+class LodgeImageInline(admin.TabularInline):
+    model = LodgeImage
+    extra = 1
+    fields = ("image_url", "image_public_id", "sort_order")
+    ordering = ("sort_order", "id")
+
+
 @admin.register(Lodge)
 class LodgeAdmin(admin.ModelAdmin):
-    list_display = ("name", "slug", "capacity", "is_active")
+    list_display = ("name", "slug", "capacity", "is_active", "image_count")
     list_editable = ("capacity", "is_active")
     search_fields = ("name", "slug", "description")
     prepopulated_fields = {"slug": ("name",)}
+    inlines = (LodgeImageInline,)
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.prefetch_related("images")
+
+    @admin.display(description="Images")
+    def image_count(self, obj):
+        return obj.images.count()
 
 
 class OrderItemInline(admin.TabularInline):

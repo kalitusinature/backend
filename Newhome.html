@@ -1,0 +1,634 @@
+<t name="New Homepage" t-name="website.new_home">
+  <t t-call="website.layout" pageName.f="homepage">
+    <div id="wrap" class="oe_structure">
+      <style>
+    :root {
+      --bg: #f6f4ee;
+      --surface: #ffffff;
+      --surface-alt: #eef3ea;
+      --text: #1f2a24;
+      --muted: #5b675f;
+      --primary: #244d3b;
+      --primary-dark: #183528;
+      --accent: #c89b5c;
+      --accent-soft: #e9d7b8;
+      --border: rgba(31, 42, 36, 0.12);
+      --shadow: 0 20px 45px rgba(24, 53, 40, 0.12);
+      --radius: 20px;
+      --radius-sm: 14px;
+      --container: 1200px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+    }
+    img { max-width: 100%; display: block; }
+    a { color: inherit; text-decoration: none; }
+
+    .container {
+      width: min(calc(100% - 2rem), var(--container));
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      font-size: 0.78rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    .section {
+      padding: 5.5rem 0;
+    }
+    .section-header {
+      max-width: 720px;
+      margin-bottom: 2.5rem;
+    }
+    .section-header.center {
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+    }
+    .section h2 {
+      font-size: clamp(2rem, 3vw, 3rem);
+      line-height: 1.15;
+      margin: 0 0 1rem;
+      color: var(--primary-dark);
+    }
+    .section p.lead {
+      font-size: 1.1rem;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.95rem 1.4rem;
+      border-radius: 999px;
+      font-weight: 600;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary {
+      background: var(--accent);
+      color: #1e1a14;
+      box-shadow: 0 10px 24px rgba(200, 155, 92, 0.28);
+    }
+    .btn-primary:hover { background: #d6aa69; }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.35);
+      backdrop-filter: blur(4px);
+    }
+    .btn-secondary:hover { background: rgba(255, 255, 255, 0.2); }
+    .btn-outline {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: transparent;
+    }
+    .btn-outline:hover { background: rgba(36, 77, 59, 0.08); }
+
+    /* Header */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(10px);
+      background: rgba(246, 244, 238, 0.82);
+      border-bottom: 1px solid rgba(31, 42, 36, 0.08);
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 76px;
+      gap: 1rem;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      letter-spacing: 0.02em;
+    }
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), #4f7a4f);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .nav-links a:hover { color: var(--primary-dark); }
+    .nav-cta { display: flex; gap: 0.75rem; align-items: center; }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      min-height: 88vh;
+      display: flex;
+      align-items: center;
+      color: #fff;
+      overflow: hidden;
+      background: #183528;
+    }
+    .hero .s_parallax_bg_wrap,
+    .hero .s_parallax_bg {
+      position: absolute;
+      inset: 0;
+    }
+    .hero .s_parallax_bg {
+      background-size: cover;
+      background-repeat: no-repeat;
+    }
+    .hero .o_we_bg_filter {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: linear-gradient(180deg, rgba(12, 28, 21, 0.35), rgba(12, 28, 21, 0.55));
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -10% -35% -10%;
+      height: 55%;
+      background: radial-gradient(closest-side, rgba(200,155,92,0.25), transparent 70%);
+      pointer-events: none;
+    }
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      padding: 7rem 0 5rem;
+      max-width: 760px;
+    }
+    .hero h1 {
+      font-size: clamp(2.8rem, 6vw, 5rem);
+      line-height: 1.05;
+      margin: 0 0 1rem;
+      letter-spacing: -0.02em;
+    }
+    .hero p {
+      font-size: clamp(1.05rem, 2vw, 1.3rem);
+      color: rgba(255,255,255,0.92);
+      max-width: 650px;
+      margin: 0 0 2rem;
+    }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-bottom: 2.5rem; }
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      max-width: 700px;
+    }
+    .stat {
+      padding: 1rem 1.1rem;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(4px);
+    }
+    .stat strong { display: block; font-size: 1.1rem; margin-bottom: 0.2rem; }
+    .stat span { color: rgba(255,255,255,0.8); font-size: 0.95rem; }
+
+    /* About */
+    .split {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 2rem;
+      align-items: center;
+    }
+    .image-stack {
+      position: relative;
+      min-height: 420px;
+    }
+    .image-card {
+      position: absolute;
+      overflow: hidden;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .image-card.large { inset: 0 3rem 2rem 0; }
+    .image-card.small {
+      width: 46%;
+      right: 0;
+      bottom: 0;
+      border: 6px solid var(--bg);
+    }
+    .image-card img { width: 100%; height: 100%; object-fit: cover; }
+    .check-list {
+      list-style: none;
+      padding: 0;
+      margin: 1.5rem 0 0;
+      display: grid;
+      gap: 0.8rem;
+    }
+    .check-list li {
+      padding-left: 1.8rem;
+      position: relative;
+      color: var(--text);
+    }
+    .check-list li::before {
+      content: "âœ“";
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    /* Cards / grids */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1.25rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(24, 53, 40, 0.06);
+    }
+    .card-body { padding: 1.4rem; }
+    .card h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1.25rem;
+      color: var(--primary-dark);
+    }
+    .card p { margin: 0; color: var(--muted); }
+    .feature {
+      padding: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .feature-icon {
+      width: 100%;
+      height: 180px;
+      display: block;
+      background: var(--surface-alt);
+      overflow: hidden;
+    }
+    .feature-icon img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .feature-body {
+      padding: 1.25rem 1.4rem 1.4rem;
+    }
+    .feature h3 { margin: 0 0 0.4rem; font-size: 1.1rem; color: var(--primary-dark); }
+    .feature p { margin: 0; color: var(--muted); font-size: 0.98rem; }
+
+    /* Stays */
+    .stay-card img { height: 230px; width: 100%; object-fit: cover; }
+    .stay-meta {
+      display: inline-flex;
+      margin-top: 1rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 999px;
+      background: var(--surface-alt);
+      color: var(--primary);
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    /* Experiences */
+    .experience-wrap {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 1.5rem;
+    }
+    .experience-panel {
+      background: linear-gradient(160deg, var(--primary-dark), var(--primary));
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 100%;
+    }
+    .experience-panel h3 { font-size: 1.8rem; margin: 0 0 0.75rem; line-height: 1.2; }
+    .experience-panel p { color: rgba(255,255,255,0.85); margin: 0 0 1.25rem; }
+    .experience-list { margin: 0; padding-left: 1.2rem; color: rgba(255,255,255,0.9); display: grid; gap: 0.5rem; }
+    .gallery {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .gallery img {
+      width: 100%;
+      height: 100%;
+      min-height: 180px;
+      object-fit: cover;
+      border-radius: 16px;
+    }
+    .gallery img.tall { grid-row: span 2; min-height: 376px; }
+
+    /* Quote / CTA */
+    .quote {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2.5rem;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(24,53,40,0.06);
+    }
+    .quote blockquote {
+      margin: 0 auto 1rem;
+      max-width: 850px;
+      font-size: clamp(1.3rem, 2.2vw, 2rem);
+      line-height: 1.4;
+      color: var(--primary-dark);
+      font-weight: 600;
+    }
+    .quote cite { color: var(--muted); font-style: normal; }
+
+    .cta-banner {
+      background: linear-gradient(135deg, var(--primary-dark), #2f5e49);
+      color: #fff;
+      border-radius: 28px;
+      padding: 2.5rem;
+      display: grid;
+      grid-template-columns: 1.5fr auto;
+      gap: 1.5rem;
+      align-items: center;
+      box-shadow: var(--shadow);
+    }
+    .cta-banner h2 { color: #fff; margin: 0 0 0.5rem; font-size: clamp(1.8rem, 3vw, 2.6rem); }
+    .cta-banner p { margin: 0; color: rgba(255,255,255,0.85); }
+    .cta-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end; }
+
+    /* Footer */
+    .footer {
+      padding: 3rem 0 2rem;
+      color: var(--muted);
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr;
+      gap: 1.5rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .footer h3, .footer h4 { color: var(--primary-dark); margin: 0 0 0.75rem; }
+    .footer p { margin: 0 0 0.5rem; }
+    .footer ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.45rem; }
+    .footer a:hover { color: var(--primary-dark); }
+    .footer-bottom {
+      padding-top: 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 980px) {
+      .nav-links { display: none; }
+      .split, .experience-wrap, .cta-banner, .footer-grid { grid-template-columns: 1fr; }
+      .grid-3 { grid-template-columns: 1fr 1fr; }
+      .grid-4 { grid-template-columns: 1fr 1fr; }
+      .hero-stats { grid-template-columns: 1fr 1fr 1fr; }
+      .cta-actions { justify-content: flex-start; }
+      .image-stack { min-height: 380px; }
+    }
+    @media (max-width: 700px) {
+      .section { padding: 4rem 0; }
+      .hero { min-height: auto; }
+      .hero-content { padding: 6rem 0 4rem; }
+      .hero-stats, .grid-3, .grid-4, .gallery { grid-template-columns: 1fr; }
+      .gallery img.tall { grid-row: span 1; min-height: 220px; }
+      .nav-cta .btn-outline { display: none; }
+      .image-stack { min-height: 320px; }
+      .image-card.large { inset: 0 1.5rem 1.5rem 0; }
+      .cta-banner, .quote { padding: 1.75rem; }
+    }
+      </style>
+<section class="hero s_cover parallax o_colored_level pt0 pb0" data-scroll-background-ratio="0" data-snippet="s_cover" data-name="Hero">
+      <span class="s_parallax_bg_wrap">
+        <span class="s_parallax_bg oe_img_bg o_bg_img_center" style="background-image: url(&quot;https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&amp;fit=crop&amp;w=1800&amp;q=80&quot;); background-position: 50% 50%;"/>
+      </span>
+      <div class="o_we_bg_filter bg-black-50"/>
+      <div class="container s_allow_columns">
+        <div class="hero-content">
+          <span class="eyebrow">The Joy of Nature</span>
+          <h1>Escape, unwind, and reconnect at Kalitusi Nature Resort.</h1>
+          <p>Discover a serene retreat surrounded by natural beauty, warm hospitality, and thoughtfully designed spaces for rest, celebration, and unforgettable moments.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary o_translate_inline" href="https://wa.me/256772957573">Book Your Stay</a>
+            <a class="btn btn-secondary o_translate_inline" href="#stays">View Accommodations</a>
+          </div>
+          <div class="hero-stats" aria-label="Resort highlights">
+            <div class="stat">
+              <strong>Peaceful Setting</strong>
+              <span>Surrounded by calming natural landscapes</span>
+            </div>
+            <div class="stat">
+              <strong>Comfortable Stays</strong>
+              <span>Spaces designed for rest and relaxation</span>
+            </div>
+            <div class="stat">
+              <strong>Warm Hospitality</strong>
+              <span>A welcoming experience from arrival to departure</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="about" class="section o_colored_level" data-name="About">
+      <div class="container split">
+        <div>
+          <span class="eyebrow">About Kalitusi</span>
+          <div class="section-header">
+            <h2>A nature retreat made for slowing down and feeling at home.</h2>
+            <p class="lead">Kalitusi Nature Resort is a place to breathe deeply, enjoy scenic surroundings, and share meaningful time with the people who matter most. Whether you are planning a quiet escape, a family getaway, or a special gathering, our resort offers the perfect balance of comfort and natural charm.</p>
+          </div>
+          <ul class="check-list">
+            <li>Beautiful outdoor scenery and a calm, refreshing atmosphere</li>
+            <li>Inviting accommodation options for couples, families, and groups</li>
+            <li>Ideal setting for relaxation, retreats, celebrations, and weekend escapes</li>
+          </ul>
+        </div>
+        <div class="image-stack" aria-hidden="true">
+          <div class="image-card large">
+            <img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=80" alt="Lush green forest surroundings">
+          </div>
+          <div class="image-card small">
+            <img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=800&q=80" alt="Peaceful nature landscape">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="amenities" class="section o_colored_level" style="padding-top: 2rem;" data-name="Amenities">
+      <div class="container">
+        <div class="section-header center">
+          <span class="eyebrow">Why Guests Love It Here</span>
+          <h2>Thoughtful comforts in a beautiful natural setting.</h2>
+          <p class="lead">Every detail is designed to help you relax, explore, and enjoy a stay that feels both refreshing and memorable.</p>
+        </div>
+        <div class="grid-4">
+          <div class="feature">
+            <div class="feature-icon"><img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=800&q=80" alt="Scenic surroundings"></div>
+            <div class="feature-body">
+              <h3>Scenic Surroundings</h3>
+              <p>Enjoy tranquil views, fresh air, and the calming presence of nature all around you.</p>
+            </div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon"><img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80" alt="Comfortable accommodation"></div>
+            <div class="feature-body">
+              <h3>Comfortable Accommodation</h3>
+              <p>Rest in welcoming spaces designed to make every stay peaceful and comfortable.</p>
+            </div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon"><img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=800&q=80" alt="Delightful dining moments"></div>
+            <div class="feature-body">
+              <h3>Delightful Moments</h3>
+              <p>Share meals, conversations, and experiences that turn simple moments into lasting memories.</p>
+            </div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon"><img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=800&q=80" alt="Warm hospitality"></div>
+            <div class="feature-body">
+              <h3>Warm Hospitality</h3>
+              <p>Feel cared for with attentive service and a genuine commitment to your comfort.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="stays" class="section o_colored_level" style="background: var(--surface-alt);" data-name="Stays">
+      <div class="container">
+        <div class="section-header">
+          <span class="eyebrow">Accommodation</span>
+          <h2>Stay your way, surrounded by nature.</h2>
+          <p class="lead">Choose from inviting options suited for romantic escapes, family retreats, and peaceful solo getaways.</p>
+        </div>
+        <div class="grid-3">
+          <article class="card stay-card">
+            <img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1510798831971-661eb04b3739?auto=format&fit=crop&w=1200&q=80" alt="Cozy cabin surrounded by nature">
+            <div class="card-body">
+              <h3>Forest Cabin</h3>
+              <p>A cozy hideaway ideal for guests seeking privacy, quiet, and a close connection to the outdoors.</p>
+              <span class="stay-meta">Perfect for couples &amp; solo escapes</span>
+            </div>
+          </article>
+          <article class="card stay-card">
+            <img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1470124182917-cc6e71b22ecc?auto=format&fit=crop&w=1200&q=80" alt="Spacious cottage in a green landscape">
+            <div class="card-body">
+              <h3>Family Cottage</h3>
+              <p>Spacious and welcoming, with the comfort you need for a relaxing family or group stay.</p>
+              <span class="stay-meta">Great for families &amp; groups</span>
+            </div>
+          </article>
+          <article class="card stay-card">
+            <img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80" alt="Comfortable suite with relaxing atmosphere">
+            <div class="card-body">
+              <h3>Garden Suite</h3>
+              <p>A restful retreat with a serene atmosphere, perfect for unwinding and enjoying the beauty around you.</p>
+              <span class="stay-meta">Ideal for restful retreats</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="experiences" class="section o_colored_level" data-name="Experiences">
+      <div class="container">
+        <div class="section-header">
+          <span class="eyebrow">Experiences</span>
+          <h2>More than a stay â€” a place to create memories.</h2>
+          <p class="lead">From quiet mornings in nature to joyful gatherings, Kalitusi Nature Resort offers experiences that feel personal, peaceful, and unforgettable.</p>
+        </div>
+        <div class="experience-wrap">
+          <div class="experience-panel">
+            <div>
+              <h3>Relax, explore, and celebrate in nature.</h3>
+              <p>Whether you come to recharge or to mark a special occasion, you will find the space, scenery, and atmosphere to make it meaningful.</p>
+              <ul class="experience-list">
+                <li>Peaceful nature walks and scenic views</li>
+                <li>Weekend escapes, holidays, and private retreats</li>
+                <li>Family gatherings and special celebrations</li>
+                <li>Quiet spaces to unwind and reconnect</li>
+              </ul>
+            </div>
+            <div style="margin-top: 1.5rem;">
+              <a class="btn btn-primary" href="/reservation">Plan Your Visit</a>
+            </div>
+          </div>
+          <div class="gallery" aria-label="Resort experience gallery">
+            <img class="tall o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=900&q=80" alt="Sunlit nature landscape">
+            <img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80" alt="Scenic outdoor path">
+            <img class="o_editable_media img img-fluid" src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80" alt="Calm and relaxing natural setting">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section o_colored_level" style="padding-top: 1rem;" data-name="Quote">
+      <div class="container">
+        <div class="quote">
+          <blockquote>â€œA refreshing escape where nature, comfort, and warm hospitality come together beautifully.â€</blockquote>
+          <cite>Kalitusi Nature Resort â€” The Joy of Nature</cite>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact" class="section o_colored_level" style="padding-top: 1rem;" data-name="Contact">
+      <div class="container">
+        <div class="cta-banner">
+          <div>
+            <span class="eyebrow" style="color: var(--accent-soft);">Plan Your Stay</span>
+            <h2>Ready for your next peaceful getaway?</h2>
+            <p>Book your stay, inquire about availability, or explore our cottages to find the perfect fit for your visit to Kalitusi Nature Resort.</p>
+          </div>
+          <div class="cta-actions">
+            <a class="btn btn-primary" href="https://wa.me/256772957573">Chat on WhatsApp</a>
+            <a class="btn btn-secondary" href="/cottages">Explore Cottages</a>
+          </div>
+        </div>
+      </div>
+    </section>
+    </div>
+  </t>
+</t>
