@@ -16,9 +16,12 @@ DEBUG = (
 CLOUDINARY_NAME = os.environ.get("CLOUDINARY_NAME", "").strip()
 CLOUDINARY_KEY = os.environ.get("CLOUDINARY_KEY", "").strip()
 CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_SECRET", "").strip()
-ALLOWED_HOSTS = os.environ.get(
-    "ALLOWED_HOSTS", "localhost,127.0.0.1,.onrender.com,api.kalitusi.com"
-).split(",")
+ALLOWED_HOSTS = [
+    "api.kalitusi.com",
+    "backend-bte7.onrender.com",
+    "localhost",
+    "127.0.0.1",
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
