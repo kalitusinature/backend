@@ -17,7 +17,7 @@ CLOUDINARY_NAME = os.environ.get("CLOUDINARY_NAME", "").strip()
 CLOUDINARY_KEY = os.environ.get("CLOUDINARY_KEY", "").strip()
 CLOUDINARY_SECRET = os.environ.get("CLOUDINARY_SECRET", "").strip()
 ALLOWED_HOSTS = os.environ.get(
-    "ALLOWED_HOSTS", "localhost,127.0.0.1,.onrender.com"
+    "ALLOWED_HOSTS", "localhost,127.0.0.1,.onrender.com,api.kalitusi.com"
 ).split(",")
 
 INSTALLED_APPS = [
@@ -108,7 +108,8 @@ LOGOUT_REDIRECT_URL = "staff_login"
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
-        "CORS_ALLOWED_ORIGINS", "https://kalitusi-nature-resort.odoo.com"
+        "CORS_ALLOWED_ORIGINS",
+        "https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
     ).split(",")
     if origin.strip()
 ]
@@ -121,7 +122,8 @@ if DEBUG:
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
-        "CSRF_TRUSTED_ORIGINS", "https://kalitusi-nature-resort.odoo.com"
+        "CSRF_TRUSTED_ORIGINS",
+        "https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
     ).split(",")
     if origin.strip()
 ]
