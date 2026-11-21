@@ -112,12 +112,14 @@ CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "https://www.kalitusi.com,https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
+        "https://admin.kalitusi.com,https://www.kalitusi.com,https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
     ).split(",")
     if origin.strip()
 ]
 if "https://kalitusinature.github.io" not in CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS.append("https://kalitusinature.github.io")
+if "https://admin.kalitusi.com" not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append("https://admin.kalitusi.com")
 if DEBUG:
     for origin in ("http://localhost:5173", "http://127.0.0.1:5173"):
         if origin not in CORS_ALLOWED_ORIGINS:
@@ -126,10 +128,12 @@ CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         "CSRF_TRUSTED_ORIGINS",
-        "https://www.kalitusi.com,https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
+        "https://admin.kalitusi.com,https://www.kalitusi.com,https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
     ).split(",")
     if origin.strip()
 ]
+if "https://admin.kalitusi.com" not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append("https://admin.kalitusi.com")
 CORS_URLS_REGEX = r"^/api/.*$"
 
 REST_FRAMEWORK = {
