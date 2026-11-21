@@ -112,7 +112,7 @@ CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
+        "https://www.kalitusi.com,https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
     ).split(",")
     if origin.strip()
 ]
@@ -126,7 +126,7 @@ CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         "CSRF_TRUSTED_ORIGINS",
-        "https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
+        "https://www.kalitusi.com,https://kalitusi-nature-resort.odoo.com,https://kalitusinature.github.io",
     ).split(",")
     if origin.strip()
 ]
