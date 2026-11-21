@@ -26,6 +26,10 @@ from .models import (
 )
 from .reservation_rules import validate_lodge_stay
 from .reservation_notifications import notify_new_reservation
+from .push_notifications import (
+    notify_new_order,
+    notify_new_reservation as notify_staff_new_reservation,
+)
 from .serializers import (
     CategorySerializer,
     GuestCartItemAddSerializer,
@@ -375,6 +379,7 @@ class OrderCreate(APIView):
         order.save(update_fields=["total_ugx", "updated_at"])
         if guest_cart:
             guest_cart.items.all().delete()
+        transaction.on_commit(lambda: notify_new_order(order))
         return Response(
             OrderReceiptSerializer(order).data, status=status.HTTP_201_CREATED
         )
@@ -422,6 +427,9 @@ class ReservationCreate(APIView):
         )
         reservation = serializer.save()
         transaction.on_commit(lambda: notify_new_reservation(reservation))
+        transaction.on_commit(
+            lambda: notify_staff_new_reservation(reservation)
+        )
         return Response(
             ReservationReceiptSerializer(reservation).data,
             status=status.HTTP_201_CREATED,

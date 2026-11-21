@@ -136,12 +136,14 @@ Use Django admin for staff user creation and detailed record management. Payment
 ## React admin portal
 
 The React admin portal is a separate GitHub Pages app. Its API base URL is
-`https://backend-bte7.onrender.com/api/v1`. The Django staff API uses token
-authentication and only accepts active staff accounts.
+`https://api.kalitusi.com/api/v1` (configurable via `VITE_API_BASE_URL` in the
+admin portal). The Django staff API uses token authentication and only accepts
+active staff accounts.
 
 The portal uses these protected endpoints after login:
 
 - `POST /auth/token/` and `POST /auth/logout/`
+- `GET /staff/push/vapid-public-key/` and `POST, DELETE /staff/push/subscriptions/`
 - `GET /staff/dashboard/`
 - `GET /staff/orders/` and `PATCH /staff/orders/<id>/`
 - `GET, POST /staff/products/` and `GET, PATCH /staff/products/<id>/`
@@ -155,7 +157,8 @@ the authenticated backend. PostgreSQL stores the secure delivery URL and asset
 ID; existing image URLs remain supported.
 
 Set `CORS_ALLOWED_ORIGINS` on Render to include both the Odoo storefront origin
-and `https://kalitusinature.github.io`. Create the first staff account using
+and each deployed admin portal origin, such as `https://admin.kalitusi.com`.
+Create the first staff account using
 `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, and
 `DJANGO_SUPERUSER_PASSWORD` in Render's environment settings. Never put these
 credentials in the React app or its GitHub repository.
@@ -166,3 +169,27 @@ To enable reservation emails on Render, configure `EMAIL_HOST`, `EMAIL_PORT`,
 reservation alerts. SMTP credentials must be stored only in Render's
 environment settings; without SMTP configuration, reservations are still
 saved and the backend logs that delivery was skipped.
+
+### Background push notifications
+
+The admin portal sends new-order and pending-reservation alerts to every active
+staff account's opted-in devices. Web Push requires a VAPID key pair. Generate
+one locally after installing the requirements:
+
+```powershell
+python -c "import base64; from py_vapid import Vapid; from cryptography.hazmat.primitives import serialization as s; v=Vapid(); v.generate_keys(); print('VAPID_PUBLIC_KEY='+base64.urlsafe_b64encode(v.public_key.public_bytes(s.Encoding.X962,s.PublicFormat.UncompressedPoint)).decode().rstrip('=')); print('VAPID_PRIVATE_KEY='+base64.urlsafe_b64encode(v.private_key.private_bytes(s.Encoding.DER,s.PrivateFormat.PKCS8,s.NoEncryption())).decode().rstrip('='))"
+```
+
+In the Render backend service environment, set `VAPID_PUBLIC_KEY` to the
+printed public value, `VAPID_PRIVATE_KEY` to the printed private value, and
+`VAPID_SUBJECT` to a monitored contact such as `mailto:operations@your-domain`.
+Store the private value only in Render's secret environment settings; never
+commit it or paste it into frontend code. Keep the same key pair across
+deployments. If the keys are rotated, staff devices must opt in again.
+
+After redeploying, each staff member must sign in to the HTTPS admin portal and
+select **Enable push** and allow notifications. The browser stores a
+subscription for that staff account/device; disabling push removes that
+device's subscription. On iOS/iPadOS, install the portal to the Home Screen
+before enabling Web Push. Push delivery is subject to browser/OS notification
+settings and the device's internet connection.

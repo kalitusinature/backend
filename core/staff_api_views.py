@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.db import transaction
 from django.db.models import Count, Q
@@ -22,11 +23,13 @@ from .models import (
     Order,
     Product,
     StaffProfile,
+    StaffPushSubscription,
 )
 from .reservation_notifications import (
     notify_new_reservation,
     notify_reservation_status,
 )
+from .push_notifications import notify_new_reservation as notify_staff_new_reservation
 from .reservation_rules import validate_lodge_stay
 from .staff_api_serializers import (
     StaffAccountPasswordSerializer,
@@ -39,6 +42,8 @@ from .staff_api_serializers import (
     StaffLodgeSerializer,
     StaffOrderSerializer,
     StaffOrderUpdateSerializer,
+    StaffPushSubscriptionDeleteSerializer,
+    StaffPushSubscriptionSerializer,
     StaffProductSerializer,
     StaffReservationCreateSerializer,
     StaffReservationSerializer,
@@ -183,6 +188,61 @@ class StaffAccountPasswordVerify(StaffApiMixin, APIView):
             context={"request": request},
         )
         serializer.is_valid(raise_exception=True)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StaffPushVapidPublicKey(StaffApiMixin, APIView):
+    def get(self, request):
+        if not all(
+            (
+                settings.VAPID_PUBLIC_KEY,
+                settings.VAPID_PRIVATE_KEY,
+                settings.VAPID_SUBJECT,
+            )
+        ):
+            return Response(
+                {"detail": "Background push notifications are not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"public_key": settings.VAPID_PUBLIC_KEY})
+
+
+class StaffPushSubscriptionView(StaffApiMixin, APIView):
+    def post(self, request):
+        if not all(
+            (
+                settings.VAPID_PUBLIC_KEY,
+                settings.VAPID_PRIVATE_KEY,
+                settings.VAPID_SUBJECT,
+            )
+        ):
+            return Response(
+                {"detail": "Background push notifications are not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        serializer = StaffPushSubscriptionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        subscription_data = serializer.validated_data
+        subscription, created = StaffPushSubscription.objects.update_or_create(
+            endpoint=subscription_data["endpoint"],
+            defaults={
+                "user": request.user,
+                "p256dh": subscription_data["keys"]["p256dh"],
+                "auth": subscription_data["keys"]["auth"],
+            },
+        )
+        return Response(
+            {"enabled": True},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    def delete(self, request):
+        serializer = StaffPushSubscriptionDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        StaffPushSubscription.objects.filter(
+            user=request.user,
+            endpoint=serializer.validated_data["endpoint"],
+        ).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -434,6 +494,10 @@ class StaffReservationList(StaffApiMixin, generics.ListCreateAPIView):
         )
         reservation = serializer.save()
         transaction.on_commit(lambda: notify_new_reservation(reservation))
+        if reservation.status == LodgeReservation.Status.PENDING:
+            transaction.on_commit(
+                lambda: notify_staff_new_reservation(reservation)
+            )
 
 
 class StaffReservationCalendar(StaffApiMixin, APIView):

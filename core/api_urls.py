@@ -36,12 +36,24 @@ from .staff_api_views import (
     StaffReservationList,
     StaffReservationCalendar,
     StaffReservationUpdate,
+    StaffPushSubscriptionView,
+    StaffPushVapidPublicKey,
 )
 
 urlpatterns = [
     path("auth/token/", StaffLogin.as_view(), name="staff_api_login"),
     path("auth/logout/", StaffLogout.as_view(), name="staff_api_logout"),
     path("staff/account/", StaffAccount.as_view(), name="staff_api_account"),
+    path(
+        "staff/push/vapid-public-key/",
+        StaffPushVapidPublicKey.as_view(),
+        name="staff_api_push_vapid_public_key",
+    ),
+    path(
+        "staff/push/subscriptions/",
+        StaffPushSubscriptionView.as_view(),
+        name="staff_api_push_subscriptions",
+    ),
     path(
         "staff/account/password/",
         StaffAccountPasswordChange.as_view(),

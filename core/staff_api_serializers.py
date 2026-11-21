@@ -1,5 +1,6 @@
 import logging
 import uuid
+from urllib.parse import urlsplit
 
 import cloudinary
 import cloudinary.uploader
@@ -771,3 +772,46 @@ class StaffReservationUpdateSerializer(serializers.ModelSerializer):
             exclude_reservation_id=reservation.pk,
         )
         return attrs
+
+
+PUSH_ENDPOINT_SUFFIXES = (
+    "fcm.googleapis.com",
+    "push.services.mozilla.com",
+    "push.apple.com",
+    "notify.windows.com",
+)
+
+
+class PushEndpointField(serializers.URLField):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("max_length", 2048)
+        super().__init__(**kwargs)
+
+    def to_internal_value(self, data):
+        endpoint = super().to_internal_value(data)
+        parsed = urlsplit(endpoint)
+        hostname = (parsed.hostname or "").lower().rstrip(".")
+        if parsed.scheme != "https" or not any(
+            hostname == suffix or hostname.endswith(f".{suffix}")
+            for suffix in PUSH_ENDPOINT_SUFFIXES
+        ):
+            raise serializers.ValidationError(
+                "Use a secure browser push-service endpoint."
+            )
+        return endpoint
+
+
+class StaffPushSubscriptionSerializer(serializers.Serializer):
+    endpoint = PushEndpointField()
+    keys = serializers.DictField(child=serializers.CharField(max_length=255))
+
+    def validate_keys(self, value):
+        if not value.get("p256dh") or not value.get("auth"):
+            raise serializers.ValidationError(
+                "Both p256dh and auth subscription keys are required."
+            )
+        return value
+
+
+class StaffPushSubscriptionDeleteSerializer(serializers.Serializer):
+    endpoint = PushEndpointField()

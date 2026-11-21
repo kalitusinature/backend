@@ -21,7 +21,9 @@ from .models import (
     Order,
     Product,
     StaffProfile,
+    StaffPushSubscription,
 )
+from .push_notifications import notify_new_order
 
 
 class PublicOrderingApiTests(TestCase):
@@ -65,6 +67,67 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(order.total_ugx, 24000)
         self.assertEqual(order.payment_status, Order.PaymentStatus.UNPAID)
         self.assertEqual(order.items.get().line_total_ugx, 24000)
+
+    @patch("core.api_views.notify_new_order")
+    def test_new_order_schedules_staff_push_after_commit(self, push_order):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/v1/orders/",
+                {
+                    "guest_name": "A Guest",
+                    "phone": "+256700000000",
+                    "order_type": "dine_in",
+                    "location": "Table 4",
+                    "items": [{"product": self.product.slug, "quantity": 1}],
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        push_order.assert_called_once()
+        self.assertEqual(push_order.call_args.args[0].number, response.data["number"])
+
+    @override_settings(
+        VAPID_PUBLIC_KEY="public-key",
+        VAPID_PRIVATE_KEY="private-key",
+        VAPID_SUBJECT="mailto:admin@kalitusi.com",
+    )
+    @patch("core.push_notifications.webpush")
+    def test_new_order_push_targets_all_active_staff_subscriptions(self, send_push):
+        staff_model = get_user_model()
+        active_staff = staff_model.objects.create_user(
+            username="active-push-staff", password="staff-password", is_staff=True
+        )
+        inactive_staff = staff_model.objects.create_user(
+            username="inactive-push-staff",
+            password="staff-password",
+            is_staff=True,
+            is_active=False,
+        )
+        for user, endpoint in (
+            (active_staff, "https://fcm.googleapis.com/fcm/send/active"),
+            (inactive_staff, "https://fcm.googleapis.com/fcm/send/inactive"),
+        ):
+            StaffPushSubscription.objects.create(
+                user=user,
+                endpoint=endpoint,
+                p256dh="p256dh-key",
+                auth="auth-key",
+            )
+        order = Order.objects.create(
+            guest_name="Guest",
+            phone="+256700000000",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 1",
+        )
+
+        notify_new_order(order)
+
+        send_push.assert_called_once()
+        self.assertEqual(
+            send_push.call_args.kwargs["subscription_info"]["endpoint"],
+            "https://fcm.googleapis.com/fcm/send/active",
+        )
 
     def test_guest_cart_uses_backend_token_and_catalog_prices(self):
         create_response = self.client.post("/api/v1/cart/create/", {}, format="json")
@@ -432,6 +495,33 @@ class PublicOrderingApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    @patch("core.api_views.notify_staff_new_reservation")
+    def test_pending_reservation_schedules_staff_push_after_commit(self, push_reservation):
+        lodge = Lodge.objects.create(name="Push Cottage")
+        check_in = date.today() + timedelta(days=12)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/v1/reservations/",
+                {
+                    "lodge": lodge.slug,
+                    "guest_name": "A Guest",
+                    "email": "guest@example.com",
+                    "phone": "+256700000000",
+                    "check_in": check_in.isoformat(),
+                    "check_out": (check_in + timedelta(days=2)).isoformat(),
+                    "adults": 2,
+                    "children": 0,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        push_reservation.assert_called_once()
+        self.assertEqual(
+            push_reservation.call_args.args[0].reference,
+            response.data["reference"],
+        )
+
     def test_pending_reservation_and_blockouts_are_excluded_from_availability(self):
         lodge = Lodge.objects.create(name="Cedar Cottage", capacity=4)
         today = date.today()
@@ -640,6 +730,52 @@ class StaffApiTests(TestCase):
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Token {response.data['token']}"
         )
+
+    def test_staff_can_register_and_remove_a_push_subscription(self):
+        self.assertEqual(
+            self.client.get("/api/v1/staff/push/vapid-public-key/").status_code,
+            401,
+        )
+        self.login_as_staff()
+        with override_settings(
+            VAPID_PUBLIC_KEY="public-key",
+            VAPID_PRIVATE_KEY="private-key",
+            VAPID_SUBJECT="mailto:admin@kalitusi.com",
+        ):
+            public_key = self.client.get("/api/v1/staff/push/vapid-public-key/")
+            self.assertEqual(public_key.status_code, 200)
+            self.assertEqual(public_key.data["public_key"], "public-key")
+
+            payload = {
+                "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint",
+                "keys": {"p256dh": "public-subscription-key", "auth": "auth-secret"},
+            }
+            response = self.client.post(
+                "/api/v1/staff/push/subscriptions/", payload, format="json"
+            )
+            self.assertEqual(response.status_code, 201)
+            self.assertTrue(
+                StaffPushSubscription.objects.filter(user=self.staff).exists()
+            )
+            denied = self.client.post(
+                "/api/v1/staff/push/subscriptions/",
+                {
+                    **payload,
+                    "endpoint": "https://example.com/not-a-push-service",
+                },
+                format="json",
+            )
+            self.assertEqual(denied.status_code, 400)
+
+            deleted = self.client.delete(
+                "/api/v1/staff/push/subscriptions/",
+                {"endpoint": payload["endpoint"]},
+                format="json",
+            )
+            self.assertEqual(deleted.status_code, 204)
+            self.assertFalse(
+                StaffPushSubscription.objects.filter(user=self.staff).exists()
+            )
 
     def test_staff_cancellation_reasons_are_saved_and_returned(self):
         self.login_as_staff()
