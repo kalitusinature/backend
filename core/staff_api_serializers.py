@@ -131,6 +131,16 @@ class StaffLoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
 
+class StaffPasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class StaffPasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField(max_length=128)
+    token = serializers.CharField(max_length=256)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+
 class StaffAccountSerializer(serializers.ModelSerializer):
     must_change_password = serializers.SerializerMethodField()
 

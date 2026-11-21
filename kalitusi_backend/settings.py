@@ -148,18 +148,25 @@ REST_FRAMEWORK = {
         "order_track": "600/hour",
         "reservation_create": "10/hour",
         "staff_login": "10/hour",
+        "staff_password_reset_request": "5/hour",
+        "staff_password_reset_confirm": "10/hour",
     },
 }
 
+ADMIN_PORTAL_URL = os.environ.get(
+    "ADMIN_PORTAL_URL", "https://admin.kalitusi.com"
+).strip().rstrip("/")
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "").strip()
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() == "true"
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "").strip()
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER).strip()
-RESERVATION_NOTIFICATION_EMAIL = os.environ.get(
-    "RESERVATION_NOTIFICATION_EMAIL", ""
-).strip()
+STAFF_NOTIFICATION_EMAIL = (
+    os.environ.get("STAFF_NOTIFICATION_EMAIL", "").strip()
+    or os.environ.get("RESERVATION_NOTIFICATION_EMAIL", "").strip()
+)
+RESERVATION_NOTIFICATION_EMAIL = STAFF_NOTIFICATION_EMAIL
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "").strip()

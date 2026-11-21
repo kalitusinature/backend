@@ -92,7 +92,7 @@ Successful response (`201`) contains the order number, status, server-calculated
 
 The Odoo menu and product pages load categories and available products from this API. Checkout posts orders to Render; the server validates product slugs and calculates prices from its catalog. New orders are stored in Render's database and appear in the GitHub Pages admin portal's Orders view, which refreshes every 30 seconds.
 
-Customers who provide an email are sent to the Odoo My Orders page after checkout, where the page checks for status/payment changes while open. Online tracking expires two days after the order is placed. No email notification is sent.
+Customers who provide an email receive an order thank-you/receipt and email updates when staff changes the order status or payment status. The operations inbox receives an alert for new orders and those status/payment changes. Online tracking expires two days after the order is placed.
 
 `POST /api/v1/orders/track/` accepts an order number and email and returns the matching order's status and item totals. A non-matching pair returns `404`; an expired lookup returns `410`. The response excludes the guest name, phone, and email. The endpoint is rate-limited to 600 lookups per hour per client.
 
@@ -117,7 +117,7 @@ The standalone Odoo page templates in this repository, including `cottages.html`
 }
 ```
 
-New requests are `pending`; a `201` response includes a unique reservation reference and booking status. Email is required. The server validates stay dates, lodge capacity and policies, blockouts, and pending/confirmed overlaps. Reservation notifications use Django's SMTP backend when configured.
+New requests are `pending`; a `201` response includes a unique reservation reference and booking status. Email is required. The server validates stay dates, lodge capacity and policies, blockouts, and pending/confirmed overlaps. Customers and the operations inbox receive reservation emails when requests are created and when staff changes a reservation status.
 
 The customer reservation form is hosted by Django at `/reservation/` on the backend domain. The Odoo cottages page's **Book Now** links open that backend page and pass the lodge slug in the `lodge` query parameter. There is no need to create a `/reservation` page in Odoo. After updating `cottages.html`, publish that template in Odoo so its links point to the backend form.
 
@@ -163,12 +163,30 @@ Create the first staff account using
 `DJANGO_SUPERUSER_PASSWORD` in Render's environment settings. Never put these
 credentials in the React app or its GitHub repository.
 
-To enable reservation emails on Render, configure `EMAIL_HOST`, `EMAIL_PORT`,
-`EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, and
-`DEFAULT_FROM_EMAIL`. Set `RESERVATION_NOTIFICATION_EMAIL` to receive new
-reservation alerts. SMTP credentials must be stored only in Render's
-environment settings; without SMTP configuration, reservations are still
-saved and the backend logs that delivery was skipped.
+To send transactional emails through Resend on Render, verify `kalitusi.com`
+in Resend and configure its SMTP integration:
+
+- `EMAIL_HOST=smtp.resend.com`
+- `EMAIL_PORT=587`
+- `EMAIL_USE_TLS=true`
+- `EMAIL_HOST_USER=resend`
+- `EMAIL_HOST_PASSWORD` to a Resend API key (keep this secret)
+- `DEFAULT_FROM_EMAIL` to a sender on the verified domain, such as
+  `notifications@kalitusi.com`
+- `STAFF_NOTIFICATION_EMAIL` to the operations inbox
+
+`RESERVATION_NOTIFICATION_EMAIL` is still accepted as a fallback for
+`STAFF_NOTIFICATION_EMAIL`. Keep all credentials in Render environment
+settings, never in the repository. Without SMTP configuration, records are
+still saved and the backend logs that email delivery was skipped.
+
+The admin login includes a password-reset flow for active staff accounts. A
+reset link is sent only to the email address saved on the staff account; set
+`ADMIN_PORTAL_URL` if the admin portal is hosted somewhere other than
+`https://admin.kalitusi.com`. The reset request response does not reveal
+whether an account exists. There is no public staff signup; creating a staff
+account in the portal alerts the operations inbox without emailing its
+temporary password.
 
 ### Background push notifications
 

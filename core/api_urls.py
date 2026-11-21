@@ -38,11 +38,23 @@ from .staff_api_views import (
     StaffReservationUpdate,
     StaffPushSubscriptionView,
     StaffPushVapidPublicKey,
+    StaffPasswordResetConfirm,
+    StaffPasswordResetRequest,
 )
 
 urlpatterns = [
     path("auth/token/", StaffLogin.as_view(), name="staff_api_login"),
     path("auth/logout/", StaffLogout.as_view(), name="staff_api_logout"),
+    path(
+        "auth/password-reset/",
+        StaffPasswordResetRequest.as_view(),
+        name="staff_api_password_reset_request",
+    ),
+    path(
+        "auth/password-reset/confirm/",
+        StaffPasswordResetConfirm.as_view(),
+        name="staff_api_password_reset_confirm",
+    ),
     path("staff/account/", StaffAccount.as_view(), name="staff_api_account"),
     path(
         "staff/push/vapid-public-key/",

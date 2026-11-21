@@ -1,10 +1,14 @@
 from django.conf import settings
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import authenticate, get_user_model, password_validation
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
 from django.utils.crypto import get_random_string
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from rest_framework import generics, status
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
@@ -29,6 +33,12 @@ from .reservation_notifications import (
     notify_new_reservation,
     notify_reservation_status,
 )
+from .email_notifications import (
+    notify_order_updated,
+    notify_staff_account_created,
+    notify_staff_password_reset_complete,
+    send_staff_password_reset_email,
+)
 from .push_notifications import notify_new_reservation as notify_staff_new_reservation
 from .reservation_rules import validate_lodge_stay
 from .staff_api_serializers import (
@@ -45,6 +55,8 @@ from .staff_api_serializers import (
     StaffPushSubscriptionDeleteSerializer,
     StaffPushSubscriptionSerializer,
     StaffProductSerializer,
+    StaffPasswordResetConfirmSerializer,
+    StaffPasswordResetRequestSerializer,
     StaffReservationCreateSerializer,
     StaffReservationSerializer,
     StaffReservationUpdateSerializer,
@@ -128,6 +140,88 @@ class StaffLogin(APIView):
                 "must_change_password": profile.must_change_password,
             }
         )
+
+
+class StaffPasswordResetRequest(APIView):
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "staff_password_reset_request"
+
+    def post(self, request):
+        serializer = StaffPasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+        users = User._default_manager.filter(
+            email__iexact=email,
+            is_staff=True,
+            is_active=True,
+        ).exclude(email="")
+        for user in users:
+            send_staff_password_reset_email(user)
+        return Response(
+            {
+                "detail": (
+                    "If an active staff account uses that email, "
+                    "password reset instructions have been sent."
+                )
+            }
+        )
+
+
+class StaffPasswordResetConfirm(APIView):
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "staff_password_reset_confirm"
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = StaffPasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            user_id = force_str(
+                urlsafe_base64_decode(serializer.validated_data["uid"])
+            )
+            user = User._default_manager.get(
+                pk=user_id,
+                is_staff=True,
+                is_active=True,
+            )
+        except (
+            User.DoesNotExist,
+            TypeError,
+            ValueError,
+            OverflowError,
+            UnicodeDecodeError,
+        ):
+            return Response(
+                {"detail": "This password-reset link is invalid or expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not default_token_generator.check_token(
+            user, serializer.validated_data["token"]
+        ):
+            return Response(
+                {"detail": "This password-reset link is invalid or expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_password = serializer.validated_data["new_password"]
+        try:
+            password_validation.validate_password(new_password, user)
+        except DjangoValidationError as error:
+            raise ValidationError({"new_password": error.messages}) from error
+
+        user.set_password(new_password)
+        user.save(update_fields=("password",))
+        profile, _ = StaffProfile.objects.get_or_create(user=user)
+        profile.must_change_password = False
+        profile.save(update_fields=("must_change_password", "updated_at"))
+        Token.objects.filter(user=user).delete()
+        transaction.on_commit(lambda: notify_staff_password_reset_complete(user))
+        return Response({"detail": "Your password has been reset. You can sign in."})
 
 
 class StaffLogout(StaffApiMixin, APIView):
@@ -266,6 +360,10 @@ class StaffAccountListCreate(StaffApiMixin, APIView):
             **serializer.validated_data,
         )
         StaffProfile.objects.create(user=user, must_change_password=True)
+        created_by = request.user.get_username()
+        transaction.on_commit(
+            lambda: notify_staff_account_created(user.get_username(), created_by)
+        )
         return Response(
             {
                 "staff": StaffUserSerializer(user).data,
@@ -382,6 +480,23 @@ class StaffOrderUpdate(StaffApiMixin, generics.UpdateAPIView):
     @transaction.atomic
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
+
+    def perform_update(self, serializer):
+        order = serializer.instance
+        previous_status = order.status
+        previous_payment_status = order.payment_status
+        updated = serializer.save()
+        if (
+            updated.status != previous_status
+            or updated.payment_status != previous_payment_status
+        ):
+            transaction.on_commit(
+                lambda: notify_order_updated(
+                    updated,
+                    previous_status,
+                    previous_payment_status,
+                )
+            )
 
 
 class StaffProductListCreate(StaffApiMixin, generics.ListCreateAPIView):

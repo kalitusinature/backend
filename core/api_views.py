@@ -26,6 +26,7 @@ from .models import (
 )
 from .reservation_rules import validate_lodge_stay
 from .reservation_notifications import notify_new_reservation
+from .email_notifications import notify_order_created
 from .push_notifications import (
     notify_new_order,
     notify_new_reservation as notify_staff_new_reservation,
@@ -380,6 +381,7 @@ class OrderCreate(APIView):
         if guest_cart:
             guest_cart.items.all().delete()
         transaction.on_commit(lambda: notify_new_order(order))
+        transaction.on_commit(lambda: notify_order_created(order))
         return Response(
             OrderReceiptSerializer(order).data, status=status.HTTP_201_CREATED
         )

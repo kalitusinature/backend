@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 import uuid
 
 from django.contrib.auth import get_user_model
@@ -660,6 +661,215 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(len(mail.outbox), 2)
         self.assertEqual(mail.outbox[0].to, ["guest@example.com"])
         self.assertEqual(mail.outbox[1].to, ["frontdesk@example.com"])
+
+
+@override_settings(
+    ADMIN_PORTAL_URL="https://admin.kalitusi.com",
+    DEFAULT_FROM_EMAIL="notifications@kalitusi.com",
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    EMAIL_HOST="smtp.resend.com",
+    EMAIL_HOST_PASSWORD="test-resend-key",
+    EMAIL_HOST_USER="resend",
+    EMAIL_PORT=587,
+    EMAIL_USE_TLS=True,
+    STAFF_NOTIFICATION_EMAIL="admin@example.com",
+)
+class TransactionalEmailAndPasswordResetTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.staff = get_user_model().objects.create_user(
+            username="email-staff",
+            password="initial-password",
+            email="admin@example.com",
+            is_staff=True,
+        )
+        self.staff_token = Token.objects.create(user=self.staff)
+        self.category = Category.objects.create(name="Email test category")
+        self.product = Product.objects.create(
+            name="Email test item",
+            category=self.category,
+            price_ugx=12000,
+        )
+
+    def test_order_creation_emails_customer_thank_you_and_staff_alert(self):
+        with (
+            self.captureOnCommitCallbacks(execute=True),
+            patch("core.api_views.notify_new_order"),
+        ):
+            response = self.client.post(
+                "/api/v1/orders/",
+                {
+                    "guest_name": "Order Guest",
+                    "phone": "+256700000000",
+                    "email": "guest@example.com",
+                    "order_type": "dine_in",
+                    "location": "Table 2",
+                    "items": [{"product": self.product.slug, "quantity": 2}],
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(mail.outbox[0].to, ["guest@example.com"])
+        self.assertIn("Thank you", mail.outbox[0].subject)
+        self.assertIn(response.data["number"], mail.outbox[0].body)
+        self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
+        self.assertIn("New order", mail.outbox[1].subject)
+
+    def test_order_status_and_payment_changes_email_customer_and_staff(self):
+        order = Order.objects.create(
+            guest_name="Order Guest",
+            phone="+256700000000",
+            email="guest@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 2",
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Token {self.staff_token.key}"
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/v1/staff/orders/{order.pk}/",
+                {
+                    "status": Order.Status.ACCEPTED,
+                    "payment_status": Order.PaymentStatus.PAID,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(mail.outbox[0].to, ["guest@example.com"])
+        self.assertIn("Confirmed", mail.outbox[0].body)
+        self.assertIn("Paid", mail.outbox[0].body)
+        self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
+
+    def test_reservation_creation_and_confirmation_email_customer_and_staff(self):
+        lodge = Lodge.objects.create(name="Email Cottage")
+        check_in = date.today() + timedelta(days=30)
+        with (
+            self.captureOnCommitCallbacks(execute=True),
+            patch("core.api_views.notify_staff_new_reservation"),
+        ):
+            response = self.client.post(
+                "/api/v1/reservations/",
+                {
+                    "lodge": lodge.slug,
+                    "guest_name": "Reservation Guest",
+                    "email": "guest@example.com",
+                    "phone": "+256700000000",
+                    "check_in": check_in.isoformat(),
+                    "check_out": (check_in + timedelta(days=2)).isoformat(),
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertIn("received", mail.outbox[0].subject)
+        self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
+
+        mail.outbox.clear()
+        reservation = LodgeReservation.objects.get(
+            reference=response.data["reference"]
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Token {self.staff_token.key}"
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            confirmed = self.client.patch(
+                f"/api/v1/staff/reservations/{reservation.pk}/",
+                {"status": LodgeReservation.Status.CONFIRMED},
+                format="json",
+            )
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertIn("Confirmed", mail.outbox[0].subject)
+        self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
+
+    def test_staff_account_creation_alerts_operations_without_sending_password(self):
+        owner = get_user_model().objects.create_superuser(
+            username="email-owner",
+            email="owner@example.com",
+            password="OwnerPassphrase!934",
+        )
+        owner_token = Token.objects.create(user=owner)
+        owner_client = APIClient()
+        owner_client.credentials(HTTP_AUTHORIZATION=f"Token {owner_token.key}")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = owner_client.post(
+                "/api/v1/staff/accounts/",
+                {
+                    "username": "email-new-staff",
+                    "email": "new-staff@example.com",
+                    "first_name": "New",
+                    "last_name": "Staff",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["admin@example.com"])
+        self.assertIn("New staff account", mail.outbox[0].subject)
+        self.assertNotIn(response.data["temporary_password"], mail.outbox[0].body)
+
+    def test_staff_password_reset_is_generic_single_use_and_updates_credentials(self):
+        account_profile = StaffProfile.objects.create(
+            user=self.staff,
+            must_change_password=True,
+        )
+        missing = self.client.post(
+            "/api/v1/auth/password-reset/",
+            {"email": "unknown@example.com"},
+            format="json",
+        )
+        self.assertEqual(missing.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+
+        requested = self.client.post(
+            "/api/v1/auth/password-reset/",
+            {"email": self.staff.email},
+            format="json",
+        )
+        self.assertEqual(requested.status_code, 200)
+        self.assertEqual(requested.data, missing.data)
+        self.assertEqual(len(mail.outbox), 1)
+        reset_url = next(
+            line
+            for line in mail.outbox[0].body.splitlines()
+            if line.startswith("https://admin.kalitusi.com/")
+        )
+        query = parse_qs(urlsplit(reset_url).query)
+        payload = {
+            "uid": query["uid"][0],
+            "token": query["token"][0],
+            "new_password": "NewSecureStaffPassphrase!527",
+        }
+
+        with self.captureOnCommitCallbacks(execute=True):
+            confirmed = self.client.post(
+                "/api/v1/auth/password-reset/confirm/",
+                payload,
+                format="json",
+            )
+        self.assertEqual(confirmed.status_code, 200)
+        self.staff.refresh_from_db()
+        account_profile.refresh_from_db()
+        self.assertTrue(self.staff.check_password(payload["new_password"]))
+        self.assertFalse(account_profile.must_change_password)
+        self.assertFalse(Token.objects.filter(user=self.staff).exists())
+        self.assertEqual(len(mail.outbox), 2)
+
+        replayed = self.client.post(
+            "/api/v1/auth/password-reset/confirm/",
+            payload,
+            format="json",
+        )
+        self.assertEqual(replayed.status_code, 400)
 
 
 class StaffReservationApprovalTests(TestCase):
