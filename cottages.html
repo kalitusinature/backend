@@ -1,4 +1,4 @@
-﻿<t t-name="website.cottages">
+<t t-name="website.cottages">
     <t t-call="website.layout">
         <div id="wrap" class="oe_structure oe_empty">
             <style>
@@ -52,7 +52,6 @@
                 .cj-lodge-modal-meta-item strong{display:block;margin-bottom:3px;font-size:13px;color:#35433e}
                 .cj-lodge-modal-meta-item span{color:#5d6965;font-size:14px;line-height:1.5}
                 .cj-lodge-modal-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
-                .cj-lodge-modal-hint{margin:14px 0 0;color:#7a8884;font-size:13px}
                 body.cj-modal-open{overflow:hidden}
 
                 .cj-loading-screen{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 50% 30%,rgba(224,241,239,.9),transparent 58%),rgba(247,250,249,.98);backdrop-filter:blur(8px);font-family:Arial,Helvetica,sans-serif}
@@ -100,7 +99,6 @@
                                 <div class="cj-lodge-modal-actions">
                                     <a class="cj-cottage-book" id="cjLodgeModalBook" href="#">Book Now</a>
                                 </div>
-                                <p class="cj-lodge-modal-hint" id="cjLodgeModalHint"></p>
                             </div>
                         </div>
                     </div>
@@ -130,7 +128,7 @@
                         },delay);
                     }
 
-                    var apiBase=(window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1').replace(/\/+$/,'');
+                    var apiBase=(window.CJ_API_BASE_URL||'https://api.kalitusi.com/api/v1').replace(/\/+$/,'');
                     var reservationBase=(window.CJ_RESERVATION_BASE_URL||apiBase.replace(/\/api\/v1$/,'')).replace(/\/+$/,'');
                     var grid=document.getElementById('cjCottagesGrid');
                     var status=document.getElementById('cjCottagesStatus');
@@ -142,7 +140,6 @@
                     var modalDesc=document.getElementById('cjLodgeModalDesc');
                     var modalMeta=document.getElementById('cjLodgeModalMeta');
                     var modalBook=document.getElementById('cjLodgeModalBook');
-                    var modalHint=document.getElementById('cjLodgeModalHint');
                     var modalPrev=document.getElementById('cjLodgeModalPrev');
                     var modalNext=document.getElementById('cjLodgeModalNext');
                     var modalClose=document.getElementById('cjLodgeModalClose');
@@ -229,7 +226,7 @@
                             var imgs=container.querySelectorAll('img');
                             if(imgs.length<2) return;
                             setActiveImage(container,(container._activeIndex||0)+1);
-                        },intervalMs||3200);
+                        },intervalMs||3000);
                     }
 
                     function renderModalDots(){
@@ -257,7 +254,7 @@
                             modalState.index=(modalState.index+1)%modalState.images.length;
                             setActiveImage(modalGallery,modalState.index);
                             renderModalDots();
-                        },3500);
+                        },3000);
                     }
                     function closeModal(){
                         modal.classList.remove('is-open');
@@ -298,10 +295,9 @@
                         }
                         modalBook.href=reservationHref(lodge);
                         modalGallery.replaceChildren();
-                        startCarousel(modalGallery,modalState.images,modalState.name,3500);
+                        startCarousel(modalGallery,modalState.images,modalState.name,3000);
                         setActiveImage(modalGallery,0);
                         renderModalDots();
-                        modalHint.textContent=modalState.images.length>1?('Showing '+modalState.images.length+' photos. Images rotate automatically; use arrows or dots to browse.'):'';
                         modal.classList.add('is-open');
                         modal.setAttribute('aria-hidden','false');
                         document.body.classList.add('cj-modal-open');
@@ -333,7 +329,7 @@
 
                         var photo=document.createElement('div');
                         photo.className='cj-cottage-photo';
-                        startCarousel(photo,images,lodge.name||'Cottage',3200);
+                        startCarousel(photo,images,lodge.name||'Cottage',3000);
                         if(images.length>1){
                             var count=document.createElement('span');
                             count.className='cj-cottage-photo-count';

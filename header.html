@@ -25,18 +25,5 @@
             </div>
         </div>
     </nav>
-    <script>
-        (function(){
-            window.CJ_API_BASE_URL = window.CJ_API_BASE_URL || 'https://backend-bte7.onrender.com/api/v1';
-            if(window.location.protocol==='file:'){
-                document.querySelectorAll('.cj-nav a[href]').forEach(function(link){
-                    var href=link.getAttribute('href');
-                    if(href.startsWith('/menu'))link.setAttribute('href','menu.html'+href.slice(5));
-                    else if(href.startsWith('/cart'))link.setAttribute('href','cart.html');
-                    else if(href.startsWith('/checkout'))link.setAttribute('href','checkout.html');
-                    else if(href.startsWith('/my-orders'))link.setAttribute('href','my-orders.html');
-                });
-            }
-        })();
-    </script>
+
 </t>

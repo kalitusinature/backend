@@ -300,7 +300,7 @@
                             }
                             return 'The order service returned HTTP '+status+'.';
                         }
-                        fetch((window.CJ_API_BASE_URL||'https://backend-bte7.onrender.com/api/v1')+'/orders/',{
+                        fetch((window.CJ_API_BASE_URL||'https://api.kalitusi.com/api/v1')+'/orders/',{
                             method:'POST',
                             headers:{Accept:'application/json','Content-Type':'application/json'},
                             body:JSON.stringify(order)
