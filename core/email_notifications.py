@@ -2,19 +2,25 @@ import json
 import logging
 import re
 import smtplib
+from html import escape
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
-from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from .models import LodgeReservation, Order
 
 logger = logging.getLogger(__name__)
+
+KALITUSI_LOGO_URL = (
+    "https://kalitusi-nature-resort.odoo.com/web/image/website/1/logo/"
+    "Kalitusi%20Nature%20Resort?unique=7d8d223"
+)
 
 
 def _resend_error_detail(error: HTTPError) -> str:
@@ -49,6 +55,7 @@ def _send_with_resend_api(
     message: str,
     recipients: list[str],
     reference: str,
+    html_message: str | None = None,
 ) -> None:
     payload = json.dumps(
         {
@@ -56,6 +63,7 @@ def _send_with_resend_api(
             "to": recipients,
             "subject": subject,
             "text": message,
+            **({"html": html_message} if html_message else {}),
         }
     ).encode("utf-8")
     request = Request(
@@ -103,7 +111,13 @@ def _send_with_resend_api(
     )
 
 
-def _send_email(subject: str, message: str, recipients: list[str], reference: str) -> None:
+def _send_email(
+    subject: str,
+    message: str,
+    recipients: list[str],
+    reference: str,
+    html_message: str | None = None,
+) -> None:
     if not recipients:
         return
     if settings.RESEND_API_KEY:
@@ -113,7 +127,7 @@ def _send_email(subject: str, message: str, recipients: list[str], reference: st
                 reference,
             )
             return
-        _send_with_resend_api(subject, message, recipients, reference)
+        _send_with_resend_api(subject, message, recipients, reference, html_message)
         return
 
     missing_settings = [
@@ -132,13 +146,23 @@ def _send_email(subject: str, message: str, recipients: list[str], reference: st
         )
         return
     try:
-        sent = send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL,
-            recipients,
-            fail_silently=False,
-        )
+        if html_message:
+            email = EmailMultiAlternatives(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                recipients,
+            )
+            email.attach_alternative(html_message, "text/html")
+            sent = email.send(fail_silently=False)
+        else:
+            sent = send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                recipients,
+                fail_silently=False,
+            )
     except (OSError, smtplib.SMTPException) as error:
         logger.error(
             "Email delivery failed for %s (%s).",
@@ -163,10 +187,132 @@ def _staff_recipients(reference: str) -> list[str]:
     return [email]
 
 
+def _image_html(url: str, alt: str, width: int, height: int) -> str:
+    parsed_url = urlsplit(url)
+    if parsed_url.scheme.lower() != "https" or not parsed_url.netloc:
+        return ""
+    return (
+        f'<img src="{escape(url, quote=True)}" alt="{escape(alt, quote=True)}" '
+        f'width="{width}" height="{height}" '
+        'style="display:block;max-width:100%;height:auto;border:0;'
+        'border-radius:8px;margin:0 auto 8px;">'
+    )
+
+
+def _email_layout(subject: str, intro: str, content_html: str) -> str:
+    logo_html = _image_html(
+        KALITUSI_LOGO_URL,
+        "Kalitusi Nature Resort",
+        180,
+        64,
+    )
+    return (
+        '<!doctype html><html lang="en"><body '
+        'style="margin:0;padding:24px;background:#f4f7f5;'
+        'font-family:Arial,Helvetica,sans-serif;color:#24332d;">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'style="border-collapse:collapse;"><tr><td align="center">'
+        '<table role="presentation" width="600" cellspacing="0" cellpadding="0" '
+        'style="width:100%;max-width:600px;background:#ffffff;border-radius:12px;'
+        'border-collapse:separate;padding:24px;">'
+        f'<tr><td align="center" style="padding:8px 8px 24px;">{logo_html}</td></tr>'
+        f'<tr><td><h1 style="margin:0 0 12px;font-size:24px;color:#234b3b;">'
+        f'{escape(subject)}</h1><p style="margin:0 0 20px;line-height:1.6;">'
+        f'{escape(intro)}</p>{content_html}</td></tr>'
+        '<tr><td style="padding-top:24px;color:#64736c;font-size:13px;">'
+        'Thank you,<br>Kalitusi Nature Resort</td></tr>'
+        '</table></td></tr></table></body></html>'
+    )
+
+
+def _details_table_html(rows: list[tuple[str, str]]) -> str:
+    table_rows = "".join(
+        '<tr>'
+        '<th scope="row" align="left" style="padding:10px;border-bottom:1px solid #e6ece8;'
+        'color:#52645b;font-weight:600;">'
+        f"{escape(label)}</th>"
+        '<td align="left" style="padding:10px;border-bottom:1px solid #e6ece8;">'
+        f"{escape(value)}</td></tr>"
+        for label, value in rows
+    )
+    return (
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'style="border-collapse:collapse;margin:0 0 20px;">'
+        f"<tbody>{table_rows}</tbody></table>"
+    )
+
+
+def _order_email_html(order: Order) -> str:
+    item_rows = []
+    for item in order.items.select_related("product").all():
+        image_url = item.product.image_url if item.product else ""
+        image = _image_html(image_url, item.product_name, 56, 56)
+        item_rows.append(
+            '<tr>'
+            '<td style="padding:10px;border-bottom:1px solid #e6ece8;">'
+            f'{image}<span>{escape(item.product_name)}</span></td>'
+            f'<td align="center" style="padding:10px;border-bottom:1px solid #e6ece8;">'
+            f"{item.quantity}</td>"
+            '<td align="right" style="padding:10px;border-bottom:1px solid #e6ece8;">'
+            f"UGX {item.unit_price_ugx:,}</td>"
+            '<td align="right" style="padding:10px;border-bottom:1px solid #e6ece8;">'
+            f"UGX {item.line_total_ugx:,}</td></tr>"
+        )
+    items_table = (
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'style="border-collapse:collapse;margin:0 0 20px;">'
+        '<thead><tr style="background:#edf4ef;">'
+        '<th align="left" style="padding:10px;">Item</th>'
+        '<th align="center" style="padding:10px;">Qty</th>'
+        '<th align="right" style="padding:10px;">Unit price</th>'
+        '<th align="right" style="padding:10px;">Subtotal</th>'
+        f"</tr></thead><tbody>{''.join(item_rows)}</tbody>"
+        '<tfoot><tr><th colspan="3" align="right" style="padding:12px 10px;">'
+        'Total</th><th align="right" style="padding:12px 10px;">'
+        f"UGX {order.total_ugx:,}</th></tr></tfoot></table>"
+    )
+    details = _details_table_html(
+        [
+            ("Order", order.number),
+            ("Status", order.get_status_display()),
+            ("Payment", order.get_payment_status_display()),
+            ("Order type", order.get_order_type_display()),
+            ("Location", order.location),
+        ]
+    )
+    return details + items_table
+
+
+def _reservation_email_html(reservation: LodgeReservation) -> str:
+    lodge_image = _image_html(
+        reservation.lodge.image_url,
+        f"{reservation.lodge.name} accommodation",
+        552,
+        240,
+    )
+    details = _details_table_html(
+        [
+            ("Reservation", reservation.reference),
+            ("Lodge", reservation.lodge.name),
+            ("Check-in", reservation.check_in.isoformat()),
+            ("Check-out", reservation.check_out.isoformat()),
+            ("Adults", str(reservation.adults)),
+            ("Children", str(reservation.children)),
+            ("Status", reservation.get_status_display()),
+        ]
+    )
+    return lodge_image + details
+
+
 def notify_order_created(order: Order) -> None:
     items = "\n".join(
         f"{item.quantity} x {item.product_name} - UGX {item.line_total_ugx:,}"
         for item in order.items.all()
+    )
+    order_html = _order_email_html(order)
+    customer_intro = (
+        "Thank you for ordering from Kalitusi Resort. We have received your "
+        "order and will email you when its status changes."
     )
     details = (
         f"Order: {order.number}\n"
@@ -177,23 +323,31 @@ def notify_order_created(order: Order) -> None:
     if order.email:
         _send_email(
             f"Thank you for your order: {order.number}",
-            f"Hello {order.guest_name},\n\n"
-            "Thank you for ordering from Kalitusi Resort. We have received your "
-            "order and will email you when its status changes.\n\n"
-            f"{details}",
+            f"Hello {order.guest_name},\n\n{customer_intro}\n\n{details}",
             [order.email],
             order.number,
+            html_message=_email_layout(
+                f"Thank you for your order: {order.number}",
+                f"Hello {order.guest_name}, {customer_intro}",
+                order_html,
+            ),
         )
+    staff_intro = "A new order has been received."
     _send_email(
         f"New order: {order.number}",
         (
-            f"A new order has been received.\n\n{details}\n"
+            f"{staff_intro}\n\n{details}\n"
             f"Guest: {order.guest_name}\n"
             f"Phone: {order.phone}\n"
             f"Location: {order.location}"
         ),
         _staff_recipients(order.number),
         order.number,
+        html_message=_email_layout(
+            f"New order: {order.number}",
+            staff_intro,
+            order_html,
+        ),
     )
 
 
@@ -220,29 +374,41 @@ def notify_order_updated(
         f"Payment: {order.get_payment_status_display()}\n"
         f"Total: UGX {order.total_ugx:,}"
     )
-    change_summary = "\n".join(changes)
+    order_html = _order_email_html(order)
+    customer_intro = f"There is an update to your order: {'; '.join(changes)}"
     if order.email:
         _send_email(
             f"Order update: {order.number}",
-            f"Hello {order.guest_name},\n\n"
-            f"There is an update to your order:\n{change_summary}\n\n{details}",
+            f"Hello {order.guest_name},\n\n{customer_intro}\n\n{details}",
             [order.email],
             order.number,
+            html_message=_email_layout(
+                f"Order update: {order.number}",
+                f"Hello {order.guest_name}, {customer_intro}",
+                order_html,
+            ),
         )
+    staff_intro = f"An order was updated: {'; '.join(changes)}"
     _send_email(
         f"Order activity: {order.number}",
         (
-            f"An order was updated.\n\n{change_summary}\n\n{details}\n"
+            f"{staff_intro}\n\n{details}\n"
             f"Guest: {order.guest_name}\n"
             f"Phone: {order.phone}"
         ),
         _staff_recipients(order.number),
         order.number,
+        html_message=_email_layout(
+            f"Order activity: {order.number}",
+            staff_intro,
+            order_html,
+        ),
     )
 
 
 def notify_new_reservation(reservation: LodgeReservation) -> None:
     is_pending = reservation.status == LodgeReservation.Status.PENDING
+    reservation_html = _reservation_email_html(reservation)
     details = (
         f"Reference: {reservation.reference}\n"
         f"Guest: {reservation.guest_name}\n"
@@ -268,24 +434,38 @@ def notify_new_reservation(reservation: LodgeReservation) -> None:
             f"Hello {reservation.guest_name},\n\n{customer_message}\n\n{details}",
             [reservation.email],
             reservation.reference,
+            html_message=_email_layout(
+                f"Reservation {reservation.get_status_display()}",
+                f"Hello {reservation.guest_name}, {customer_message}",
+                reservation_html,
+            ),
         )
+    staff_intro = (
+        "A new reservation request is awaiting review."
+        if is_pending
+        else f"A new reservation has status {reservation.get_status_display()}."
+    )
     _send_email(
         f"New reservation: {reservation.reference}",
-        (
-            "A new reservation request is awaiting review."
-            if is_pending
-            else f"A new reservation has status {reservation.get_status_display()}."
-        )
-        + f"\n\n{details}",
+        f"{staff_intro}\n\n{details}",
         _staff_recipients(reservation.reference),
         reservation.reference,
+        html_message=_email_layout(
+            f"New reservation: {reservation.reference}",
+            staff_intro,
+            reservation_html,
+        ),
     )
 
 
 def notify_reservation_status(reservation: LodgeReservation) -> None:
+    reservation_html = _reservation_email_html(reservation)
+    customer_intro = (
+        f"Your reservation status is now {reservation.get_status_display()}."
+    )
     message = (
         f"Hello {reservation.guest_name},\n\n"
-        f"Your reservation status is now {reservation.get_status_display()}.\n\n"
+        f"{customer_intro}\n\n"
         f"Stay: {reservation.lodge.name}, "
         f"{reservation.check_in} to {reservation.check_out}\n"
         f"Reference: {reservation.reference}"
@@ -296,18 +476,28 @@ def notify_reservation_status(reservation: LodgeReservation) -> None:
             message,
             [reservation.email],
             reservation.reference,
+            html_message=_email_layout(
+                f"Reservation {reservation.reference}: "
+                f"{reservation.get_status_display()}",
+                f"Hello {reservation.guest_name}, {customer_intro}",
+                reservation_html,
+            ),
         )
+    staff_intro = f"Reservation status changed to {reservation.get_status_display()}."
     _send_email(
         f"Reservation activity: {reservation.reference}",
-        (
-            f"Reservation status changed to {reservation.get_status_display()}.\n\n"
-            f"Reference: {reservation.reference}\n"
-            f"Guest: {reservation.guest_name}\n"
-            f"Stay: {reservation.lodge.name}, "
-            f"{reservation.check_in} to {reservation.check_out}"
-        ),
+        f"{staff_intro}\n\n"
+        f"Reference: {reservation.reference}\n"
+        f"Guest: {reservation.guest_name}\n"
+        f"Stay: {reservation.lodge.name}, "
+        f"{reservation.check_in} to {reservation.check_out}",
         _staff_recipients(reservation.reference),
         reservation.reference,
+        html_message=_email_layout(
+            f"Reservation activity: {reservation.reference}",
+            staff_intro,
+            reservation_html,
+        ),
     )
 
 

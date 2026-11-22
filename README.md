@@ -177,6 +177,8 @@ in Resend and configure its HTTPS API:
 `STAFF_NOTIFICATION_EMAIL`. Keep all credentials in Render environment
 settings, never in the repository. If the Resend API is unavailable, records
 are still saved and the backend logs the email delivery failure.
+Order and reservation emails include HTML tables, the resort logo, and product
+or lodge images when available, alongside a plain-text alternative.
 
 The admin login includes a password-reset flow for active staff accounts. A
 reset link is sent only to the email address saved on the staff account; set

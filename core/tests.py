@@ -23,11 +23,12 @@ from .models import (
     LodgeBlockout,
     LodgeReservation,
     Order,
+    OrderItem,
     Product,
     StaffProfile,
     StaffPushSubscription,
 )
-from .email_notifications import send_staff_password_reset_email
+from .email_notifications import notify_order_created, send_staff_password_reset_email
 from .push_notifications import notify_new_order
 
 
@@ -731,6 +732,10 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         )
 
     def test_order_creation_emails_customer_thank_you_and_staff_alert(self):
+        self.product.image_url = (
+            "https://res.cloudinary.com/kalitusi/image/upload/sample-product.jpg"
+        )
+        self.product.save(update_fields=["image_url"])
         with (
             self.captureOnCommitCallbacks(execute=True),
             patch("core.api_views.notify_new_order"),
@@ -753,6 +758,10 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         self.assertEqual(mail.outbox[0].to, ["guest@example.com"])
         self.assertIn("Thank you", mail.outbox[0].subject)
         self.assertIn(response.data["number"], mail.outbox[0].body)
+        order_html = mail.outbox[0].alternatives[0].content
+        self.assertIn("Kalitusi%20Nature%20Resort", order_html)
+        self.assertIn(self.product.image_url, order_html)
+        self.assertIn("<table", order_html)
         self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
         self.assertIn("New order", mail.outbox[1].subject)
 
@@ -785,7 +794,10 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
 
     def test_reservation_creation_and_confirmation_email_customer_and_staff(self):
-        lodge = Lodge.objects.create(name="Email Cottage")
+        lodge = Lodge.objects.create(
+            name="Email Cottage",
+            image_url="https://res.cloudinary.com/kalitusi/image/upload/email-cottage.jpg",
+        )
         check_in = date.today() + timedelta(days=30)
         with (
             self.captureOnCommitCallbacks(execute=True),
@@ -807,6 +819,9 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(mail.outbox), 2)
         self.assertIn("received", mail.outbox[0].subject)
+        reservation_html = mail.outbox[0].alternatives[0].content
+        self.assertIn(lodge.image_url, reservation_html)
+        self.assertIn("<table", reservation_html)
         self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
 
         mail.outbox.clear()
@@ -988,6 +1003,43 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
 
         self.assertIn("Forbidden for [email redacted]", logs.output[0])
         self.assertNotIn("user@example.com", logs.output[0])
+
+    @override_settings(RESEND_API_KEY="test-resend-key")
+    def test_order_confirmation_includes_images_and_tables_in_resend_html(self):
+        self.product.image_url = (
+            "https://res.cloudinary.com/kalitusi/image/upload/order-item.jpg"
+        )
+        self.product.save(update_fields=["image_url"])
+        order = Order.objects.create(
+            guest_name="Order Guest",
+            phone="+256700000000",
+            email="guest@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 2",
+            total_ugx=24000,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            product_name=self.product.name,
+            unit_price_ugx=self.product.price_ugx,
+            quantity=2,
+            line_total_ugx=24000,
+        )
+        response = MagicMock()
+        response.status = 200
+        response.__enter__.return_value = response
+        response.read.return_value = b""
+
+        with patch("core.email_notifications.urlopen", return_value=response) as urlopen:
+            notify_order_created(order)
+
+        request = urlopen.call_args_list[0].args[0]
+        payload = json.loads(request.data)
+        self.assertIn(self.product.image_url, payload["html"])
+        self.assertIn("Kalitusi%20Nature%20Resort", payload["html"])
+        self.assertIn("<table", payload["html"])
+        self.assertEqual(urlopen.call_count, 2)
 
 
 class StaffReservationApprovalTests(TestCase):
