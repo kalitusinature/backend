@@ -448,10 +448,13 @@ class StaffDashboard(StaffApiMixin, APIView):
                 "categories_total": Category.objects.count(),
                 "lodges_total": Lodge.objects.count(),
                 "recent_orders": StaffOrderSerializer(
-                    Order.objects.prefetch_related("items")[:5], many=True
+                    Order.objects.prefetch_related("items", "payments")[:5], many=True
                 ).data,
                 "recent_reservations": StaffReservationSerializer(
-                    LodgeReservation.objects.select_related("lodge")[:5], many=True
+                    LodgeReservation.objects.select_related("lodge").prefetch_related(
+                        "payments"
+                    )[:5],
+                    many=True,
                 ).data,
             }
         )
@@ -461,7 +464,7 @@ class StaffOrderList(StaffApiMixin, generics.ListAPIView):
     serializer_class = StaffOrderSerializer
 
     def get_queryset(self):
-        queryset = Order.objects.prefetch_related("items")
+        queryset = Order.objects.prefetch_related("items", "payments")
         status_filter = self.request.query_params.get("status")
         if status_filter and status_filter in Order.Status.values:
             queryset = queryset.filter(status=status_filter)
@@ -543,7 +546,9 @@ class StaffReservationList(StaffApiMixin, generics.ListCreateAPIView):
         return StaffReservationSerializer
 
     def get_queryset(self):
-        queryset = LodgeReservation.objects.select_related("lodge")
+        queryset = LodgeReservation.objects.select_related("lodge").prefetch_related(
+            "payments"
+        )
         status_filter = self.request.query_params.get("status")
         if status_filter and status_filter != "all":
             if status_filter not in LodgeReservation.Status.values:
@@ -636,7 +641,9 @@ class StaffReservationCalendar(StaffApiMixin, APIView):
         reservations = LodgeReservation.objects.filter(
             check_in__lt=end,
             check_out__gt=start,
-        ).select_related("lodge").order_by("check_in", "created_at")
+        ).select_related("lodge").prefetch_related("payments").order_by(
+            "check_in", "created_at"
+        )
         return Response(StaffReservationSerializer(reservations, many=True).data)
 
 

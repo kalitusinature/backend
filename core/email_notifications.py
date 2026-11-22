@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import re
@@ -14,7 +15,7 @@ from django.core.mail import EmailMultiAlternatives, send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from .models import LodgeReservation, Order
+from .models import LodgeReservation, Order, Payment, PaymentReceipt
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +190,16 @@ def _send_with_resend_api(
     recipients: list[str],
     reference: str,
     html_message: str | None = None,
-) -> None:
+    attachments: list[tuple[str, bytes, str]] | None = None,
+) -> bool:
+    resend_attachments = [
+        {
+            "filename": filename,
+            "content": base64.b64encode(content).decode("ascii"),
+            "content_type": content_type,
+        }
+        for filename, content, content_type in attachments or []
+    ]
     payload = json.dumps(
         {
             "from": settings.DEFAULT_FROM_EMAIL,
@@ -197,6 +207,7 @@ def _send_with_resend_api(
             "subject": subject,
             "text": message,
             **({"html": html_message} if html_message else {}),
+            **({"attachments": resend_attachments} if resend_attachments else {}),
         }
     ).encode("utf-8")
     request = Request(
@@ -217,7 +228,7 @@ def _send_with_resend_api(
                     reference,
                     response.status,
                 )
-                return
+                return False
             response.read()
     except HTTPError as error:
         detail = _resend_error_detail(error)
@@ -227,7 +238,7 @@ def _send_with_resend_api(
             error.code,
             f", {detail}" if detail else "",
         )
-        return
+        return False
     except (OSError, URLError) as error:
         reason = getattr(error, "reason", None)
         error_type = type(reason).__name__ if reason is not None else type(error).__name__
@@ -236,12 +247,13 @@ def _send_with_resend_api(
             reference,
             error_type,
         )
-        return
+        return False
     logger.info(
         "Resend API accepted email for %s (%d recipient(s)).",
         reference,
         len(recipients),
     )
+    return True
 
 
 def _send_email(
@@ -250,18 +262,25 @@ def _send_email(
     recipients: list[str],
     reference: str,
     html_message: str | None = None,
-) -> None:
+    attachments: list[tuple[str, bytes, str]] | None = None,
+) -> bool:
     if not recipients:
-        return
+        return False
     if settings.RESEND_API_KEY:
         if not settings.DEFAULT_FROM_EMAIL:
             logger.warning(
                 "Email not sent for %s: required setting is empty: DEFAULT_FROM_EMAIL.",
                 reference,
             )
-            return
-        _send_with_resend_api(subject, message, recipients, reference, html_message)
-        return
+            return False
+        return _send_with_resend_api(
+            subject,
+            message,
+            recipients,
+            reference,
+            html_message,
+            attachments,
+        )
 
     missing_settings = [
         name
@@ -277,16 +296,19 @@ def _send_email(
             reference,
             ", ".join(missing_settings),
         )
-        return
+        return False
     try:
-        if html_message:
+        if html_message or attachments:
             email = EmailMultiAlternatives(
                 subject,
                 message,
                 settings.DEFAULT_FROM_EMAIL,
                 recipients,
             )
-            email.attach_alternative(html_message, "text/html")
+            if html_message:
+                email.attach_alternative(html_message, "text/html")
+            for filename, content, content_type in attachments or []:
+                email.attach(filename, content, content_type)
             sent = email.send(fail_silently=False)
         else:
             sent = send_mail(
@@ -302,11 +324,13 @@ def _send_email(
             reference,
             type(error).__name__,
         )
-        return
+        return False
     if sent != len(recipients):
         logger.error("Email delivery was incomplete for %s.", reference)
+        return False
     else:
         logger.info("SMTP accepted email for %s (%d recipient(s)).", reference, sent)
+        return True
 
 
 def _staff_recipients(reference: str) -> list[str]:
@@ -847,6 +871,80 @@ def notify_reservation_status(reservation: LodgeReservation) -> None:
             staff_intro,
             reservation_html,
         ),
+    )
+
+
+def send_payment_receipt_email(payment: Payment) -> bool:
+    try:
+        receipt = payment.receipt
+    except PaymentReceipt.DoesNotExist:
+        logger.error(
+            "Payment receipt email not sent for transaction %s: receipt is missing.",
+            payment.transaction_reference,
+        )
+        return False
+
+    target = payment.order or payment.reservation
+    if not target.email:
+        logger.warning(
+            "Payment receipt email not sent for transaction %s: customer email is missing.",
+            payment.transaction_reference,
+        )
+        return False
+
+    if payment.order_id:
+        payment_type = "Order"
+        booking_reference = payment.order.number
+    else:
+        payment_type = "Reservation"
+        booking_reference = payment.reservation.reference
+    payment_status = "Paid in full" if receipt.balance_ugx == 0 else "Partially paid"
+    text = (
+        f"Hello {target.guest_name},\n\n"
+        "Thank you for your payment to Kalitusi Nature Resort. "
+        "Your payment receipt is attached as a PDF.\n\n"
+        f"Receipt number: {receipt.number}\n"
+        f"{payment_type}: {booking_reference}\n"
+        f"Payment: UGX {payment.amount_ugx:,}\n"
+        f"Total paid: UGX {receipt.paid_to_date_ugx:,}\n"
+        f"Outstanding balance: UGX {receipt.balance_ugx:,}\n"
+        f"Payment status: {payment_status}\n\n"
+        "Warm regards,\nKalitusi Nature Resort\n"
+        "Experience Nature. Experience Kalitusi."
+    )
+    payment_details_html = _details_table_html(
+        [
+            ("Receipt Number", receipt.number),
+            (payment_type, booking_reference),
+            ("Payment", f"UGX {payment.amount_ugx:,}"),
+            ("Total Paid", f"UGX {receipt.paid_to_date_ugx:,}"),
+            ("Outstanding Balance", f"UGX {receipt.balance_ugx:,}"),
+            ("Payment Status", payment_status),
+        ]
+    )
+    content_html = (
+        f'<p style="line-height:1.6;">Hello {escape(target.guest_name)},</p>'
+        '<p style="line-height:1.6;">Thank you for your payment to '
+        "Kalitusi Nature Resort. Your payment receipt is attached as a PDF.</p>"
+        f"{payment_details_html}"
+    )
+    return _send_email(
+        f"Payment receipt {receipt.number}",
+        text,
+        [target.email],
+        payment.transaction_reference,
+        html_message=_email_layout(
+            "Your Kalitusi payment receipt",
+            "Payment confirmed",
+            content_html,
+        ),
+        attachments=[
+            (
+                f"{receipt.number}.pdf",
+                bytes(receipt.pdf_data),
+                "application/pdf",
+            )
+        ],
     )
 
 

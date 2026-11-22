@@ -150,6 +150,8 @@ REST_FRAMEWORK = {
         "staff_login": "10/hour",
         "staff_password_reset_request": "5/hour",
         "staff_password_reset_confirm": "10/hour",
+        "receipt_lookup": "20/hour",
+        "receipt_verification": "60/hour",
     },
 }
 
@@ -175,6 +177,10 @@ RESERVATION_NOTIFICATION_EMAIL = STAFF_NOTIFICATION_EMAIL
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
 VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "").strip()
+RECEIPT_VERIFY_BASE_URL = os.environ.get(
+    "RECEIPT_VERIFY_BASE_URL",
+    "https://api.kalitusi.com/api/v1/receipts/verify",
+).strip().rstrip("/")
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

@@ -1,6 +1,7 @@
 import hashlib
 
 from rest_framework import serializers
+from django.db.models import Sum
 
 from .models import (
     Category,
@@ -10,6 +11,7 @@ from .models import (
     LodgeReservation,
     Order,
     OrderItem,
+    Payment,
     Product,
 )
 from .reservation_rules import validate_lodge_stay
@@ -229,6 +231,66 @@ class OrderTrackingRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=254)
 
 
+class OrderReceiptLookupRequestSerializer(serializers.Serializer):
+    number = serializers.CharField(max_length=20)
+    email = serializers.EmailField(max_length=254)
+
+
+class OrderReceiptDownloadRequestSerializer(OrderReceiptLookupRequestSerializer):
+    receipt_number = serializers.CharField(max_length=32)
+
+
+class ReservationTrackingRequestSerializer(serializers.Serializer):
+    reference = serializers.CharField(max_length=20)
+    email = serializers.EmailField(max_length=254)
+
+
+class ReservationReceiptDownloadRequestSerializer(
+    ReservationTrackingRequestSerializer
+):
+    receipt_number = serializers.CharField(max_length=32)
+
+
+def _verified_payment_total(target):
+    prefetched = getattr(target, "_prefetched_objects_cache", {})
+    if "payments" in prefetched:
+        return sum(
+            payment.amount_ugx
+            for payment in prefetched["payments"]
+            if payment.status == Payment.Status.VERIFIED
+        )
+    return (
+        target.payments.filter(status=Payment.Status.VERIFIED).aggregate(
+            total=Sum("amount_ugx")
+        )["total"]
+        or 0
+    )
+
+
+class CustomerPaymentReceiptSerializer(serializers.ModelSerializer):
+    receipt_number = serializers.CharField(source="receipt.number", read_only=True)
+    total_due_ugx = serializers.IntegerField(
+        source="receipt.total_due_ugx", read_only=True
+    )
+    paid_to_date_ugx = serializers.IntegerField(
+        source="receipt.paid_to_date_ugx", read_only=True
+    )
+    balance_ugx = serializers.IntegerField(
+        source="receipt.balance_ugx", read_only=True
+    )
+
+    class Meta:
+        model = Payment
+        fields = (
+            "receipt_number",
+            "amount_ugx",
+            "total_due_ugx",
+            "paid_to_date_ugx",
+            "balance_ugx",
+            "verified_at",
+        )
+
+
 class OrderTrackingItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
@@ -241,6 +303,9 @@ class OrderTrackingSerializer(serializers.ModelSerializer):
         source="get_payment_status_display", read_only=True
     )
     items = OrderTrackingItemSerializer(many=True, read_only=True)
+    amount_paid_ugx = serializers.SerializerMethodField()
+    balance_ugx = serializers.SerializerMethodField()
+    receipts = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -254,10 +319,36 @@ class OrderTrackingSerializer(serializers.ModelSerializer):
             "payment_status",
             "payment_status_label",
             "total_ugx",
+            "amount_paid_ugx",
+            "balance_ugx",
             "created_at",
             "updated_at",
             "items",
+            "receipts",
         )
+
+    def get_amount_paid_ugx(self, order):
+        amount_paid = _verified_payment_total(order)
+        if (
+            amount_paid == 0
+            and order.payment_status == Order.PaymentStatus.PAID
+        ):
+            return order.total_ugx
+        return amount_paid
+
+    def get_balance_ugx(self, order):
+        return max(order.total_ugx - self.get_amount_paid_ugx(order), 0)
+
+    def get_receipts(self, order):
+        return CustomerPaymentReceiptSerializer(
+            [
+                payment
+                for payment in order.payments.all()
+                if payment.status == Payment.Status.VERIFIED
+                and hasattr(payment, "receipt")
+            ],
+            many=True,
+        ).data
 
 
 class ReservationReceiptSerializer(serializers.ModelSerializer):
@@ -274,3 +365,60 @@ class ReservationReceiptSerializer(serializers.ModelSerializer):
             "check_in",
             "check_out",
         )
+
+
+class ReservationTrackingSerializer(serializers.ModelSerializer):
+    lodge_name = serializers.CharField(source="lodge.name", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    amount_paid_ugx = serializers.SerializerMethodField()
+    balance_ugx = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
+    receipts = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LodgeReservation
+        fields = (
+            "reference",
+            "guest_name",
+            "status",
+            "status_label",
+            "lodge_name",
+            "check_in",
+            "check_out",
+            "adults",
+            "children",
+            "total_due_ugx",
+            "amount_paid_ugx",
+            "balance_ugx",
+            "payment_status",
+            "receipts",
+        )
+
+    def get_amount_paid_ugx(self, reservation):
+        return _verified_payment_total(reservation)
+
+    def get_balance_ugx(self, reservation):
+        return max(
+            reservation.total_due_ugx - self.get_amount_paid_ugx(reservation),
+            0,
+        )
+
+    def get_payment_status(self, reservation):
+        if reservation.total_due_ugx == 0:
+            return Order.PaymentStatus.UNPAID
+        if self.get_balance_ugx(reservation) == 0:
+            return Order.PaymentStatus.PAID
+        if self.get_amount_paid_ugx(reservation):
+            return Order.PaymentStatus.PARTIAL
+        return Order.PaymentStatus.UNPAID
+
+    def get_receipts(self, reservation):
+        return CustomerPaymentReceiptSerializer(
+            [
+                payment
+                for payment in reservation.payments.all()
+                if payment.status == Payment.Status.VERIFIED
+                and hasattr(payment, "receipt")
+            ],
+            many=True,
+        ).data

@@ -5,13 +5,13 @@
         .cj-logo{color:#008B92;font-size:20px;font-weight:900;text-decoration:none;letter-spacing:-1px;text-transform:uppercase}
         .cj-nav-links,.cj-nav-actions{display:flex;align-items:center;gap:24px}
         .cj-nav-links a,.cj-nav-actions a{color:#222;text-decoration:none;font-weight:700}
-        .cj-my-orders-link{white-space:nowrap}
+        .cj-my-orders-link,.cj-my-reservations-link{white-space:nowrap}
         @media(max-width:620px){
             .cj-nav{height:68px}
             .cj-logo{max-width:180px;font-size:12px;line-height:1.15}
             .cj-nav-links{gap:9px}
-            .cj-nav-links>a:not(.cj-my-orders-link){display:none}
-            .cj-my-orders-link{font-size:11px}
+            .cj-nav-links>a:not(.cj-my-orders-link):not(.cj-my-reservations-link){display:none}
+            .cj-my-orders-link,.cj-my-reservations-link{font-size:11px}
             .cj-nav-actions>a:first-child{display:none}
         }
     </style>
@@ -22,6 +22,7 @@
                 <a href="/menu">Menu</a>
                 <a href="/menu#popular">Popular</a>
                 <a class="cj-my-orders-link" href="/my-orders">My Orders</a>
+                <a class="cj-my-reservations-link" href="/my-reservations">My Reservations</a>
             </div>
         </div>
     </nav>

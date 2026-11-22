@@ -92,11 +92,11 @@ Successful response (`201`) contains the order number, status, server-calculated
 
 The Odoo menu and product pages load categories and available products from this API. Checkout posts orders to Render; the server validates product slugs and calculates prices from its catalog. New orders are stored in Render's database and appear in the GitHub Pages admin portal's Orders view, which refreshes every 30 seconds.
 
-Customers who provide an email receive an order thank-you/receipt and email updates when staff changes the order status or payment status. The operations inbox receives an alert for new orders and those status/payment changes. Online tracking expires two days after the order is placed.
+Customers who provide an email receive an order thank-you email and status updates. The operations inbox receives an alert for new orders and status changes. Order tracking expires two days after placement; verified payment receipts remain available through the customer receipt lookup.
 
 `POST /api/v1/orders/track/` accepts an order number and email and returns the matching order's status and item totals. A non-matching pair returns `404`; an expired lookup returns `410`. The response excludes the guest name, phone, and email. The endpoint is rate-limited to 600 lookups per hour per client.
 
-The standalone Odoo page templates in this repository, including `cottages.html` and `my-orders.html`, must also be copied into and published from the Odoo Website editor; pushing them to GitHub does not update Odoo pages automatically.
+The standalone Odoo page templates in this repository, including `cottages.html`, `header.html`, `my-orders.html`, and `my-reservations.html`, must also be copied into and published from the Odoo Website editor; pushing them to GitHub does not update Odoo pages automatically.
 
 ### Request a lodge reservation
 
@@ -119,19 +119,32 @@ The standalone Odoo page templates in this repository, including `cottages.html`
 
 New requests are `pending`; a `201` response includes a unique reservation reference and booking status. Email is required. The server validates stay dates, lodge capacity and policies, blockouts, and pending/confirmed overlaps. Customers and the operations inbox receive reservation emails when requests are created and when staff changes a reservation status.
 
+The public form does not set reservation prices. Staff enters the total due in the Reservations page before recording payments.
+
 The customer reservation form is hosted by Django at `/reservation/` on the backend domain. The Odoo cottages page's **Book Now** links open that backend page and pass the lodge slug in the `lodge` query parameter. There is no need to create a `/reservation` page in Odoo. After updating `cottages.html`, publish that template in Odoo so its links point to the backend form.
 
 ## Staff portal
 
 `/staff/` is for authenticated staff accounts. It shows recent orders and reservations, supports status changes, and links to catalog management:
 
-- Orders: open order details, confirm, prepare, mark ready/delivered, cancel, or mark payment received. Order statuses can only move forward through the service flow; delivered orders retain the backend `completed` status.
-- Reservations: create manually, search/filter, paginate, edit details, confirm, decline, cancel, complete, or delete inactive records. Day/week/month calendar views show the status of each stay.
+- Orders: open order details, confirm, prepare, mark ready/delivered, cancel, or record a verified full/partial payment using its transaction or counter receipt reference. Order statuses can only move forward through the service flow; delivered orders retain the backend `completed` status.
+- Reservations: create manually, search/filter, paginate, set the total due, edit details, record verified payments, confirm, decline, cancel, complete, or delete inactive records. Day/week/month calendar views show the status of each stay.
+- Payment receipts: search and filter verified payments, view/print or download PDFs, resend customer copies, and review the original transaction reference.
 - Products: create and maintain food/drink items, UGX price, uploaded Cloudinary image, availability, and featured state.
 - Categories: create menu sections and control order/visibility.
 - Lodges: maintain lodge/cottage details, capacity, images, stay length and advance-booking rules, check-in days, and active state. Add and remove unavailable date ranges.
 
-Use Django admin for staff user creation and detailed record management. Payment processing is intentionally not implemented.
+Use Django admin for staff user creation and detailed record management. It is not a payment-verification surface; authenticated staff record received payments in the React portal.
+
+## Payment receipts
+
+The current payment verification source is an authenticated staff member recording a payment received at the resort. Each record requires a unique transaction or counter receipt reference. The API rejects duplicate references (case-insensitively), prevents overpayment, and creates a receipt only for a verified payment. Orders use their server-calculated total; staff enters a reservation's total due. Multiple verified payments create separate receipts with the amount paid, paid-to-date total, and remaining balance.
+
+PDF receipts are A4 documents with the resort logo, business name and public WhatsApp contact, customer and booking details, item or stay details, payment method/reference, status, and a QR verification code. PDF bytes are stored in PostgreSQL and are not exposed through public file URLs. Staff downloads require staff authentication; customer downloads require the matching booking reference and email. Public QR verification returns only the receipt number, verified status, amount, and issue time.
+
+The payment confirmation email includes the PDF attachment through either Resend or SMTP. If delivery fails, the payment and receipt remain saved; staff can retry delivery from Payment Receipts. Customers can retrieve order receipts from My Orders and reservation details/receipts from My Reservations.
+
+The receipt PDFs use the backend-bundled logo in `core/static/core/Kalitusi_Nature_Resort_Sunset_Logo.png` and the public WhatsApp number `+256 772 957 573`; no address or tax identifier is configured. `RECEIPT_VERIFY_BASE_URL` can override the default public verification endpoint.
 
 ## React admin portal
 
@@ -146,11 +159,15 @@ The portal uses these protected endpoints after login:
 - `GET /staff/push/vapid-public-key/` and `POST, DELETE /staff/push/subscriptions/`
 - `GET /staff/dashboard/`
 - `GET /staff/orders/` and `PATCH /staff/orders/<id>/`
+- `POST /staff/payments/`
+- `GET /staff/payment-receipts/`, `GET /staff/payment-receipts/<payment-id>/download/`, and `POST /staff/payment-receipts/<payment-id>/resend/`
 - `GET, POST /staff/products/` and `GET, PATCH /staff/products/<id>/`
 - `GET, POST /staff/categories/` and `GET, PATCH /staff/categories/<id>/`
 - `GET, POST /staff/lodges/` and `GET, PATCH /staff/lodges/<id>/`
 - `GET, POST /staff/reservations/`, `GET, PATCH, DELETE /staff/reservations/<id>/`, and `GET /staff/reservations/calendar/`
 - `GET, POST /staff/lodge-blockouts/` and `GET, PATCH, DELETE /staff/lodge-blockouts/<id>/`
+
+Customer receipt lookups are `POST /orders/receipts/` and `POST /reservations/track/`. Customer PDF downloads use the corresponding `/orders/receipts/download/` and `/reservations/receipts/download/` endpoints; both require a matching booking reference and email in the request body. `GET /receipts/verify/<opaque-token>/` is limited to receipt verification metadata.
 
 Uploaded product images are optimized in the browser and sent to Cloudinary by
 the authenticated backend. PostgreSQL stores the secure delivery URL and asset
@@ -178,9 +195,10 @@ in Resend and configure its HTTPS API:
 settings, never in the repository. If the Resend API is unavailable, records
 are still saved and the backend logs the email delivery failure.
 Order and reservation emails include HTML tables, the resort logo, and product
-or lodge images when available, alongside a plain-text alternative. Customer
-order updates use distinct messages for confirmation, preparation, readiness,
-and completion; payment-only changes get a separate update.
+or lodge images when available, alongside a plain-text alternative. Verified
+payment confirmation emails attach the generated PDF receipt. Customer order
+updates use distinct messages for confirmation, preparation, readiness, and
+completion.
 
 The admin login includes a password-reset flow for active staff accounts. A
 reset link is sent only to the email address saved on the staff account; set

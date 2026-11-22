@@ -394,7 +394,7 @@ class OrderTrack(APIView):
         serializer = OrderTrackingRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order = get_object_or_404(
-            Order.objects.prefetch_related("items"),
+            Order.objects.prefetch_related("items", "payments__receipt"),
             number__iexact=serializer.validated_data["number"].strip(),
             email__iexact=serializer.validated_data["email"],
         )

@@ -41,6 +41,17 @@ from .staff_api_views import (
     StaffPasswordResetConfirm,
     StaffPasswordResetRequest,
 )
+from .payment_api_views import (
+    OrderReceiptDownload,
+    OrderReceiptList,
+    ReceiptVerification,
+    ReservationReceiptDownload,
+    ReservationTrack,
+    StaffPaymentCreate,
+    StaffPaymentReceiptDownload,
+    StaffPaymentReceiptList,
+    StaffPaymentReceiptResend,
+)
 
 urlpatterns = [
     path("auth/token/", StaffLogin.as_view(), name="staff_api_login"),
@@ -109,7 +120,48 @@ urlpatterns = [
     ),
     path("orders/", OrderCreate.as_view(), name="api_orders"),
     path("orders/track/", OrderTrack.as_view(), name="api_order_track"),
+    path("orders/receipts/", OrderReceiptList.as_view(), name="api_order_receipts"),
+    path(
+        "orders/receipts/download/",
+        OrderReceiptDownload.as_view(),
+        name="api_order_receipt_download",
+    ),
     path("reservations/", ReservationCreate.as_view(), name="api_reservations"),
+    path(
+        "reservations/track/",
+        ReservationTrack.as_view(),
+        name="api_reservation_track",
+    ),
+    path(
+        "reservations/receipts/download/",
+        ReservationReceiptDownload.as_view(),
+        name="api_reservation_receipt_download",
+    ),
+    path(
+        "receipts/verify/<str:token>/",
+        ReceiptVerification.as_view(),
+        name="api_receipt_verification",
+    ),
+    path(
+        "staff/payments/",
+        StaffPaymentCreate.as_view(),
+        name="staff_api_payment_create",
+    ),
+    path(
+        "staff/payment-receipts/",
+        StaffPaymentReceiptList.as_view(),
+        name="staff_api_payment_receipts",
+    ),
+    path(
+        "staff/payment-receipts/<int:pk>/download/",
+        StaffPaymentReceiptDownload.as_view(),
+        name="staff_api_payment_receipt_download",
+    ),
+    path(
+        "staff/payment-receipts/<int:pk>/resend/",
+        StaffPaymentReceiptResend.as_view(),
+        name="staff_api_payment_receipt_resend",
+    ),
     path("staff/dashboard/", StaffDashboard.as_view(), name="staff_api_dashboard"),
     path("staff/orders/", StaffOrderList.as_view(), name="staff_api_orders"),
     path(

@@ -1,3 +1,4 @@
+import base64
 import json
 from datetime import date, timedelta
 from io import BytesIO
@@ -24,6 +25,8 @@ from .models import (
     LodgeReservation,
     Order,
     OrderItem,
+    Payment,
+    PaymentReceipt,
     Product,
     StaffProfile,
     StaffPushSubscription,
@@ -34,6 +37,7 @@ from .email_notifications import (
     notify_reservation_status,
     send_staff_password_reset_email,
 )
+from .payment_receipts import create_payment_receipt
 from .push_notifications import notify_new_order
 
 
@@ -369,9 +373,15 @@ class PublicOrderingApiTests(TestCase):
             {"status": Order.Status.ACCEPTED},
             format="json",
         )
-        payment_response = self.client.patch(
-            f"/api/v1/staff/orders/{Order.objects.get(number=order_response.data['number']).id}/",
-            {"payment_status": Order.PaymentStatus.PAID},
+        order = Order.objects.get(number=order_response.data["number"])
+        payment_response = self.client.post(
+            "/api/v1/staff/payments/",
+            {
+                "order_id": order.id,
+                "amount_ugx": order.total_ugx,
+                "method": Payment.Method.CASH,
+                "transaction_reference": "TEST-TRACK-PAYMENT-1",
+            },
             format="json",
         )
         tracking_response = self.client.post(
@@ -381,13 +391,16 @@ class PublicOrderingApiTests(TestCase):
         )
 
         self.assertEqual(status_response.status_code, 200)
-        self.assertEqual(payment_response.status_code, 200)
+        self.assertEqual(payment_response.status_code, 201)
         self.assertEqual(tracking_response.status_code, 200)
         self.assertEqual(tracking_response.data["status"], Order.Status.ACCEPTED)
         self.assertEqual(tracking_response.data["status_label"], "Confirmed")
-        self.assertEqual(tracking_response.data["payment_status"], Order.PaymentStatus.PAID)
+        self.assertEqual(
+            tracking_response.data["payment_status"], Order.PaymentStatus.PAID
+        )
+        self.assertEqual(tracking_response.data["amount_paid_ugx"], order.total_ugx)
 
-    def test_staff_cannot_skip_order_statuses_or_revert_payment(self):
+    def test_staff_cannot_skip_order_statuses_or_change_payment_status_directly(self):
         staff_user = get_user_model().objects.create_user(
             username="restricted-order-staff",
             password="staff-password",
@@ -425,7 +438,7 @@ class PublicOrderingApiTests(TestCase):
 
         self.assertEqual(skip_response.status_code, 400)
         self.assertEqual(paid_response.status_code, 200)
-        self.assertEqual(paid_order_response.status_code, 200)
+        self.assertEqual(paid_order_response.status_code, 400)
         self.assertEqual(revert_response.status_code, 400)
 
         cancelled_order = Order.objects.create(
@@ -736,6 +749,314 @@ class PublicOrderingApiTests(TestCase):
     RESEND_API_KEY="",
     STAFF_NOTIFICATION_EMAIL="admin@example.com",
 )
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    RESEND_API_KEY="",
+    EMAIL_HOST="smtp.test",
+    DEFAULT_FROM_EMAIL="noreply@kalitusi.com",
+)
+class PaymentReceiptApiTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.staff = get_user_model().objects.create_user(
+            username="payment-staff",
+            password="staff-password",
+            email="staff@example.com",
+            is_staff=True,
+        )
+        self.token = Token.objects.create(user=self.staff)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token.key}")
+        self.category = Category.objects.create(name="Receipt test category")
+        self.product = Product.objects.create(
+            name="Receipt test item",
+            category=self.category,
+            price_ugx=10000,
+        )
+        self.order = Order.objects.create(
+            guest_name="Receipt Guest",
+            phone="+256700000001",
+            email="receipt.guest@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 7",
+            total_ugx=20000,
+        )
+        OrderItem.objects.create(
+            order=self.order,
+            product=self.product,
+            product_name=self.product.name,
+            unit_price_ugx=10000,
+            quantity=2,
+            line_total_ugx=20000,
+        )
+        self.reservation = LodgeReservation.objects.create(
+            lodge=Lodge.objects.create(name="Receipt Cottage", capacity=4),
+            guest_name="Stay Guest",
+            email="stay.guest@example.com",
+            phone="+256700000002",
+            check_in=date.today() + timedelta(days=30),
+            check_out=date.today() + timedelta(days=32),
+            adults=2,
+            children=1,
+        )
+
+    def _record_payment(self, **overrides):
+        data = {
+            "order_id": self.order.id,
+            "amount_ugx": 5000,
+            "method": Payment.Method.CASH,
+            "transaction_reference": "POS-RECEIPT-1",
+        }
+        data.update(overrides)
+        for field in ("order_id", "reservation_id"):
+            if data.get(field) is None:
+                data.pop(field, None)
+        return self.client.post("/api/v1/staff/payments/", data, format="json")
+
+    def test_partial_and_final_verified_payments_create_separate_pdf_receipts(self):
+        partial = self._record_payment()
+        self.assertEqual(partial.status_code, 201)
+        self.assertTrue(partial.data["email_sent"])
+        self.assertEqual(partial.data["balance_ugx"], 15000)
+        self.assertEqual(partial.data["payment_status"], Order.PaymentStatus.PARTIAL)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, Order.PaymentStatus.PARTIAL)
+
+        receipt = PaymentReceipt.objects.get(number=partial.data["receipt_number"])
+        self.assertTrue(bytes(receipt.pdf_data).startswith(b"%PDF"))
+        self.assertEqual(receipt.total_due_ugx, 20000)
+        self.assertEqual(receipt.paid_to_date_ugx, 5000)
+        self.assertEqual(receipt.balance_ugx, 15000)
+        attachment = mail.outbox[0].attachments[0]
+        self.assertEqual(attachment[0], f"{receipt.number}.pdf")
+        self.assertEqual(attachment[2], "application/pdf")
+        self.assertTrue(attachment[1].startswith(b"%PDF"))
+
+        final = self._record_payment(
+            amount_ugx=15000,
+            transaction_reference="POS-RECEIPT-2",
+        )
+        self.assertEqual(final.status_code, 201)
+        self.assertEqual(final.data["balance_ugx"], 0)
+        self.assertEqual(final.data["payment_status"], Order.PaymentStatus.PAID)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
+        self.assertEqual(PaymentReceipt.objects.filter(payment__order=self.order).count(), 2)
+
+    def test_duplicate_transaction_reference_is_rejected_without_second_receipt(self):
+        first = self._record_payment()
+        duplicate = self._record_payment(
+            order_id=None,
+            reservation_id=self.reservation.id,
+        )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertIn("transaction_reference", duplicate.data)
+        self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(PaymentReceipt.objects.count(), 1)
+
+    def test_overpayment_and_unpriced_reservation_cannot_create_receipts(self):
+        order_overpayment = self._record_payment(amount_ugx=20001)
+        reservation_without_total = self._record_payment(
+            order_id=None,
+            reservation_id=self.reservation.id,
+        )
+
+        self.assertEqual(order_overpayment.status_code, 400)
+        self.assertEqual(reservation_without_total.status_code, 400)
+        self.assertEqual(Payment.objects.count(), 0)
+        self.assertEqual(PaymentReceipt.objects.count(), 0)
+
+    def test_staff_payment_submission_cannot_claim_an_unverified_state(self):
+        response = self._record_payment(status="pending")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("status", response.data)
+        self.assertEqual(Payment.objects.count(), 0)
+        self.assertEqual(PaymentReceipt.objects.count(), 0)
+
+    def test_reservation_total_partial_payment_and_customer_lookup(self):
+        response = self.client.patch(
+            f"/api/v1/staff/reservations/{self.reservation.id}/",
+            {"total_due_ugx": 600000},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        payment = self._record_payment(
+            order_id=None,
+            reservation_id=self.reservation.id,
+            amount_ugx=250000,
+            method=Payment.Method.MOBILE_MONEY,
+            transaction_reference="MM-RESERVATION-1",
+        )
+        self.assertEqual(payment.status_code, 201)
+        self.assertEqual(payment.data["balance_ugx"], 350000)
+
+        tracking = self.client.post(
+            "/api/v1/reservations/track/",
+            {
+                "reference": self.reservation.reference,
+                "email": self.reservation.email,
+            },
+            format="json",
+        )
+        self.assertEqual(tracking.status_code, 200)
+        self.assertEqual(tracking.data["total_due_ugx"], 600000)
+        self.assertEqual(tracking.data["amount_paid_ugx"], 250000)
+        self.assertEqual(tracking.data["balance_ugx"], 350000)
+        self.assertEqual(len(tracking.data["receipts"]), 1)
+        self.assertEqual(tracking.data["receipts"][0]["receipt_number"], payment.data["receipt_number"])
+
+        denied = self.client.post(
+            "/api/v1/reservations/track/",
+            {
+                "reference": self.reservation.reference,
+                "email": "wrong@example.com",
+            },
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 404)
+
+    def test_receipt_download_requires_matching_booking_and_email(self):
+        payment = self._record_payment()
+        receipt_number = payment.data["receipt_number"]
+        Order.objects.filter(pk=self.order.pk).update(
+            created_at=timezone.now() - timedelta(days=3)
+        )
+        lookup = self.client.post(
+            "/api/v1/orders/receipts/",
+            {"number": self.order.number, "email": self.order.email},
+            format="json",
+        )
+        self.assertEqual(lookup.status_code, 200)
+        self.assertEqual(len(lookup.data["receipts"]), 1)
+        self.assertNotIn("transaction_reference", lookup.data["receipts"][0])
+
+        denied = self.client.post(
+            "/api/v1/orders/receipts/download/",
+            {
+                "number": self.order.number,
+                "email": "wrong@example.com",
+                "receipt_number": receipt_number,
+            },
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 404)
+
+        downloaded = self.client.post(
+            "/api/v1/orders/receipts/download/",
+            {
+                "number": self.order.number,
+                "email": self.order.email,
+                "receipt_number": receipt_number,
+            },
+            format="json",
+        )
+        self.assertEqual(downloaded.status_code, 200)
+        self.assertEqual(downloaded["Content-Type"], "application/pdf")
+        self.assertTrue(downloaded.content.startswith(b"%PDF"))
+        self.assertIn("private, no-store", downloaded["Cache-Control"])
+
+    def test_public_verification_response_does_not_expose_customer_or_transaction_data(self):
+        with patch(
+            "core.payment_receipts.secrets.token_urlsafe",
+            return_value="receipt-verification-test-token",
+        ):
+            payment = self._record_payment()
+
+        response = self.client.get(
+            "/api/v1/receipts/verify/receipt-verification-test-token/"
+        )
+
+        self.assertEqual(payment.status_code, 201)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["receipt_number"], payment.data["receipt_number"])
+        self.assertEqual(response.data["status"], "verified")
+        self.assertNotIn("customer_name", response.data)
+        self.assertNotIn("email", response.data)
+        self.assertNotIn("transaction_reference", response.data)
+
+    def test_unverified_payment_cannot_generate_a_receipt(self):
+        payment = Payment.objects.create(
+            order=self.order,
+            amount_ugx=1000,
+            method=Payment.Method.CASH,
+            transaction_reference="UNVERIFIED-1",
+            status="pending",
+        )
+        with self.assertRaises(ValueError):
+            create_payment_receipt(payment)
+        self.assertFalse(PaymentReceipt.objects.filter(payment=payment).exists())
+
+    def test_receipt_email_can_be_resent_and_is_attached(self):
+        payment = self._record_payment()
+        mail.outbox.clear()
+
+        response = self.client.post(
+            f"/api/v1/staff/payment-receipts/{payment.data['id']}/resend/",
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.order.email])
+        self.assertEqual(mail.outbox[0].attachments[0][2], "application/pdf")
+
+    @override_settings(RESEND_API_KEY="re_test_key")
+    def test_resend_api_receipt_attachment_is_base64_encoded(self):
+        response_context = MagicMock()
+        response_context.status = 200
+        urlopen_context = MagicMock()
+        urlopen_context.__enter__.return_value = response_context
+
+        with patch(
+            "core.email_notifications.urlopen",
+            return_value=urlopen_context,
+        ) as resend_request:
+            response = self._record_payment()
+
+        payload = json.loads(resend_request.call_args.args[0].data.decode("utf-8"))
+        attachment = payload["attachments"][0]
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["email_sent"])
+        self.assertEqual(attachment["filename"], f"{response.data['receipt_number']}.pdf")
+        self.assertEqual(attachment["content_type"], "application/pdf")
+        self.assertTrue(
+            base64.b64decode(attachment["content"]).startswith(b"%PDF")
+        )
+
+    def test_receipt_search_and_payment_status_filter(self):
+        partial = self._record_payment()
+        self._record_payment(
+            amount_ugx=15000,
+            transaction_reference="POS-RECEIPT-2",
+        )
+
+        partial_list = self.client.get(
+            "/api/v1/staff/payment-receipts/",
+            {"status": "partial", "q": partial.data["receipt_number"]},
+        )
+        paid_list = self.client.get(
+            "/api/v1/staff/payment-receipts/",
+            {"status": "paid"},
+        )
+
+        self.assertEqual(partial_list.status_code, 200)
+        self.assertEqual(partial_list.data["count"], 1)
+        self.assertEqual(partial_list.data["results"][0]["receipt_number"], partial.data["receipt_number"])
+        self.assertEqual(paid_list.status_code, 200)
+        self.assertEqual(paid_list.data["count"], 1)
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    RESEND_API_KEY="",
+    EMAIL_HOST="smtp.test",
+    DEFAULT_FROM_EMAIL="notifications@kalitusi.com",
+    STAFF_NOTIFICATION_EMAIL="admin@example.com",
+)
 class TransactionalEmailAndPasswordResetTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -798,13 +1119,14 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
         self.assertIn("New order", mail.outbox[1].subject)
 
-    def test_order_status_and_payment_changes_email_customer_and_staff(self):
+    def test_order_status_email_and_verified_payment_receipt_email(self):
         order = Order.objects.create(
             guest_name="Order Guest",
             phone="+256700000000",
             email="guest@example.com",
             order_type=Order.OrderType.DINE_IN,
             location="Table 2",
+            total_ugx=12000,
         )
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Token {self.staff_token.key}"
@@ -812,21 +1134,34 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.patch(
                 f"/api/v1/staff/orders/{order.pk}/",
-                {
-                    "status": Order.Status.ACCEPTED,
-                    "payment_status": Order.PaymentStatus.PAID,
-                },
+                {"status": Order.Status.ACCEPTED},
                 format="json",
             )
+        payment_response = self.client.post(
+            "/api/v1/staff/payments/",
+            {
+                "order_id": order.id,
+                "amount_ugx": order.total_ugx,
+                "method": Payment.Method.CASH,
+                "transaction_reference": "POS-EMAIL-RECEIPT-1",
+            },
+            format="json",
+        )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(payment_response.status_code, 201)
+        self.assertTrue(payment_response.data["email_sent"])
+        self.assertEqual(len(mail.outbox), 3)
         self.assertEqual(mail.outbox[0].to, ["guest@example.com"])
         self.assertIn("Your Order Has Been Confirmed!", mail.outbox[0].body)
         self.assertIn("begin preparing it shortly", mail.outbox[0].body)
         self.assertIn("What's Next?", mail.outbox[0].body)
         self.assertIn("Confirmed", mail.outbox[0].body)
-        self.assertIn("Paid", mail.outbox[0].body)
+        self.assertEqual(mail.outbox[2].to, ["guest@example.com"])
+        self.assertIn(payment_response.data["receipt_number"], mail.outbox[2].body)
+        self.assertEqual(mail.outbox[2].attachments[0][0], f"{payment_response.data['receipt_number']}.pdf")
+        self.assertEqual(mail.outbox[2].attachments[0][2], "application/pdf")
+        self.assertTrue(mail.outbox[2].attachments[0][1].startswith(b"%PDF"))
         self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
 
     def test_order_status_transitions_have_distinct_customer_messages(self):

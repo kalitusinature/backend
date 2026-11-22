@@ -51,6 +51,8 @@ services:
         sync: false
       - key: RESERVATION_NOTIFICATION_EMAIL
         sync: false
+      - key: RECEIPT_VERIFY_BASE_URL
+        value: https://api.kalitusi.com/api/v1/receipts/verify
       - key: ADMIN_PORTAL_URL
         value: https://admin.kalitusi.com
       - key: VAPID_PUBLIC_KEY

@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.db.models import Sum
 from rest_framework import serializers
 
 from .models import (
@@ -18,6 +19,7 @@ from .models import (
     LodgeReservation,
     Order,
     OrderItem,
+    Payment,
     Product,
 )
 from .reservation_rules import ACTIVE_RESERVATION_STATUSES, validate_lodge_stay
@@ -26,6 +28,22 @@ MAX_IMAGE_BYTES = 1_572_864
 IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+def _verified_payment_total(target) -> int:
+    prefetched = getattr(target, "_prefetched_objects_cache", {})
+    if "payments" in prefetched:
+        return sum(
+            payment.amount_ugx
+            for payment in prefetched["payments"]
+            if payment.status == Payment.Status.VERIFIED
+        )
+    return (
+        target.payments.filter(status=Payment.Status.VERIFIED).aggregate(
+            total=Sum("amount_ugx")
+        )["total"]
+        or 0
+    )
 
 
 def _new_image_public_id(resource: str) -> str:
@@ -533,6 +551,8 @@ class StaffOrderItemSerializer(serializers.ModelSerializer):
 
 class StaffOrderSerializer(serializers.ModelSerializer):
     items = StaffOrderItemSerializer(many=True, read_only=True)
+    amount_paid_ugx = serializers.SerializerMethodField()
+    balance_ugx = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -547,12 +567,26 @@ class StaffOrderSerializer(serializers.ModelSerializer):
             "email",
             "payment_method",
             "payment_status",
+            "amount_paid_ugx",
+            "balance_ugx",
             "note",
             "cancellation_reason",
             "total_ugx",
             "created_at",
             "items",
         )
+
+    def get_amount_paid_ugx(self, order):
+        amount_paid = _verified_payment_total(order)
+        if (
+            amount_paid == 0
+            and order.payment_status == Order.PaymentStatus.PAID
+        ):
+            return order.total_ugx
+        return amount_paid
+
+    def get_balance_ugx(self, order):
+        return max(order.total_ugx - self.get_amount_paid_ugx(order), 0)
 
 
 class StaffOrderUpdateSerializer(serializers.ModelSerializer):
@@ -562,12 +596,20 @@ class StaffOrderUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ("status", "payment_status", "cancellation_reason")
+        fields = ("status", "cancellation_reason")
 
     def validate(self, attrs):
         order = self.instance
         if order is None:
             return attrs
+        if "payment_status" in self.initial_data:
+            raise serializers.ValidationError(
+                {
+                    "payment_status": (
+                        "Record a verified payment through the payment receipts API."
+                    )
+                }
+            )
 
         status_value = attrs.get("status", order.status)
         if (
@@ -597,27 +639,14 @@ class StaffOrderUpdateSerializer(serializers.ModelSerializer):
                 {"status": "This order cannot move to the requested status."}
             )
 
-        payment_status = attrs.get("payment_status", order.payment_status)
-        if (
-            status_value == Order.Status.CANCELLED
-            and payment_status == Order.PaymentStatus.PAID
-            and order.payment_status != Order.PaymentStatus.PAID
-        ):
-            raise serializers.ValidationError(
-                {"payment_status": "A cancelled order cannot be marked paid."}
-            )
-        if (
-            order.payment_status == Order.PaymentStatus.PAID
-            and payment_status != Order.PaymentStatus.PAID
-        ):
-            raise serializers.ValidationError(
-                {"payment_status": "A paid order cannot be marked unpaid."}
-            )
         return attrs
 
 
 class StaffReservationSerializer(serializers.ModelSerializer):
     lodge_name = serializers.CharField(source="lodge.name", read_only=True)
+    amount_paid_ugx = serializers.SerializerMethodField()
+    balance_ugx = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
 
     class Meta:
         model = LodgeReservation
@@ -634,6 +663,10 @@ class StaffReservationSerializer(serializers.ModelSerializer):
             "check_out",
             "adults",
             "children",
+            "total_due_ugx",
+            "amount_paid_ugx",
+            "balance_ugx",
+            "payment_status",
             "note",
             "cancellation_reason",
             "occasion",
@@ -642,6 +675,24 @@ class StaffReservationSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+    def get_amount_paid_ugx(self, reservation):
+        return _verified_payment_total(reservation)
+
+    def get_balance_ugx(self, reservation):
+        return max(
+            reservation.total_due_ugx - self.get_amount_paid_ugx(reservation),
+            0,
+        )
+
+    def get_payment_status(self, reservation):
+        if reservation.total_due_ugx == 0:
+            return Order.PaymentStatus.UNPAID
+        if self.get_balance_ugx(reservation) == 0:
+            return Order.PaymentStatus.PAID
+        if self.get_amount_paid_ugx(reservation):
+            return Order.PaymentStatus.PARTIAL
+        return Order.PaymentStatus.UNPAID
 
 
 class StaffReservationCreateSerializer(serializers.ModelSerializer):
@@ -665,6 +716,7 @@ class StaffReservationCreateSerializer(serializers.ModelSerializer):
             "check_out",
             "adults",
             "children",
+            "total_due_ugx",
             "note",
             "occasion",
             "source",
@@ -681,6 +733,7 @@ class StaffReservationCreateSerializer(serializers.ModelSerializer):
             "occasion": {"required": False},
             "source": {"required": False, "default": LodgeReservation.Source.STAFF},
             "status": {"required": False, "default": LodgeReservation.Status.PENDING},
+            "total_due_ugx": {"required": False, "default": 0},
         }
 
     def validate(self, attrs):
@@ -725,6 +778,7 @@ class StaffReservationUpdateSerializer(serializers.ModelSerializer):
             "check_out",
             "adults",
             "children",
+            "total_due_ugx",
             "note",
             "cancellation_reason",
             "occasion",
@@ -768,6 +822,16 @@ class StaffReservationUpdateSerializer(serializers.ModelSerializer):
         check_out = attrs.get("check_out", reservation.check_out)
         adults = attrs.get("adults", reservation.adults)
         children = attrs.get("children", reservation.children)
+        total_due = attrs.get("total_due_ugx", reservation.total_due_ugx)
+        paid = _verified_payment_total(reservation)
+        if total_due < paid:
+            raise serializers.ValidationError(
+                {
+                    "total_due_ugx": (
+                        "The reservation total cannot be less than payments already received."
+                    )
+                }
+            )
 
         validate_lodge_stay(
             lodge=lodge,
@@ -779,6 +843,86 @@ class StaffReservationUpdateSerializer(serializers.ModelSerializer):
             exclude_reservation_id=reservation.pk,
         )
         return attrs
+
+
+class StaffPaymentCreateSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField(min_value=1, required=False)
+    reservation_id = serializers.IntegerField(min_value=1, required=False)
+    amount_ugx = serializers.IntegerField(min_value=1)
+    method = serializers.ChoiceField(choices=Payment.Method.choices)
+    transaction_reference = serializers.CharField(
+        max_length=120, allow_blank=False, trim_whitespace=True
+    )
+
+    def validate(self, attrs):
+        if "status" in self.initial_data:
+            raise serializers.ValidationError(
+                {"status": "Payment verification is recorded by authenticated staff."}
+            )
+        if bool(attrs.get("order_id")) == bool(attrs.get("reservation_id")):
+            raise serializers.ValidationError(
+                "Provide exactly one order_id or reservation_id."
+            )
+        attrs["transaction_reference"] = attrs["transaction_reference"].strip()
+        return attrs
+
+
+class StaffPaymentReceiptSerializer(serializers.ModelSerializer):
+    receipt_number = serializers.CharField(source="receipt.number", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    order_number = serializers.SerializerMethodField()
+    reservation_reference = serializers.SerializerMethodField()
+    method_label = serializers.CharField(source="get_method_display", read_only=True)
+    total_due_ugx = serializers.IntegerField(
+        source="receipt.total_due_ugx", read_only=True
+    )
+    paid_to_date_ugx = serializers.IntegerField(
+        source="receipt.paid_to_date_ugx", read_only=True
+    )
+    balance_ugx = serializers.IntegerField(
+        source="receipt.balance_ugx", read_only=True
+    )
+    payment_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Payment
+        fields = (
+            "id",
+            "receipt_number",
+            "customer_name",
+            "customer_email",
+            "order_number",
+            "reservation_reference",
+            "method",
+            "method_label",
+            "transaction_reference",
+            "amount_ugx",
+            "total_due_ugx",
+            "paid_to_date_ugx",
+            "balance_ugx",
+            "payment_status",
+            "verified_at",
+        )
+
+    def get_customer_name(self, payment):
+        return (payment.order or payment.reservation).guest_name
+
+    def get_customer_email(self, payment):
+        return (payment.order or payment.reservation).email
+
+    def get_order_number(self, payment):
+        return payment.order.number if payment.order_id else None
+
+    def get_reservation_reference(self, payment):
+        return payment.reservation.reference if payment.reservation_id else None
+
+    def get_payment_status(self, payment):
+        return (
+            Order.PaymentStatus.PAID
+            if payment.receipt.balance_ugx == 0
+            else Order.PaymentStatus.PARTIAL
+        )
 
 
 PUSH_ENDPOINT_SUFFIXES = (

@@ -3,6 +3,7 @@ import uuid
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils.text import slugify
 
 
@@ -183,7 +184,8 @@ class Order(models.Model):
 
     class PaymentStatus(models.TextChoices):
         UNPAID = "unpaid", "Unpaid"
-        PAID = "paid", "Paid at resort"
+        PARTIAL = "partial", "Partially paid"
+        PAID = "paid", "Paid in full"
 
     number = models.CharField(max_length=20, unique=True, editable=False)
     status = models.CharField(
@@ -270,6 +272,7 @@ class LodgeReservation(models.Model):
     children = models.PositiveSmallIntegerField(
         default=0, validators=[MinValueValidator(0), MaxValueValidator(50)]
     )
+    total_due_ugx = models.PositiveIntegerField(default=0)
     note = models.TextField(blank=True)
     cancellation_reason = models.TextField(blank=True)
     occasion = models.CharField(max_length=100, blank=True)
@@ -289,6 +292,89 @@ class LodgeReservation(models.Model):
 
     def __str__(self):
         return f"{self.reference} — {self.guest_name}"
+
+
+class Payment(models.Model):
+    class Method(models.TextChoices):
+        CASH = "cash", "Cash"
+        CARD_AT_COUNTER = "card_at_counter", "Card at counter"
+        MOBILE_MONEY = "mobile_money", "Mobile money"
+        BANK_TRANSFER = "bank_transfer", "Bank transfer"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        VERIFIED = "verified", "Verified"
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.PROTECT,
+        related_name="payments",
+        null=True,
+        blank=True,
+    )
+    reservation = models.ForeignKey(
+        LodgeReservation,
+        on_delete=models.PROTECT,
+        related_name="payments",
+        null=True,
+        blank=True,
+    )
+    amount_ugx = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    method = models.CharField(max_length=24, choices=Method.choices)
+    transaction_reference = models.CharField(max_length=120)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.VERIFIED
+    )
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="verified_payments",
+        null=True,
+        blank=True,
+    )
+    verified_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-verified_at", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(order__isnull=False, reservation__isnull=True)
+                    | models.Q(order__isnull=True, reservation__isnull=False)
+                ),
+                name="payment_has_exactly_one_target",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(amount_ugx__gt=0),
+                name="payment_amount_must_be_positive",
+            ),
+            models.UniqueConstraint(
+                Lower("transaction_reference"),
+                name="unique_payment_transaction_reference_ci",
+            ),
+        ]
+
+    def __str__(self):
+        return self.transaction_reference
+
+
+class PaymentReceipt(models.Model):
+    payment = models.OneToOneField(
+        Payment, on_delete=models.PROTECT, related_name="receipt"
+    )
+    number = models.CharField(max_length=32, unique=True)
+    verification_token_digest = models.CharField(max_length=64, unique=True)
+    total_due_ugx = models.PositiveIntegerField()
+    paid_to_date_ugx = models.PositiveIntegerField()
+    balance_ugx = models.PositiveIntegerField()
+    pdf_data = models.BinaryField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.number
 
 
 class StaffProfile(models.Model):

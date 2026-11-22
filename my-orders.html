@@ -34,6 +34,13 @@
                 .cj-order-item strong{color:#34483c;white-space:nowrap}
                 .cj-order-total{display:flex;justify-content:space-between;gap:16px;margin-top:16px;color:#34483c;font-size:17px;font-weight:800}
                 .cj-order-update-note{margin:18px 0 0;color:#6f7a74;font-size:12px;line-height:1.5}
+                .cj-order-receipts{margin-top:24px;padding-top:18px;border-top:1px solid #edf1ee}
+                .cj-order-receipts h3{margin:0 0 10px;color:#41534a;font-size:15px}
+                .cj-order-receipt{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #eff2f0;color:#5e6d65;font-size:12px}
+                .cj-order-receipt strong{display:block;color:#34483c}
+                .cj-order-receipt small{display:block;margin-top:4px;color:#89968f}
+                .cj-order-receipt button{min-height:36px;padding:0 12px;border:0;border-radius:6px;color:#fff;background:#008B92;font-size:12px;font-weight:800;cursor:pointer}
+                .cj-order-receipt button:disabled{opacity:.6;cursor:wait}
                 @media(max-width:680px){
                     .cj-orders-container{width:calc(100% - 24px);margin:28px auto 56px}
                     .cj-orders-heading h1{font-size:32px}
@@ -41,7 +48,7 @@
                     .cj-orders-submit{width:100%}
                     .cj-order-meta{grid-template-columns:1fr 1fr}
                 }
-                @media(max-width:420px){.cj-order-heading{align-items:flex-start;flex-direction:column}.cj-order-meta{grid-template-columns:1fr}}
+                @media(max-width:420px){.cj-order-heading{align-items:flex-start;flex-direction:column}.cj-order-meta{grid-template-columns:1fr}.cj-order-receipt{align-items:flex-start;flex-direction:column}}
             </style>
             <main class="cj-orders-page">
                 <t t-call="website.cj_header"/>
@@ -101,6 +108,96 @@
                         return 'UGX '+Number(amount).toLocaleString('en-UG');
                     }
 
+                    function downloadReceipt(receipt,number,email,button){
+                        button.disabled=true;
+                        button.textContent='Preparing PDF…';
+                        fetch(apiBase+'/orders/receipts/download/',{
+                            method:'POST',
+                            headers:{Accept:'application/pdf','Content-Type':'application/json'},
+                            body:JSON.stringify({number:number,email:email,receipt_number:receipt.receipt_number})
+                        }).then(function(response){
+                            if(!response.ok){
+                                return response.text().then(function(text){
+                                    var data=null;
+                                    try{data=text?JSON.parse(text):null;}catch(parseError){}
+                                    throw new Error(data&&typeof data.detail==='string'?data.detail:'Could not download the receipt (HTTP '+response.status+').');
+                                });
+                            }
+                            return response.blob();
+                        }).then(function(file){
+                            var url=URL.createObjectURL(file);
+                            var link=document.createElement('a');
+                            link.href=url;
+                            link.download=receipt.receipt_number+'.pdf';
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            window.setTimeout(function(){URL.revokeObjectURL(url);},60000);
+                            showNotice('Receipt '+receipt.receipt_number+' downloaded.',false);
+                        }).catch(function(error){
+                            showNotice(error instanceof TypeError?'Could not connect to the receipt service. Check your connection and try again.':error.message,true);
+                        }).finally(function(){
+                            button.disabled=false;
+                            button.textContent='Download PDF';
+                        });
+                    }
+
+                    function appendReceiptList(container,receipts,number,email){
+                        if(!Array.isArray(receipts)||!receipts.length)return;
+                        var section=document.createElement('section');
+                        var title=document.createElement('h3');
+                        section.className='cj-order-receipts';
+                        title.textContent='Payment Receipts';
+                        section.appendChild(title);
+                        receipts.forEach(function(receipt){
+                            var row=document.createElement('div');
+                            var details=document.createElement('div');
+                            var receiptNumber=document.createElement('strong');
+                            var paymentDetails=document.createElement('small');
+                            var button=document.createElement('button');
+                            row.className='cj-order-receipt';
+                            receiptNumber.textContent=receipt.receipt_number;
+                            paymentDetails.textContent=formatAmount(receipt.amount_ugx)+' · '+new Date(receipt.verified_at).toLocaleString();
+                            button.type='button';
+                            button.textContent='Download PDF';
+                            button.addEventListener('click',function(){
+                                downloadReceipt(receipt,number,email,button);
+                            });
+                            details.appendChild(receiptNumber);
+                            details.appendChild(paymentDetails);
+                            row.appendChild(details);
+                            row.appendChild(button);
+                            section.appendChild(row);
+                        });
+                        container.appendChild(section);
+                    }
+
+                    function lookupReceipts(number,email,currentRequest){
+                        fetch(apiBase+'/orders/receipts/',{
+                            method:'POST',
+                            headers:{Accept:'application/json','Content-Type':'application/json'},
+                            body:JSON.stringify({number:number,email:email})
+                        }).then(function(response){
+                            return response.text().then(function(text){
+                                var data=null;
+                                try{data=text?JSON.parse(text):null;}catch(parseError){}
+                                if(!response.ok){
+                                    if(response.status===429)throw new Error('Too many receipt lookup attempts. Please wait before trying again.');
+                                    throw new Error('No matching order receipts were found. Check the order number and email address.');
+                                }
+                                if(!data||!Array.isArray(data.receipts))throw new Error('The receipt service returned an invalid response.');
+                                return data;
+                            });
+                        }).then(function(data){
+                            if(currentRequest!==requestNumber)return;
+                            result.replaceChildren();
+                            appendReceiptList(result,data.receipts,number,email);
+                            showNotice(data.receipts.length?'Order tracking has expired, but these payment receipts remain available.':'Order tracking has expired and no payment receipts are available.',false);
+                        }).catch(function(error){
+                            if(currentRequest===requestNumber)showNotice(error instanceof TypeError?'Could not connect to the receipt service. Check your connection and try again.':error.message,true);
+                        });
+                    }
+
                     function renderOrder(order){
                         result.replaceChildren();
                         var heading=document.createElement('div');
@@ -123,6 +220,8 @@
                         meta.className='cj-order-meta';
                         addMeta(meta,'Order status',order.status_label);
                         addMeta(meta,'Payment',order.payment_status_label);
+                        addMeta(meta,'Paid to date',formatAmount(order.amount_paid_ugx));
+                        addMeta(meta,'Balance',formatAmount(order.balance_ugx));
                         addMeta(meta,'Service location',order.location);
                         addMeta(meta,'Order type',order.order_type==='dine_in'?'Dine-in':'Lodge / cottage');
                         addMeta(meta,'Payment method',order.payment_method==='cash'?'Cash at resort':'Card at counter');
@@ -160,6 +259,7 @@
                         updateNote.className='cj-order-update-note';
                         updateNote.textContent='Order updates appear here automatically. Keep this page open to see status or payment changes.';
                         result.appendChild(updateNote);
+                        appendReceiptList(result,order.receipts,order.number,latestEmail);
                     }
 
                     function lookup(isPolling){
@@ -228,6 +328,8 @@
                                     latestNumber='';
                                     latestEmail='';
                                     result.replaceChildren();
+                                    lookupReceipts(number,email,currentRequest);
+                                    return;
                                 }
                                 showNotice(error instanceof TypeError?'Could not connect to the resort order service. Check your connection and try again.':error.message,true);
                             }

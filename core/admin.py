@@ -1,6 +1,16 @@
 from django.contrib import admin
 
-from .models import Category, Lodge, LodgeImage, LodgeReservation, Order, OrderItem, Product
+from .models import (
+    Category,
+    Lodge,
+    LodgeImage,
+    LodgeReservation,
+    Order,
+    OrderItem,
+    Payment,
+    PaymentReceipt,
+    Product,
+)
 
 
 @admin.register(Category)
@@ -73,7 +83,13 @@ class OrderAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "order_type", "payment_method", "payment_status")
     search_fields = ("number", "guest_name", "phone", "location")
-    readonly_fields = ("number", "total_ugx", "created_at", "updated_at")
+    readonly_fields = (
+        "number",
+        "total_ugx",
+        "payment_status",
+        "created_at",
+        "updated_at",
+    )
     inlines = (OrderItemInline,)
     date_hierarchy = "created_at"
 
@@ -89,9 +105,59 @@ class LodgeReservationAdmin(admin.ModelAdmin):
         "adults",
         "children",
         "status",
+        "total_due_ugx",
         "created_at",
     )
     list_filter = ("status", "lodge", "check_in")
     search_fields = ("reference", "guest_name", "phone", "email", "lodge__name")
-    readonly_fields = ("reference", "created_at")
+    readonly_fields = ("reference", "total_due_ugx", "created_at")
     date_hierarchy = "check_in"
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "transaction_reference",
+        "order",
+        "reservation",
+        "amount_ugx",
+        "method",
+        "verified_at",
+    )
+    list_filter = ("method", "status", "verified_at")
+    search_fields = (
+        "transaction_reference",
+        "order__number",
+        "reservation__reference",
+    )
+    readonly_fields = tuple(field.name for field in Payment._meta.fields)
+    date_hierarchy = "verified_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PaymentReceipt)
+class PaymentReceiptAdmin(admin.ModelAdmin):
+    list_display = ("number", "payment", "created_at")
+    search_fields = ("number", "payment__transaction_reference")
+    readonly_fields = (
+        "payment",
+        "number",
+        "verification_token_digest",
+        "total_due_ugx",
+        "paid_to_date_ugx",
+        "balance_ugx",
+        "created_at",
+    )
+    exclude = ("pdf_data",)
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
