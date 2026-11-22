@@ -713,17 +713,63 @@ def send_staff_password_reset_email(user) -> None:
     token = default_token_generator.make_token(user)
     query = urlencode({"reset": "1", "uid": uid, "token": token})
     reset_url = f"{settings.ADMIN_PORTAL_URL}/?{query}"
+    closing_text = (
+        "Best regards,\n\n"
+        "Kalitusi Nature Resort\n"
+        "Experience Nature. Experience Kalitusi."
+    )
+    closing_html = (
+        '<tr><td style="padding-top:24px;color:#64736c;'
+        'font-size:13px;line-height:1.7;">'
+        "Best regards,<br><br><strong>Kalitusi Nature Resort</strong><br>"
+        "<em>Experience Nature. Experience Kalitusi.</em>"
+        "</td></tr>"
+    )
     _send_email(
-        "Reset your Kalitusi admin password",
+        "Reset Your Password",
         (
+            "Reset Your Password\n\n"
             f"Hello {user.get_username()},\n\n"
-            "A password reset was requested for your Kalitusi staff account. "
-            "Use the link below to choose a new password:\n\n"
+            "We received a request to reset the password for your Kalitusi "
+            "staff account.\n\n"
+            "To create a new password, click the link below:\n\n"
+            "Reset My Password:\n"
             f"{reset_url}\n\n"
-            "If you did not request this, you can ignore this email."
+            "If you did not request a password reset, you can safely ignore "
+            "this email. Your account password will remain unchanged.\n\n"
+            "For security reasons, please do not share this password reset "
+            "link with anyone.\n\n"
+            "If you need assistance, please contact the Kalitusi "
+            "administration team.\n\n"
+            f"{closing_text}"
         ),
         [user.email],
         f"password reset for staff account {user.pk}",
+        html_message=_email_layout(
+            "Reset Your Password",
+            f"Hello {user.get_username()},",
+            (
+                '<p style="line-height:1.6;">We received a request to reset '
+                "the password for your <strong>Kalitusi staff account</strong>."
+                "</p>"
+                '<p style="line-height:1.6;">To create a new password, click '
+                "the button below:</p>"
+                '<p style="margin:24px 0;text-align:center;">'
+                f'<a href="{escape(reset_url, quote=True)}" '
+                'style="display:inline-block;padding:13px 22px;'
+                'background:#234b3b;color:#ffffff;text-decoration:none;'
+                'border-radius:8px;font-weight:bold;">'
+                "Reset My Password</a></p>"
+                '<p style="line-height:1.6;">If you did not request a password '
+                "reset, you can safely ignore this email. Your account "
+                "password will remain unchanged.</p>"
+                '<p style="line-height:1.6;">For security reasons, please do '
+                "not share this password reset link with anyone.</p>"
+                '<p style="line-height:1.6;">If you need assistance, please '
+                "contact the Kalitusi administration team.</p>"
+            ),
+            closing_html=closing_html,
+        ),
     )
 
 

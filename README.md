@@ -186,7 +186,8 @@ The admin login includes a password-reset flow for active staff accounts. A
 reset link is sent only to the email address saved on the staff account; set
 `ADMIN_PORTAL_URL` if the admin portal is hosted somewhere other than
 `https://admin.kalitusi.com`. The reset request response does not reveal
-whether an account exists. There is no public staff signup; creating a staff
+whether an account exists. Reset emails use a branded HTML button and include
+a plain-text alternative. There is no public staff signup; creating a staff
 account in the portal alerts the operations inbox without emailing its
 temporary password.
 

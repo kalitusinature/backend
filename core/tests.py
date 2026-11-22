@@ -957,6 +957,12 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
             for line in mail.outbox[0].body.splitlines()
             if line.startswith("https://admin.kalitusi.com/")
         )
+        self.assertIn("Reset Your Password", mail.outbox[0].body)
+        self.assertIn("For security reasons", mail.outbox[0].body)
+        reset_html = mail.outbox[0].alternatives[0].content
+        self.assertIn("Reset Your Password", reset_html)
+        self.assertIn("Reset My Password</a>", reset_html)
+        self.assertIn(reset_url.replace("&", "&amp;"), reset_html)
         query = parse_qs(urlsplit(reset_url).query)
         payload = {
             "uid": query["uid"][0],
@@ -1018,6 +1024,8 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         payload = json.loads(request.data)
         self.assertEqual(payload["to"], [self.staff.email])
         self.assertEqual(payload["from"], "notifications@kalitusi.com")
+        self.assertIn("Reset My Password</a>", payload["html"])
+        self.assertIn("For security reasons", payload["html"])
         self.assertEqual(len(mail.outbox), 0)
 
     @override_settings(RESEND_API_KEY="test-resend-key")
