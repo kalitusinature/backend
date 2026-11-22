@@ -64,6 +64,7 @@ def _send_with_resend_api(
         headers={
             "Authorization": f"Bearer {settings.RESEND_API_KEY}",
             "Content-Type": "application/json",
+            "User-Agent": "kalitusi-backend/1.0",
         },
         method="POST",
     )

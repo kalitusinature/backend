@@ -938,6 +938,7 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
             request.get_header("Authorization"),
             "Bearer test-resend-key",
         )
+        self.assertEqual(request.get_header("User-agent"), "kalitusi-backend/1.0")
         payload = json.loads(request.data)
         self.assertEqual(payload["to"], [self.staff.email])
         self.assertEqual(payload["from"], "notifications@kalitusi.com")
