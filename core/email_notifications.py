@@ -16,10 +16,19 @@ logger = logging.getLogger(__name__)
 def _send_email(subject: str, message: str, recipients: list[str], reference: str) -> None:
     if not recipients:
         return
-    if not settings.EMAIL_HOST or not settings.DEFAULT_FROM_EMAIL:
+    missing_settings = [
+        name
+        for name, value in (
+            ("EMAIL_HOST", settings.EMAIL_HOST),
+            ("DEFAULT_FROM_EMAIL", settings.DEFAULT_FROM_EMAIL),
+        )
+        if not value
+    ]
+    if missing_settings:
         logger.warning(
-            "Email not sent for %s: email settings are incomplete.",
+            "Email not sent for %s: required settings are empty: %s.",
             reference,
+            ", ".join(missing_settings),
         )
         return
     try:
@@ -39,6 +48,12 @@ def _send_email(subject: str, message: str, recipients: list[str], reference: st
         return
     if sent != len(recipients):
         logger.error("Email delivery was incomplete for %s.", reference)
+    else:
+        logger.info(
+            "SMTP accepted email for %s (%d recipient(s)).",
+            reference,
+            sent,
+        )
 
 
 def _staff_recipients(reference: str) -> list[str]:

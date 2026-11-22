@@ -898,6 +898,20 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         )
         self.assertEqual(replayed.status_code, 400)
 
+    @override_settings(EMAIL_HOST="", DEFAULT_FROM_EMAIL="")
+    def test_staff_password_reset_logs_which_email_settings_are_empty(self):
+        with self.assertLogs("core.email_notifications", level="WARNING") as logs:
+            response = self.client.post(
+                "/api/v1/auth/password-reset/",
+                {"email": self.staff.email},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("EMAIL_HOST, DEFAULT_FROM_EMAIL", logs.output[0])
+        self.assertNotIn(self.staff.email, logs.output[0])
+        self.assertEqual(len(mail.outbox), 0)
+
 
 class StaffReservationApprovalTests(TestCase):
     def setUp(self):
