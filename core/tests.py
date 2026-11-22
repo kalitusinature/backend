@@ -1,5 +1,6 @@
+import json
 from datetime import date, timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlsplit
 import uuid
 
@@ -24,9 +25,14 @@ from .models import (
     StaffProfile,
     StaffPushSubscription,
 )
+from .email_notifications import send_staff_password_reset_email
 from .push_notifications import notify_new_order
 
 
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    RESEND_API_KEY="",
+)
 class PublicOrderingApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -666,6 +672,8 @@ class PublicOrderingApiTests(TestCase):
                 EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
                 EMAIL_HOST="smtp.example.com",
                 DEFAULT_FROM_EMAIL="reservations@example.com",
+                RESEND_API_KEY="",
+                STAFF_NOTIFICATION_EMAIL="",
                 RESERVATION_NOTIFICATION_EMAIL="frontdesk@example.com",
             ),
             self.captureOnCommitCallbacks(execute=True),
@@ -699,6 +707,7 @@ class PublicOrderingApiTests(TestCase):
     EMAIL_HOST_USER="resend",
     EMAIL_PORT=587,
     EMAIL_USE_TLS=True,
+    RESEND_API_KEY="",
     STAFF_NOTIFICATION_EMAIL="admin@example.com",
 )
 class TransactionalEmailAndPasswordResetTests(TestCase):
@@ -910,6 +919,26 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("EMAIL_HOST, DEFAULT_FROM_EMAIL", logs.output[0])
         self.assertNotIn(self.staff.email, logs.output[0])
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(RESEND_API_KEY="test-resend-key")
+    def test_staff_password_reset_uses_resend_https_api(self):
+        response = MagicMock()
+        response.status = 200
+        response.__enter__.return_value = response
+        response.read.return_value = b""
+        with patch("core.email_notifications.urlopen", return_value=response) as urlopen:
+            send_staff_password_reset_email(self.staff)
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.resend.com/emails")
+        self.assertEqual(
+            request.get_header("Authorization"),
+            "Bearer test-resend-key",
+        )
+        payload = json.loads(request.data)
+        self.assertEqual(payload["to"], [self.staff.email])
+        self.assertEqual(payload["from"], "notifications@kalitusi.com")
         self.assertEqual(len(mail.outbox), 0)
 
 

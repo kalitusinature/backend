@@ -1,5 +1,8 @@
+import json
 import logging
 import smtplib
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -13,9 +16,75 @@ from .models import LodgeReservation, Order
 logger = logging.getLogger(__name__)
 
 
+def _send_with_resend_api(
+    subject: str,
+    message: str,
+    recipients: list[str],
+    reference: str,
+) -> None:
+    payload = json.dumps(
+        {
+            "from": settings.DEFAULT_FROM_EMAIL,
+            "to": recipients,
+            "subject": subject,
+            "text": message,
+        }
+    ).encode("utf-8")
+    request = Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=settings.EMAIL_TIMEOUT) as response:
+            if not 200 <= response.status < 300:
+                logger.error(
+                    "Resend API rejected email for %s (HTTP %s).",
+                    reference,
+                    response.status,
+                )
+                return
+            response.read()
+    except HTTPError as error:
+        logger.error(
+            "Resend API rejected email for %s (HTTP %s).",
+            reference,
+            error.code,
+        )
+        return
+    except (OSError, URLError) as error:
+        reason = getattr(error, "reason", None)
+        error_type = type(reason).__name__ if reason is not None else type(error).__name__
+        logger.error(
+            "Resend API request failed for %s (%s).",
+            reference,
+            error_type,
+        )
+        return
+    logger.info(
+        "Resend API accepted email for %s (%d recipient(s)).",
+        reference,
+        len(recipients),
+    )
+
+
 def _send_email(subject: str, message: str, recipients: list[str], reference: str) -> None:
     if not recipients:
         return
+    if settings.RESEND_API_KEY:
+        if not settings.DEFAULT_FROM_EMAIL:
+            logger.warning(
+                "Email not sent for %s: required setting is empty: DEFAULT_FROM_EMAIL.",
+                reference,
+            )
+            return
+        _send_with_resend_api(subject, message, recipients, reference)
+        return
+
     missing_settings = [
         name
         for name, value in (
@@ -49,11 +118,7 @@ def _send_email(subject: str, message: str, recipients: list[str], reference: st
     if sent != len(recipients):
         logger.error("Email delivery was incomplete for %s.", reference)
     else:
-        logger.info(
-            "SMTP accepted email for %s (%d recipient(s)).",
-            reference,
-            sent,
-        )
+        logger.info("SMTP accepted email for %s (%d recipient(s)).", reference, sent)
 
 
 def _staff_recipients(reference: str) -> list[str]:

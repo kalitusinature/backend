@@ -164,22 +164,19 @@ Create the first staff account using
 credentials in the React app or its GitHub repository.
 
 To send transactional emails through Resend on Render, verify `kalitusi.com`
-in Resend and configure its SMTP integration:
+in Resend and configure its HTTPS API:
 
-- `EMAIL_HOST=smtp.resend.com`
-- `EMAIL_PORT=587`
-- `EMAIL_USE_TLS=true`
+- `RESEND_API_KEY` to a Resend API key (keep this secret). For existing
+  deployments, `EMAIL_HOST_PASSWORD` is accepted as a fallback.
 - `EMAIL_TIMEOUT=10`
-- `EMAIL_HOST_USER=resend`
-- `EMAIL_HOST_PASSWORD` to a Resend API key (keep this secret)
 - `DEFAULT_FROM_EMAIL` to a sender on the verified domain, such as
   `notifications@kalitusi.com`
 - `STAFF_NOTIFICATION_EMAIL` to the operations inbox
 
 `RESERVATION_NOTIFICATION_EMAIL` is still accepted as a fallback for
 `STAFF_NOTIFICATION_EMAIL`. Keep all credentials in Render environment
-settings, never in the repository. Without SMTP configuration, records are
-still saved and the backend logs that email delivery was skipped.
+settings, never in the repository. If the Resend API is unavailable, records
+are still saved and the backend logs the email delivery failure.
 
 The admin login includes a password-reset flow for active staff accounts. A
 reset link is sent only to the email address saved on the staff account; set
