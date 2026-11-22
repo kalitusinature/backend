@@ -169,6 +169,7 @@ in Resend and configure its SMTP integration:
 - `EMAIL_HOST=smtp.resend.com`
 - `EMAIL_PORT=587`
 - `EMAIL_USE_TLS=true`
+- `EMAIL_TIMEOUT=10`
 - `EMAIL_HOST_USER=resend`
 - `EMAIL_HOST_PASSWORD` to a Resend API key (keep this secret)
 - `DEFAULT_FROM_EMAIL` to a sender on the verified domain, such as
