@@ -21,6 +21,46 @@ KALITUSI_LOGO_URL = (
     "https://kalitusi-nature-resort.odoo.com/web/image/website/1/logo/"
     "Kalitusi%20Nature%20Resort?unique=7d8d223"
 )
+ORDER_STATUS_EMAIL_COPY: dict[str, tuple[str, str, str, str]] = {
+    Order.Status.NEW: (
+        "Your Order Has Been Received!",
+        "We've received your order at Kalitusi Nature Resort.",
+        "Our team will review it and update you when it is confirmed.",
+        "No action is needed while our team reviews your order.",
+    ),
+    Order.Status.ACCEPTED: (
+        "Your Order Has Been Confirmed!",
+        "Good news! Your order at Kalitusi Nature Resort has been confirmed.",
+        "Our team has received your order and will begin preparing it shortly. "
+        "You can find your order details below.",
+        "Your order is confirmed, and our team will take care of the rest. "
+        "We'll keep you updated if there are any further changes to your order.",
+    ),
+    Order.Status.PREPARING: (
+        "Your Order Is Being Prepared!",
+        "Our team is now preparing your order at Kalitusi Nature Resort.",
+        "We are carefully preparing your order and will notify you when it is ready.",
+        "You can contact the resort if you need assistance while we prepare it.",
+    ),
+    Order.Status.READY: (
+        "Your Order Is Ready!",
+        "Your order at Kalitusi Nature Resort is ready.",
+        "Our team has finished preparing your order.",
+        "Please check in with our team to receive your order at the resort.",
+    ),
+    Order.Status.COMPLETED: (
+        "Your Order Has Been Completed!",
+        "Your order has been completed.",
+        "We hope you enjoyed your experience at Kalitusi Nature Resort.",
+        "Thank you for choosing Kalitusi. We look forward to serving you again.",
+    ),
+    Order.Status.CANCELLED: (
+        "Your Order Has Been Cancelled",
+        "Your order at Kalitusi Nature Resort has been cancelled.",
+        "If you have questions about this change, please contact the resort team.",
+        "Our team can help with any questions about your order.",
+    ),
+}
 
 
 def _resend_error_detail(error: HTTPError) -> str:
@@ -287,7 +327,7 @@ def _order_email_html(order: Order) -> str:
     details = _details_table_html(
         [
             ("Order Number", order.number),
-            ("Order Status", order.get_status_display()),
+            ("Order Status", _order_status_label(order.status)),
             ("Payment Status", order.get_payment_status_display()),
             ("Order Type", order.get_order_type_display()),
             (location_label, order.location),
@@ -312,7 +352,7 @@ def _order_summary_text(order: Order) -> str:
     lines = [
         "Order Summary",
         f"Order Number | {order.number}",
-        f"Order Status | {order.get_status_display()}",
+        f"Order Status | {_order_status_label(order.status)}",
         f"Payment Status | {order.get_payment_status_display()}",
         f"Order Type | {order.get_order_type_display()}",
         f"{location_label} | {order.location}",
@@ -327,6 +367,12 @@ def _order_summary_text(order: Order) -> str:
         )
     lines.append(f"Total Amount: UGX {order.total_ugx:,}")
     return "\n".join(lines)
+
+
+def _order_status_label(status: str) -> str:
+    if status == Order.Status.COMPLETED:
+        return "Completed"
+    return Order.Status(status).label
 
 
 def _reservation_email_html(reservation: LodgeReservation) -> str:
@@ -433,8 +479,8 @@ def notify_order_updated(
     changes = []
     if order.status != previous_status:
         changes.append(
-            f"Order status: {Order.Status(previous_status).label} -> "
-            f"{order.get_status_display()}"
+            f"Order status: {_order_status_label(previous_status)} -> "
+            f"{_order_status_label(order.status)}"
         )
     if order.payment_status != previous_payment_status:
         changes.append(
@@ -446,22 +492,97 @@ def notify_order_updated(
 
     details = (
         f"Order: {order.number}\n"
-        f"Status: {order.get_status_display()}\n"
+        f"Status: {_order_status_label(order.status)}\n"
         f"Payment: {order.get_payment_status_display()}\n"
         f"Total: UGX {order.total_ugx:,}"
     )
     order_html = _order_email_html(order)
-    customer_intro = f"There is an update to your order: {'; '.join(changes)}"
     if order.email:
+        if order.status != previous_status:
+            heading, intro, detail, next_step = ORDER_STATUS_EMAIL_COPY.get(
+                order.status,
+                (
+                    "Your Order Has Been Updated",
+                    "Your order at Kalitusi Nature Resort has been updated.",
+                    "Please review the latest order information below.",
+                    "Contact the resort team if you have questions.",
+                ),
+            )
+        else:
+            heading = "Your Payment Status Has Been Updated"
+            intro = (
+                "The payment status for your order is now "
+                f"{order.get_payment_status_display()}."
+            )
+            detail = (
+                f"Your order status is {_order_status_label(order.status)}."
+            )
+            next_step = (
+                "Please contact the resort team if you have questions about "
+                "your payment."
+            )
+
+        payment_note = (
+            f"Payment status is now {order.get_payment_status_display()}."
+            if (
+                order.status != previous_status
+                and order.payment_status != previous_payment_status
+            )
+            else ""
+        )
+        closing_text = (
+            "Thank you for choosing Kalitusi Nature Resort. We look forward "
+            "to serving you!\n\nWarm regards,\n\n"
+            "Kalitusi Nature Resort\n"
+            "Experience Nature. Experience Kalitusi."
+        )
+        closing_html = (
+            '<tr><td style="padding-top:24px;color:#64736c;'
+            'font-size:13px;line-height:1.7;">'
+            "Thank you for choosing <strong>Kalitusi Nature Resort"
+            "</strong>. We look forward to serving you!<br><br>"
+            "Warm regards,<br><br><strong>Kalitusi Nature Resort</strong><br>"
+            "<em>Experience Nature. Experience Kalitusi.</em>"
+            "</td></tr>"
+        )
+        customer_parts = [
+            heading,
+            f"Hello {order.guest_name},",
+            intro,
+            detail,
+        ]
+        if payment_note:
+            customer_parts.append(payment_note)
+        customer_parts.extend(
+            [
+                _order_summary_text(order),
+                f"What's Next?\n{next_step}",
+                closing_text,
+            ]
+        )
+        content_html = (
+            f'<p style="line-height:1.6;">{escape(intro)}</p>'
+            f'<p style="line-height:1.6;">{escape(detail)}</p>'
+            + (
+                f'<p style="line-height:1.6;">{escape(payment_note)}</p>'
+                if payment_note
+                else ""
+            )
+            + order_html
+            + '<h2 style="margin:24px 0 12px;font-size:18px;color:#234b3b;">'
+            "What's Next?</h2>"
+            f'<p style="line-height:1.6;">{escape(next_step)}</p>'
+        )
         _send_email(
-            f"Order update: {order.number}",
-            f"Hello {order.guest_name},\n\n{customer_intro}\n\n{details}",
+            f"{heading} - {order.number}",
+            "\n\n".join(customer_parts),
             [order.email],
             order.number,
             html_message=_email_layout(
-                f"Order update: {order.number}",
-                f"Hello {order.guest_name}, {customer_intro}",
-                order_html,
+                heading,
+                f"Hello {order.guest_name},",
+                content_html,
+                closing_html=closing_html,
             ),
         )
     staff_intro = f"An order was updated: {'; '.join(changes)}"

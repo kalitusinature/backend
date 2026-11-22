@@ -178,7 +178,9 @@ in Resend and configure its HTTPS API:
 settings, never in the repository. If the Resend API is unavailable, records
 are still saved and the backend logs the email delivery failure.
 Order and reservation emails include HTML tables, the resort logo, and product
-or lodge images when available, alongside a plain-text alternative.
+or lodge images when available, alongside a plain-text alternative. Customer
+order updates use distinct messages for confirmation, preparation, readiness,
+and completion; payment-only changes get a separate update.
 
 The admin login includes a password-reset flow for active staff accounts. A
 reset link is sent only to the email address saved on the staff account; set

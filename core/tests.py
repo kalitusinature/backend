@@ -28,7 +28,11 @@ from .models import (
     StaffProfile,
     StaffPushSubscription,
 )
-from .email_notifications import notify_order_created, send_staff_password_reset_email
+from .email_notifications import (
+    notify_order_created,
+    notify_order_updated,
+    send_staff_password_reset_email,
+)
 from .push_notifications import notify_new_order
 
 
@@ -799,9 +803,56 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(mail.outbox), 2)
         self.assertEqual(mail.outbox[0].to, ["guest@example.com"])
+        self.assertIn("Your Order Has Been Confirmed!", mail.outbox[0].body)
+        self.assertIn("begin preparing it shortly", mail.outbox[0].body)
+        self.assertIn("What's Next?", mail.outbox[0].body)
         self.assertIn("Confirmed", mail.outbox[0].body)
         self.assertIn("Paid", mail.outbox[0].body)
         self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
+
+    def test_order_status_transitions_have_distinct_customer_messages(self):
+        order = Order.objects.create(
+            guest_name="Order Guest",
+            phone="+256700000000",
+            email="guest@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 56",
+        )
+        transitions = (
+            (
+                Order.Status.ACCEPTED,
+                "Your Order Has Been Confirmed!",
+                "Confirmed",
+            ),
+            (
+                Order.Status.PREPARING,
+                "Your Order Is Being Prepared!",
+                "Preparing",
+            ),
+            (Order.Status.READY, "Your Order Is Ready!", "Ready"),
+            (
+                Order.Status.COMPLETED,
+                "Your Order Has Been Completed!",
+                "Completed",
+            ),
+        )
+        previous_status = Order.Status.NEW
+
+        for status_value, heading, status_label in transitions:
+            with self.subTest(status=status_value):
+                order.status = status_value
+                notify_order_updated(
+                    order,
+                    previous_status,
+                    Order.PaymentStatus.UNPAID,
+                )
+                customer_email = mail.outbox[0]
+                self.assertIn(heading, customer_email.subject)
+                self.assertIn(heading, customer_email.body)
+                self.assertIn(f"Order Status | {status_label}", customer_email.body)
+                self.assertIn("What's Next?", customer_email.body)
+                previous_status = status_value
+                mail.outbox.clear()
 
     def test_reservation_creation_and_confirmation_email_customer_and_staff(self):
         lodge = Lodge.objects.create(
