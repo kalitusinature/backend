@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import smtplib
+from datetime import date
 from html import escape
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
@@ -60,6 +61,98 @@ ORDER_STATUS_EMAIL_COPY: dict[str, tuple[str, str, str, str]] = {
         "If you have questions about this change, please contact the resort team.",
         "Our team can help with any questions about your order.",
     ),
+}
+RESERVATION_STATUS_EMAIL_COPY: dict[str, dict[str, str]] = {
+    LodgeReservation.Status.PENDING: {
+        "heading": "Your Reservation Request Has Been Received!",
+        "intro": "Thank you for choosing Kalitusi Nature Resort!",
+        "detail": (
+            "We're pleased to let you know that we have received your "
+            "reservation request. Our team is currently reviewing the details, "
+            "and your reservation is pending confirmation."
+        ),
+        "next_heading": "What Happens Next?",
+        "next_step": (
+            "Our reservations team will review your request and notify you by "
+            "email once your reservation has been approved or if any "
+            "additional information is required."
+        ),
+        "notice": (
+            "Please note that your reservation is not yet confirmed. We "
+            "recommend waiting for our confirmation before making travel "
+            "arrangements."
+        ),
+        "closing": (
+            "Thank you for considering Kalitusi Nature Resort. We look forward "
+            "to welcoming you!"
+        ),
+    },
+    LodgeReservation.Status.CONFIRMED: {
+        "heading": "Your Reservation Is Confirmed!",
+        "intro": (
+            "Good news! Your reservation at Kalitusi Nature Resort is confirmed."
+        ),
+        "detail": "Your accommodation is booked.",
+        "next_heading": "What Happens Next?",
+        "next_step": (
+            "We look forward to welcoming you. Please contact our reservations "
+            "team if you have any questions before arrival."
+        ),
+        "notice": "",
+        "closing": (
+            "Thank you for choosing Kalitusi Nature Resort. We look forward to "
+            "welcoming you!"
+        ),
+    },
+    LodgeReservation.Status.DECLINED: {
+        "heading": "Reservation Request Update",
+        "intro": (
+            "Unfortunately, we cannot accommodate your reservation request."
+        ),
+        "detail": "Your reservation request has been rejected.",
+        "next_heading": "Need Help?",
+        "next_step": (
+            "Please contact our reservations team if you would like help with "
+            "alternative dates or accommodation."
+        ),
+        "notice": "",
+        "closing": "Thank you for considering Kalitusi Nature Resort.",
+    },
+    LodgeReservation.Status.CANCELLED: {
+        "heading": "Your Reservation Has Been Cancelled",
+        "intro": "Your reservation at Kalitusi Nature Resort has been cancelled.",
+        "detail": "The latest reservation details are included below.",
+        "next_heading": "Need Help?",
+        "next_step": (
+            "If you need help with a future booking, our reservations team is "
+            "here to assist."
+        ),
+        "notice": "",
+        "closing": "Thank you for considering Kalitusi Nature Resort.",
+    },
+    LodgeReservation.Status.CHECKED_IN: {
+        "heading": "Welcome to Kalitusi!",
+        "intro": "Welcome! Your stay at Kalitusi Nature Resort has begun.",
+        "detail": "We hope you enjoy your time with us.",
+        "next_heading": "During Your Stay",
+        "next_step": (
+            "If you need assistance during your stay, please contact our team."
+        ),
+        "notice": "",
+        "closing": "Thank you for choosing Kalitusi Nature Resort.",
+    },
+    LodgeReservation.Status.COMPLETED: {
+        "heading": "Thank You for Staying with Us!",
+        "intro": "Thank you for staying at Kalitusi Nature Resort.",
+        "detail": "We hope you had a wonderful stay.",
+        "next_heading": "We Hope to Welcome You Back",
+        "next_step": (
+            "We would love to welcome you back again. Please contact us when "
+            "you are ready to plan your next stay."
+        ),
+        "notice": "",
+        "closing": "Thank you for choosing Kalitusi Nature Resort.",
+    },
 }
 
 
@@ -384,16 +477,99 @@ def _reservation_email_html(reservation: LodgeReservation) -> str:
     )
     details = _details_table_html(
         [
-            ("Reservation", reservation.reference),
-            ("Lodge", reservation.lodge.name),
-            ("Check-in", reservation.check_in.isoformat()),
-            ("Check-out", reservation.check_out.isoformat()),
+            ("Reservation Number", reservation.reference),
+            ("Accommodation", reservation.lodge.name),
+            ("Check-in", _reservation_email_date(reservation.check_in)),
+            ("Check-out", _reservation_email_date(reservation.check_out)),
             ("Adults", str(reservation.adults)),
             ("Children", str(reservation.children)),
-            ("Status", reservation.get_status_display()),
+            ("Reservation Status", reservation.get_status_display()),
         ]
     )
-    return lodge_image + details
+    return (
+        lodge_image
+        + '<h2 style="margin:24px 0 12px;font-size:18px;color:#234b3b;">'
+        "Reservation Details</h2>"
+        + details
+    )
+
+
+def _reservation_email_date(value: date) -> str:
+    return f"{value.day} {value.strftime('%B %Y')}"
+
+
+def _reservation_summary_text(reservation: LodgeReservation) -> str:
+    return "\n".join(
+        [
+            "Reservation Details",
+            f"Reservation Number | {reservation.reference}",
+            f"Accommodation | {reservation.lodge.name}",
+            f"Check-in | {_reservation_email_date(reservation.check_in)}",
+            f"Check-out | {_reservation_email_date(reservation.check_out)}",
+            f"Adults | {reservation.adults}",
+            f"Children | {reservation.children}",
+            f"Reservation Status | {reservation.get_status_display()}",
+        ]
+    )
+
+
+def _reservation_customer_email(
+    reservation: LodgeReservation,
+) -> tuple[str, str, str]:
+    copy = RESERVATION_STATUS_EMAIL_COPY[reservation.status]
+    heading = copy["heading"]
+    next_heading = copy["next_heading"]
+    summary = _reservation_summary_text(reservation)
+    signoff = (
+        "Warm regards,\n\n"
+        "Kalitusi Nature Resort\n"
+        "Experience Nature. Experience Kalitusi."
+    )
+    notice_text = f"\n\n{copy['notice']}" if copy["notice"] else ""
+    body = (
+        f"{heading}\n\n"
+        f"Hello {reservation.guest_name},\n\n"
+        f"{copy['intro']}\n\n"
+        f"{copy['detail']}\n\n"
+        f"{summary}\n\n"
+        f"{next_heading}\n"
+        f"{copy['next_step']}"
+        f"{notice_text}\n\n"
+        f"{copy['closing']}\n\n"
+        f"{signoff}"
+    )
+    notice_html = (
+        f'<p style="line-height:1.6;">{escape(copy["notice"])}</p>'
+        if copy["notice"]
+        else ""
+    )
+    content_html = (
+        f'<p style="line-height:1.6;">{escape(copy["intro"])}</p>'
+        f'<p style="line-height:1.6;">{escape(copy["detail"])}</p>'
+        f"{_reservation_email_html(reservation)}"
+        '<h2 style="margin:24px 0 12px;font-size:18px;color:#234b3b;">'
+        f"{escape(next_heading)}</h2>"
+        f'<p style="line-height:1.6;">{escape(copy["next_step"])}</p>'
+        f"{notice_html}"
+    )
+    closing_html = (
+        '<tr><td style="padding-top:24px;color:#64736c;'
+        'font-size:13px;line-height:1.7;">'
+        f"{escape(copy['closing'])}<br><br>Warm regards,<br><br>"
+        "<strong>Kalitusi Nature Resort</strong><br>"
+        "<em>Experience Nature. Experience Kalitusi.</em>"
+        "</td></tr>"
+    )
+    return (
+        heading,
+        body,
+        _email_layout(
+            heading,
+            f"Hello {reservation.guest_name},",
+            content_html,
+            closing_html=closing_html,
+        ),
+    )
 
 
 def notify_order_created(order: Order) -> None:
@@ -606,6 +782,9 @@ def notify_order_updated(
 def notify_new_reservation(reservation: LodgeReservation) -> None:
     is_pending = reservation.status == LodgeReservation.Status.PENDING
     reservation_html = _reservation_email_html(reservation)
+    customer_heading, customer_message, customer_html = (
+        _reservation_customer_email(reservation)
+    )
     details = (
         f"Reference: {reservation.reference}\n"
         f"Guest: {reservation.guest_name}\n"
@@ -615,27 +794,12 @@ def notify_new_reservation(reservation: LodgeReservation) -> None:
         f"Status: {reservation.get_status_display()}"
     )
     if reservation.email:
-        customer_message = (
-            "Thank you for your reservation request. "
-            "It has been received and is pending review."
-            if is_pending
-            else (
-                "Thank you for your reservation. "
-                f"Its current status is {reservation.get_status_display()}."
-            )
-        )
         _send_email(
-            f"Reservation request received: {reservation.reference}"
-            if is_pending
-            else f"Reservation created: {reservation.reference}",
-            f"Hello {reservation.guest_name},\n\n{customer_message}\n\n{details}",
+            f"{customer_heading} ({reservation.reference})",
+            customer_message,
             [reservation.email],
             reservation.reference,
-            html_message=_email_layout(
-                f"Reservation {reservation.get_status_display()}",
-                f"Hello {reservation.guest_name}, {customer_message}",
-                reservation_html,
-            ),
+            html_message=customer_html,
         )
     staff_intro = (
         "A new reservation request is awaiting review."
@@ -657,28 +821,16 @@ def notify_new_reservation(reservation: LodgeReservation) -> None:
 
 def notify_reservation_status(reservation: LodgeReservation) -> None:
     reservation_html = _reservation_email_html(reservation)
-    customer_intro = (
-        f"Your reservation status is now {reservation.get_status_display()}."
-    )
-    message = (
-        f"Hello {reservation.guest_name},\n\n"
-        f"{customer_intro}\n\n"
-        f"Stay: {reservation.lodge.name}, "
-        f"{reservation.check_in} to {reservation.check_out}\n"
-        f"Reference: {reservation.reference}"
+    customer_heading, customer_message, customer_html = (
+        _reservation_customer_email(reservation)
     )
     if reservation.email:
         _send_email(
-            f"Reservation {reservation.reference}: {reservation.get_status_display()}",
-            message,
+            f"{customer_heading} ({reservation.reference})",
+            customer_message,
             [reservation.email],
             reservation.reference,
-            html_message=_email_layout(
-                f"Reservation {reservation.reference}: "
-                f"{reservation.get_status_display()}",
-                f"Hello {reservation.guest_name}, {customer_intro}",
-                reservation_html,
-            ),
+            html_message=customer_html,
         )
     staff_intro = f"Reservation status changed to {reservation.get_status_display()}."
     _send_email(

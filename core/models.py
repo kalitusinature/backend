@@ -239,11 +239,12 @@ class OrderItem(models.Model):
 
 class LodgeReservation(models.Model):
     class Status(models.TextChoices):
-        PENDING = "pending", "Pending review"
+        PENDING = "pending", "Pending Review"
         CONFIRMED = "confirmed", "Confirmed"
-        DECLINED = "declined", "Declined"
+        DECLINED = "declined", "Rejected"
         CANCELLED = "cancelled", "Cancelled"
-        COMPLETED = "completed", "Completed"
+        CHECKED_IN = "checked_in", "Checked In"
+        COMPLETED = "completed", "Checked Out"
 
     class Source(models.TextChoices):
         WEBSITE = "website", "Website"

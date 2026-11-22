@@ -40,7 +40,7 @@ from .email_notifications import (
     send_staff_password_reset_email,
 )
 from .push_notifications import notify_new_reservation as notify_staff_new_reservation
-from .reservation_rules import validate_lodge_stay
+from .reservation_rules import ACTIVE_RESERVATION_STATUSES, validate_lodge_stay
 from .staff_api_serializers import (
     StaffAccountPasswordSerializer,
     StaffAccountSerializer,
@@ -100,10 +100,7 @@ class StaffReservationPagination(PageNumberPagination):
 def validate_blockout_conflicts(lodge, start_date, end_date):
     if LodgeReservation.objects.filter(
         lodge=lodge,
-        status__in=(
-            LodgeReservation.Status.PENDING,
-            LodgeReservation.Status.CONFIRMED,
-        ),
+        status__in=ACTIVE_RESERVATION_STATUSES,
         check_in__lt=end_date,
         check_out__gt=start_date,
     ).exists():
@@ -726,8 +723,9 @@ class StaffReservationUpdate(StaffApiMixin, generics.RetrieveUpdateDestroyAPIVie
         if instance.status in (
             LodgeReservation.Status.PENDING,
             LodgeReservation.Status.CONFIRMED,
+            LodgeReservation.Status.CHECKED_IN,
         ):
             raise ValidationError(
-                {"status": "Decline or cancel an active reservation before deleting it."}
+                {"status": "Complete or cancel an active reservation before deleting it."}
             )
         instance.delete()

@@ -24,7 +24,7 @@ from .models import (
     OrderItem,
     Product,
 )
-from .reservation_rules import validate_lodge_stay
+from .reservation_rules import ACTIVE_RESERVATION_STATUSES, validate_lodge_stay
 from .reservation_notifications import notify_new_reservation
 from .email_notifications import notify_order_created
 from .push_notifications import (
@@ -302,10 +302,7 @@ class LodgeAvailability(APIView):
         reservation_periods = list(
             LodgeReservation.objects.filter(
                 lodge=lodge,
-                status__in=(
-                    LodgeReservation.Status.PENDING,
-                    LodgeReservation.Status.CONFIRMED,
-                ),
+                status__in=ACTIVE_RESERVATION_STATUSES,
                 check_in__lt=search_end,
                 check_out__gt=month_start,
             ).values_list("pk", "check_in", "check_out")

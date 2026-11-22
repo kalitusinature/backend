@@ -31,6 +31,7 @@ from .models import (
 from .email_notifications import (
     notify_order_created,
     notify_order_updated,
+    notify_reservation_status,
     send_staff_password_reset_email,
 )
 from .push_notifications import notify_new_order
@@ -574,6 +575,14 @@ class PublicOrderingApiTests(TestCase):
             check_out=today + timedelta(days=7),
             status=LodgeReservation.Status.PENDING,
         )
+        LodgeReservation.objects.create(
+            lodge=lodge,
+            guest_name="In-house Guest",
+            phone="+256700000003",
+            check_in=today - timedelta(days=1),
+            check_out=today + timedelta(days=4),
+            status=LodgeReservation.Status.CHECKED_IN,
+        )
         LodgeBlockout.objects.create(
             lodge=lodge,
             start_date=today + timedelta(days=8),
@@ -596,6 +605,14 @@ class PublicOrderingApiTests(TestCase):
                 "check_out": (today + timedelta(days=11)).isoformat(),
             },
         )
+        checked_in_overlap = self.client.get(
+            "/api/v1/lodges/",
+            {
+                "check_in": (today + timedelta(days=2)).isoformat(),
+                "check_out": (today + timedelta(days=3)).isoformat(),
+                "guests": 2,
+            },
+        )
         duplicate = self.client.post(
             "/api/v1/reservations/",
             {
@@ -612,8 +629,10 @@ class PublicOrderingApiTests(TestCase):
         )
         self.assertEqual(overlapping.status_code, 200)
         self.assertEqual(blocked.status_code, 200)
+        self.assertEqual(checked_in_overlap.status_code, 200)
         self.assertEqual(overlapping.data, [])
         self.assertEqual(blocked.data, [])
+        self.assertEqual(checked_in_overlap.data, [])
         self.assertEqual(duplicate.status_code, 400)
         self.assertIn("lodge", duplicate.data)
 
@@ -879,10 +898,13 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(mail.outbox), 2)
-        self.assertIn("received", mail.outbox[0].subject)
+        self.assertIn("Your Reservation Request Has Been Received!", mail.outbox[0].subject)
+        self.assertIn("pending confirmation", mail.outbox[0].body)
+        self.assertIn("Reservation Number |", mail.outbox[0].body)
         reservation_html = mail.outbox[0].alternatives[0].content
         self.assertIn(lodge.image_url, reservation_html)
         self.assertIn("<table", reservation_html)
+        self.assertIn("Reservation Status", reservation_html)
         self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
 
         mail.outbox.clear()
@@ -902,6 +924,56 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         self.assertEqual(len(mail.outbox), 2)
         self.assertIn("Confirmed", mail.outbox[0].subject)
         self.assertEqual(mail.outbox[1].to, ["admin@example.com"])
+
+    def test_reservation_status_emails_have_distinct_customer_copy(self):
+        lodge = Lodge.objects.create(name="Email Cottage")
+        check_in = date.today() + timedelta(days=30)
+        reservation = LodgeReservation.objects.create(
+            lodge=lodge,
+            guest_name="Reservation Guest",
+            email="guest@example.com",
+            phone="+256700000000",
+            check_in=check_in,
+            check_out=check_in + timedelta(days=2),
+        )
+        transitions = (
+            (
+                LodgeReservation.Status.DECLINED,
+                "Reservation Request Update",
+                "Rejected",
+            ),
+            (
+                LodgeReservation.Status.CANCELLED,
+                "Your Reservation Has Been Cancelled",
+                "Cancelled",
+            ),
+            (
+                LodgeReservation.Status.CHECKED_IN,
+                "Welcome to Kalitusi!",
+                "Checked In",
+            ),
+            (
+                LodgeReservation.Status.COMPLETED,
+                "Thank You for Staying with Us!",
+                "Checked Out",
+            ),
+        )
+
+        for status_value, heading, status_label in transitions:
+            with self.subTest(status=status_value):
+                reservation.status = status_value
+                reservation.save(update_fields=["status"])
+                notify_reservation_status(reservation)
+
+                customer_email = mail.outbox[0]
+                self.assertIn(heading, customer_email.subject)
+                self.assertIn(heading, customer_email.body)
+                self.assertIn(
+                    f"Reservation Status | {status_label}",
+                    customer_email.body,
+                )
+                self.assertIn("<table", customer_email.alternatives[0].content)
+                mail.outbox.clear()
 
     def test_staff_account_creation_alerts_operations_without_sending_password(self):
         owner = get_user_model().objects.create_superuser(
@@ -1145,6 +1217,27 @@ class StaffReservationApprovalTests(TestCase):
         self.second.refresh_from_db()
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.second.status, LodgeReservation.Status.PENDING)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        RESEND_API_KEY="",
+    )
+    def test_legacy_staff_status_change_sends_lifecycle_email(self):
+        self.second.delete()
+        self.first.email = "guest@example.com"
+        self.first.save(update_fields=["email"])
+        self.client.force_login(self.staff)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("staff_reservation_status", args=[self.first.pk]),
+                {"status": LodgeReservation.Status.CHECKED_IN},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertIn("Welcome to Kalitusi!", mail.outbox[0].subject)
+        self.assertEqual(mail.outbox[0].to, ["guest@example.com"])
 
 
 class StaffApiTests(TestCase):
@@ -1773,6 +1866,47 @@ class StaffApiTests(TestCase):
         self.assertEqual(response.data["note"], "Ground-floor room requested")
         self.assertEqual(response.data["status"], LodgeReservation.Status.CONFIRMED)
 
+    def test_checked_in_stays_allow_past_arrival_and_block_overlaps(self):
+        self.login_as_staff()
+        today = date.today()
+        checked_in = LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="In-house Guest",
+            phone="+256700000001",
+            check_in=today - timedelta(days=1),
+            check_out=today + timedelta(days=4),
+            status=LodgeReservation.Status.CONFIRMED,
+        )
+
+        response = self.client.patch(
+            f"/api/v1/staff/reservations/{checked_in.id}/",
+            {"status": LodgeReservation.Status.CHECKED_IN},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], LodgeReservation.Status.CHECKED_IN)
+
+        pending = LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="Next Guest",
+            phone="+256700000002",
+            check_in=today + timedelta(days=1),
+            check_out=today + timedelta(days=2),
+        )
+        response = self.client.patch(
+            f"/api/v1/staff/reservations/{pending.id}/",
+            {"status": LodgeReservation.Status.CONFIRMED},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, LodgeReservation.Status.PENDING)
+
+        response = self.client.delete(
+            f"/api/v1/staff/reservations/{checked_in.id}/"
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_staff_reservation_edits_validate_dates_and_lodge_capacity(self):
         self.login_as_staff()
         reservation = LodgeReservation.objects.create(
@@ -1921,6 +2055,26 @@ class StaffApiTests(TestCase):
                 "start_date": active_reservation.check_in.isoformat(),
                 "end_date": active_reservation.check_out.isoformat(),
                 "reason": "Closed",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        in_house_start = date.today() - timedelta(days=1)
+        LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="In-house Guest",
+            phone="+256700000002",
+            check_in=in_house_start,
+            check_out=in_house_start + timedelta(days=3),
+            status=LodgeReservation.Status.CHECKED_IN,
+        )
+        response = self.client.post(
+            "/api/v1/staff/lodge-blockouts/",
+            {
+                "lodge": self.lodge.id,
+                "start_date": date.today().isoformat(),
+                "end_date": (date.today() + timedelta(days=1)).isoformat(),
+                "reason": "Maintenance",
             },
             format="json",
         )

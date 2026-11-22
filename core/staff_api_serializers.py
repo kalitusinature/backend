@@ -20,7 +20,7 @@ from .models import (
     OrderItem,
     Product,
 )
-from .reservation_rules import validate_lodge_stay
+from .reservation_rules import ACTIVE_RESERVATION_STATUSES, validate_lodge_stay
 
 MAX_IMAGE_BYTES = 1_572_864
 IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -423,10 +423,7 @@ class StaffLodgeBlockoutSerializer(serializers.ModelSerializer):
         if lodge and start_date and end_date and end_date > start_date:
             occupied = LodgeReservation.objects.filter(
                 lodge=lodge,
-                status__in=(
-                    LodgeReservation.Status.PENDING,
-                    LodgeReservation.Status.CONFIRMED,
-                ),
+                status__in=ACTIVE_RESERVATION_STATUSES,
                 check_in__lt=end_date,
                 check_out__gt=start_date,
             ).exists()

@@ -8,6 +8,12 @@ from .models import Lodge, LodgeBlockout, LodgeReservation
 ACTIVE_RESERVATION_STATUSES = (
     LodgeReservation.Status.PENDING,
     LodgeReservation.Status.CONFIRMED,
+    LodgeReservation.Status.CHECKED_IN,
+)
+
+ADVANCE_BOOKING_STATUSES = (
+    LodgeReservation.Status.PENDING,
+    LodgeReservation.Status.CONFIRMED,
 )
 
 
@@ -36,7 +42,7 @@ def validate_lodge_stay(
     if adults + children > lodge.capacity:
         errors["adults"] = "Guest count exceeds this lodge's capacity."
 
-    if status in ACTIVE_RESERVATION_STATUSES:
+    if status in ADVANCE_BOOKING_STATUSES:
         today = timezone.localdate()
         if check_in < today:
             errors["check_in"] = "Check-in cannot be in the past."
@@ -59,41 +65,41 @@ def validate_lodge_stay(
         ):
             errors["check_in"] = "This lodge is not available for check-in on that day."
 
-        if check_out > check_in:
-            if blockout_periods is None:
-                is_blocked = LodgeBlockout.objects.filter(
-                    lodge=lodge,
-                    start_date__lt=check_out,
-                    end_date__gt=check_in,
-                ).exists()
-            else:
-                is_blocked = any(
-                    start_date < check_out and end_date > check_in
-                    for start_date, end_date in blockout_periods
-                )
-            if is_blocked:
-                errors["check_in"] = "This lodge is unavailable for part of those dates."
+    if status in ACTIVE_RESERVATION_STATUSES and check_out > check_in:
+        if blockout_periods is None:
+            is_blocked = LodgeBlockout.objects.filter(
+                lodge=lodge,
+                start_date__lt=check_out,
+                end_date__gt=check_in,
+            ).exists()
+        else:
+            is_blocked = any(
+                start_date < check_out and end_date > check_in
+                for start_date, end_date in blockout_periods
+            )
+        if is_blocked:
+            errors["check_in"] = "This lodge is unavailable for part of those dates."
 
-            if reservation_periods is None:
-                overlapping = LodgeReservation.objects.filter(
-                    lodge=lodge,
-                    status__in=ACTIVE_RESERVATION_STATUSES,
-                    check_in__lt=check_out,
-                    check_out__gt=check_in,
-                )
-                if exclude_reservation_id is not None:
-                    overlapping = overlapping.exclude(pk=exclude_reservation_id)
-                has_overlap = overlapping.exists()
-            else:
-                has_overlap = any(
-                    reservation_id != exclude_reservation_id
-                    and reservation_start < check_out
-                    and reservation_end > check_in
-                    for reservation_id, reservation_start, reservation_end
-                    in reservation_periods
-                )
-            if has_overlap:
-                errors["lodge"] = "This lodge already has a request for those dates."
+        if reservation_periods is None:
+            overlapping = LodgeReservation.objects.filter(
+                lodge=lodge,
+                status__in=ACTIVE_RESERVATION_STATUSES,
+                check_in__lt=check_out,
+                check_out__gt=check_in,
+            )
+            if exclude_reservation_id is not None:
+                overlapping = overlapping.exclude(pk=exclude_reservation_id)
+            has_overlap = overlapping.exists()
+        else:
+            has_overlap = any(
+                reservation_id != exclude_reservation_id
+                and reservation_start < check_out
+                and reservation_end > check_in
+                for reservation_id, reservation_start, reservation_end
+                in reservation_periods
+            )
+        if has_overlap:
+            errors["lodge"] = "This lodge already has a request for those dates."
 
     if errors:
         raise ValidationError(errors)
