@@ -220,7 +220,10 @@ class StaffPasswordResetConfirm(APIView):
         profile.must_change_password = False
         profile.save(update_fields=("must_change_password", "updated_at"))
         Token.objects.filter(user=user).delete()
-        transaction.on_commit(lambda: notify_staff_password_reset_complete(user))
+        transaction.on_commit(
+            lambda: notify_staff_password_reset_complete(user),
+            robust=True,
+        )
         return Response({"detail": "Your password has been reset. You can sign in."})
 
 
@@ -362,7 +365,8 @@ class StaffAccountListCreate(StaffApiMixin, APIView):
         StaffProfile.objects.create(user=user, must_change_password=True)
         created_by = request.user.get_username()
         transaction.on_commit(
-            lambda: notify_staff_account_created(user.get_username(), created_by)
+            lambda: notify_staff_account_created(user.get_username(), created_by),
+            robust=True,
         )
         return Response(
             {
@@ -495,7 +499,8 @@ class StaffOrderUpdate(StaffApiMixin, generics.UpdateAPIView):
                     updated,
                     previous_status,
                     previous_payment_status,
-                )
+                ),
+                robust=True,
             )
 
 
@@ -608,10 +613,14 @@ class StaffReservationList(StaffApiMixin, generics.ListCreateAPIView):
             status=status_value,
         )
         reservation = serializer.save()
-        transaction.on_commit(lambda: notify_new_reservation(reservation))
+        transaction.on_commit(
+            lambda: notify_new_reservation(reservation),
+            robust=True,
+        )
         if reservation.status == LodgeReservation.Status.PENDING:
             transaction.on_commit(
-                lambda: notify_staff_new_reservation(reservation)
+                lambda: notify_staff_new_reservation(reservation),
+                robust=True,
             )
 
 
@@ -708,7 +717,10 @@ class StaffReservationUpdate(StaffApiMixin, generics.RetrieveUpdateDestroyAPIVie
         serializer.instance = reservation
         updated = serializer.save()
         if updated.status != previous_status:
-            transaction.on_commit(lambda: notify_reservation_status(updated))
+            transaction.on_commit(
+                lambda: notify_reservation_status(updated),
+                robust=True,
+            )
 
     def perform_destroy(self, instance):
         if instance.status in (

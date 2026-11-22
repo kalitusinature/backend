@@ -88,6 +88,33 @@ class PublicOrderingApiTests(TestCase):
         push_order.assert_called_once()
         self.assertEqual(push_order.call_args.args[0].number, response.data["number"])
 
+    def test_order_creation_succeeds_when_notification_callbacks_fail(self):
+        with (
+            self.captureOnCommitCallbacks(execute=True),
+            patch(
+                "core.api_views.notify_new_order",
+                side_effect=ValueError("Invalid test push key"),
+            ),
+            patch(
+                "core.api_views.notify_order_created",
+                side_effect=RuntimeError("Email provider unavailable"),
+            ),
+        ):
+            response = self.client.post(
+                "/api/v1/orders/",
+                {
+                    "guest_name": "A Guest",
+                    "phone": "+256700000000",
+                    "order_type": "dine_in",
+                    "location": "Table 4",
+                    "items": [{"product": self.product.slug, "quantity": 1}],
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(Order.objects.filter(number=response.data["number"]).exists())
+
     @override_settings(
         VAPID_PUBLIC_KEY="public-key",
         VAPID_PRIVATE_KEY="private-key",

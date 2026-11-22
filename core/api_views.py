@@ -380,8 +380,8 @@ class OrderCreate(APIView):
         order.save(update_fields=["total_ugx", "updated_at"])
         if guest_cart:
             guest_cart.items.all().delete()
-        transaction.on_commit(lambda: notify_new_order(order))
-        transaction.on_commit(lambda: notify_order_created(order))
+        transaction.on_commit(lambda: notify_new_order(order), robust=True)
+        transaction.on_commit(lambda: notify_order_created(order), robust=True)
         return Response(
             OrderReceiptSerializer(order).data, status=status.HTTP_201_CREATED
         )
@@ -428,9 +428,13 @@ class ReservationCreate(APIView):
             status=LodgeReservation.Status.PENDING,
         )
         reservation = serializer.save()
-        transaction.on_commit(lambda: notify_new_reservation(reservation))
         transaction.on_commit(
-            lambda: notify_staff_new_reservation(reservation)
+            lambda: notify_new_reservation(reservation),
+            robust=True,
+        )
+        transaction.on_commit(
+            lambda: notify_staff_new_reservation(reservation),
+            robust=True,
         )
         return Response(
             ReservationReceiptSerializer(reservation).data,
