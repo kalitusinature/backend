@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import smtplib
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -14,6 +15,25 @@ from django.utils.http import urlsafe_base64_encode
 from .models import LodgeReservation, Order
 
 logger = logging.getLogger(__name__)
+
+
+def _resend_error_detail(error: HTTPError) -> str:
+    try:
+        body = json.loads(error.read().decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return ""
+    if not isinstance(body, dict):
+        return ""
+
+    details = [
+        value
+        for value in (body.get("name"), body.get("message"))
+        if isinstance(value, str) and value
+    ]
+    detail = ": ".join(details)
+    detail = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[email redacted]", detail)
+    detail = re.sub(r"\bre_[A-Za-z0-9_-]+\b", "[API key redacted]", detail)
+    return detail[:300]
 
 
 def _send_with_resend_api(
@@ -50,10 +70,12 @@ def _send_with_resend_api(
                 return
             response.read()
     except HTTPError as error:
+        detail = _resend_error_detail(error)
         logger.error(
-            "Resend API rejected email for %s (HTTP %s).",
+            "Resend API rejected email for %s (HTTP %s%s).",
             reference,
             error.code,
+            f", {detail}" if detail else "",
         )
         return
     except (OSError, URLError) as error:

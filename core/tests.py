@@ -1,6 +1,8 @@
 import json
 from datetime import date, timedelta
+from io import BytesIO
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 import uuid
 
@@ -940,6 +942,32 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         self.assertEqual(payload["to"], [self.staff.email])
         self.assertEqual(payload["from"], "notifications@kalitusi.com")
         self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(RESEND_API_KEY="test-resend-key")
+    def test_resend_rejection_logs_provider_reason(self):
+        error_body = json.dumps(
+            {
+                "name": "validation_error",
+                "message": "The kalitusi.com domain is not verified.",
+            }
+        ).encode("utf-8")
+        error = HTTPError(
+            "https://api.resend.com/emails",
+            403,
+            "Forbidden",
+            {},
+            BytesIO(error_body),
+        )
+
+        with (
+            self.assertLogs("core.email_notifications", level="ERROR") as logs,
+            patch("core.email_notifications.urlopen", side_effect=error),
+        ):
+            send_staff_password_reset_email(self.staff)
+
+        self.assertIn("HTTP 403", logs.output[0])
+        self.assertIn("validation_error", logs.output[0])
+        self.assertIn("domain is not verified", logs.output[0])
 
 
 class StaffReservationApprovalTests(TestCase):
