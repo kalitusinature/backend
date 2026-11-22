@@ -18,21 +18,29 @@ logger = logging.getLogger(__name__)
 
 
 def _resend_error_detail(error: HTTPError) -> str:
-    try:
-        body = json.loads(error.read().decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return ""
-    if not isinstance(body, dict):
-        return ""
+    raw_body = error.read()
+    if not raw_body:
+        return "no response body"
 
-    details = [
-        value
-        for value in (body.get("name"), body.get("message"))
-        if isinstance(value, str) and value
-    ]
-    detail = ": ".join(details)
+    try:
+        body = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        detail = raw_body.decode("utf-8", errors="replace")
+    else:
+        if isinstance(body, dict):
+            details = [
+                value
+                for value in (body.get("name"), body.get("message"))
+                if isinstance(value, str) and value
+            ]
+            detail = ": ".join(details) or json.dumps(body)
+        else:
+            detail = json.dumps(body)
+    detail = re.sub(r"<[^>]*>", " ", detail)
+    detail = re.sub(r"[\r\n\t]+", " ", detail)
     detail = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[email redacted]", detail)
     detail = re.sub(r"\bre_[A-Za-z0-9_-]+\b", "[API key redacted]", detail)
+    detail = re.sub(r"(?i)\bbearer\s+\S+", "Bearer [redacted]", detail)
     return detail[:300]
 
 

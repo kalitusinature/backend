@@ -969,6 +969,25 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         self.assertIn("validation_error", logs.output[0])
         self.assertIn("domain is not verified", logs.output[0])
 
+    @override_settings(RESEND_API_KEY="test-resend-key")
+    def test_resend_rejection_logs_redacted_plain_text_response(self):
+        error = HTTPError(
+            "https://api.resend.com/emails",
+            403,
+            "Forbidden",
+            {},
+            BytesIO(b"Forbidden for user@example.com"),
+        )
+
+        with (
+            self.assertLogs("core.email_notifications", level="ERROR") as logs,
+            patch("core.email_notifications.urlopen", side_effect=error),
+        ):
+            send_staff_password_reset_email(self.staff)
+
+        self.assertIn("Forbidden for [email redacted]", logs.output[0])
+        self.assertNotIn("user@example.com", logs.output[0])
+
 
 class StaffReservationApprovalTests(TestCase):
     def setUp(self):
