@@ -199,12 +199,21 @@ def _image_html(url: str, alt: str, width: int, height: int) -> str:
     )
 
 
-def _email_layout(subject: str, intro: str, content_html: str) -> str:
+def _email_layout(
+    subject: str,
+    intro: str,
+    content_html: str,
+    closing_html: str | None = None,
+) -> str:
     logo_html = _image_html(
         KALITUSI_LOGO_URL,
         "Kalitusi Nature Resort",
         180,
         64,
+    )
+    closing = closing_html or (
+        '<tr><td style="padding-top:24px;color:#64736c;font-size:13px;">'
+        'Thank you,<br>Kalitusi Nature Resort</td></tr>'
     )
     return (
         '<!doctype html><html lang="en"><body '
@@ -219,8 +228,7 @@ def _email_layout(subject: str, intro: str, content_html: str) -> str:
         f'<tr><td><h1 style="margin:0 0 12px;font-size:24px;color:#234b3b;">'
         f'{escape(subject)}</h1><p style="margin:0 0 20px;line-height:1.6;">'
         f'{escape(intro)}</p>{content_html}</td></tr>'
-        '<tr><td style="padding-top:24px;color:#64736c;font-size:13px;">'
-        'Thank you,<br>Kalitusi Nature Resort</td></tr>'
+        f"{closing}"
         '</table></td></tr></table></body></html>'
     )
 
@@ -263,24 +271,62 @@ def _order_email_html(order: Order) -> str:
         'style="border-collapse:collapse;margin:0 0 20px;">'
         '<thead><tr style="background:#edf4ef;">'
         '<th align="left" style="padding:10px;">Item</th>'
-        '<th align="center" style="padding:10px;">Qty</th>'
-        '<th align="right" style="padding:10px;">Unit price</th>'
+        '<th align="center" style="padding:10px;">Quantity</th>'
+        '<th align="right" style="padding:10px;">Unit Price</th>'
         '<th align="right" style="padding:10px;">Subtotal</th>'
         f"</tr></thead><tbody>{''.join(item_rows)}</tbody>"
         '<tfoot><tr><th colspan="3" align="right" style="padding:12px 10px;">'
-        'Total</th><th align="right" style="padding:12px 10px;">'
+        'Total Amount</th><th align="right" style="padding:12px 10px;">'
         f"UGX {order.total_ugx:,}</th></tr></tfoot></table>"
+    )
+    location_label = (
+        "Table"
+        if order.order_type == Order.OrderType.DINE_IN
+        else "Lodge"
     )
     details = _details_table_html(
         [
-            ("Order", order.number),
-            ("Status", order.get_status_display()),
-            ("Payment", order.get_payment_status_display()),
-            ("Order type", order.get_order_type_display()),
-            ("Location", order.location),
+            ("Order Number", order.number),
+            ("Order Status", order.get_status_display()),
+            ("Payment Status", order.get_payment_status_display()),
+            ("Order Type", order.get_order_type_display()),
+            (location_label, order.location),
         ]
     )
-    return details + items_table
+    return (
+        '<h2 style="margin:24px 0 12px;font-size:18px;color:#234b3b;">'
+        'Order Summary</h2>'
+        f"{details}"
+        '<h2 style="margin:24px 0 12px;font-size:18px;color:#234b3b;">'
+        'Order Details</h2>'
+        f"{items_table}"
+    )
+
+
+def _order_summary_text(order: Order) -> str:
+    location_label = (
+        "Table"
+        if order.order_type == Order.OrderType.DINE_IN
+        else "Lodge"
+    )
+    lines = [
+        "Order Summary",
+        f"Order Number | {order.number}",
+        f"Order Status | {order.get_status_display()}",
+        f"Payment Status | {order.get_payment_status_display()}",
+        f"Order Type | {order.get_order_type_display()}",
+        f"{location_label} | {order.location}",
+        "",
+        "Order Details",
+        "Item | Quantity | Unit Price | Subtotal",
+    ]
+    for item in order.items.all():
+        lines.append(
+            f"{item.product_name} | {item.quantity} | "
+            f"UGX {item.unit_price_ugx:,} | UGX {item.line_total_ugx:,}"
+        )
+    lines.append(f"Total Amount: UGX {order.total_ugx:,}")
+    return "\n".join(lines)
 
 
 def _reservation_email_html(reservation: LodgeReservation) -> str:
@@ -311,8 +357,10 @@ def notify_order_created(order: Order) -> None:
     )
     order_html = _order_email_html(order)
     customer_intro = (
-        "Thank you for ordering from Kalitusi Resort. We have received your "
-        "order and will email you when its status changes."
+        "Thank you for choosing Kalitusi Nature Resort!\n\n"
+        "We're pleased to confirm that we have received your order. Our team "
+        "will process it shortly, and you'll receive an email notification "
+        "whenever your order status changes."
     )
     details = (
         f"Order: {order.number}\n"
@@ -323,13 +371,41 @@ def notify_order_created(order: Order) -> None:
     if order.email:
         _send_email(
             f"Thank you for your order: {order.number}",
-            f"Hello {order.guest_name},\n\n{customer_intro}\n\n{details}",
+            (
+                "Thank You for Your Order!\n\n"
+                f"Hello {order.guest_name},\n\n"
+                f"{customer_intro}\n\n"
+                f"{_order_summary_text(order)}\n\n"
+                "Thank you for choosing Kalitusi Nature Resort. We appreciate "
+                "your business and look forward to serving you!\n\n"
+                "Warm regards,\n\n"
+                "Kalitusi Nature Resort\n"
+                "Experience Nature. Experience Kalitusi."
+            ),
             [order.email],
             order.number,
             html_message=_email_layout(
-                f"Thank you for your order: {order.number}",
-                f"Hello {order.guest_name}, {customer_intro}",
-                order_html,
+                "Thank You for Your Order!",
+                f"Hello {order.guest_name},",
+                (
+                    '<p style="line-height:1.6;">Thank you for choosing '
+                    '<strong>Kalitusi Nature Resort</strong>!</p>'
+                    '<p style="line-height:1.6;">We\'re pleased to confirm '
+                    "that we have received your order. Our team will process "
+                    "it shortly, and you'll receive an email notification "
+                    "whenever your order status changes.</p>"
+                    f"{order_html}"
+                ),
+                closing_html=(
+                    '<tr><td style="padding-top:24px;color:#64736c;'
+                    'font-size:13px;line-height:1.7;">'
+                    "Thank you for choosing <strong>Kalitusi Nature Resort"
+                    "</strong>. We appreciate your business and look forward "
+                    "to serving you!<br><br>Warm regards,<br><br>"
+                    "<strong>Kalitusi Nature Resort</strong><br>"
+                    "<em>Experience Nature. Experience Kalitusi.</em>"
+                    "</td></tr>"
+                ),
             ),
         )
     staff_intro = "A new order has been received."
