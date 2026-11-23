@@ -1064,8 +1064,23 @@ class PaymentReceiptApiTests(TestCase):
         )
 
         self.assertEqual(browser_response.status_code, 200)
-        self.assertEqual(browser_response["Content-Type"], "application/json")
+        self.assertTrue(browser_response["Content-Type"].startswith("text/html"))
         self.assertEqual(browser_response.data["status"], "verified")
+        page = browser_response.content.decode("utf-8")
+        self.assertIn("Payment receipt verified", page)
+        self.assertIn("UGX 5,000", page)
+        self.assertIn("Receipt number", page)
+        self.assertNotIn("receipt.guest@example.com", page)
+        self.assertEqual(browser_response["X-Robots-Tag"], "noindex, nofollow")
+
+        not_found = self.client.get(
+            "/api/v1/receipts/verify/unknown-receipt-token/",
+            HTTP_ACCEPT=(
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            ),
+        )
+        self.assertEqual(not_found.status_code, 404)
+        self.assertIn("Receipt not found", not_found.content.decode("utf-8"))
 
     def test_unverified_payment_cannot_generate_a_receipt(self):
         payment = Payment.objects.create(

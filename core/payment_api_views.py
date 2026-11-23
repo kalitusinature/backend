@@ -1,14 +1,17 @@
+import html
+
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
+from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
-from rest_framework.renderers import JSONRenderer
-from rest_framework.response import Response
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
@@ -28,6 +31,70 @@ from .staff_api_serializers import (
     StaffPaymentReceiptSerializer,
 )
 from .staff_api_views import StaffApiMixin
+
+
+class ReceiptVerificationHTMLRenderer(BaseRenderer):
+    media_type = "text/html"
+    format = "html"
+    charset = "utf-8"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if data.get("status") == "verified":
+            receipt_number = html.escape(str(data["receipt_number"]))
+            amount = f"UGX {int(data['amount_ugx']):,}"
+            issued_at = timezone.localtime(data["issued_at"])
+            issued = (
+                f"{issued_at.day} "
+                f"{issued_at.strftime('%B %Y at %I:%M %p %Z')}"
+            )
+            content = f"""
+                <span class="badge">Verified</span>
+                <h1>Payment receipt verified</h1>
+                <p class="intro">This payment receipt is valid and was issued by Kalitusi Nature Resort.</p>
+                <dl>
+                    <div><dt>Receipt number</dt><dd>{receipt_number}</dd></div>
+                    <div><dt>Amount paid</dt><dd>{amount}</dd></div>
+                    <div><dt>Issued</dt><dd>{html.escape(issued)}</dd></div>
+                </dl>
+                <p class="footnote">This page confirms receipt authenticity. It does not show customer or transaction details.</p>
+            """
+        else:
+            content = """
+                <span class="badge invalid">Not verified</span>
+                <h1>Receipt not found</h1>
+                <p class="intro">We could not verify this receipt. Please check the QR code or contact Kalitusi Nature Resort.</p>
+            """
+        return f"""<!doctype html>
+            <html lang="en">
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <meta name="robots" content="noindex, nofollow">
+                <title>Receipt verification | Kalitusi Nature Resort</title>
+                <style>
+                    * {{ box-sizing: border-box; }}
+                    body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f2f6f2; color: #23332b; font-family: Arial, sans-serif; }}
+                    main {{ width: min(100%, 520px); padding: 36px; border: 1px solid #dce6e0; border-radius: 16px; background: #fff; box-shadow: 0 12px 36px rgba(23, 75, 58, .08); }}
+                    .brand {{ margin-bottom: 28px; color: #174b3a; font-size: 15px; font-weight: 700; letter-spacing: .04em; }}
+                    .badge {{ display: inline-block; padding: 7px 12px; border-radius: 999px; background: #e7f4ec; color: #17613b; font-size: 13px; font-weight: 700; }}
+                    .badge.invalid {{ background: #fff0ed; color: #a13d2a; }}
+                    h1 {{ margin: 18px 0 8px; color: #174b3a; font-size: clamp(24px, 6vw, 32px); }}
+                    .intro {{ margin: 0 0 24px; color: #58675f; line-height: 1.6; }}
+                    dl {{ margin: 0; border-top: 1px solid #e4ebe6; }}
+                    dl div {{ display: flex; justify-content: space-between; gap: 16px; padding: 15px 0; border-bottom: 1px solid #e4ebe6; }}
+                    dt {{ color: #63746c; }}
+                    dd {{ margin: 0; text-align: right; font-weight: 700; overflow-wrap: anywhere; }}
+                    .footnote {{ margin: 20px 0 0; color: #76847c; font-size: 13px; line-height: 1.5; }}
+                    @media (max-width: 480px) {{ main {{ padding: 26px 22px; }} dl div {{ display: block; }} dd {{ margin-top: 5px; text-align: left; }} }}
+                </style>
+            </head>
+            <body>
+                <main>
+                    <div class="brand">KALITUSI NATURE RESORT</div>
+                    {content}
+                </main>
+            </body>
+            </html>"""
 
 
 class StaffPaymentPagination(PageNumberPagination):
@@ -364,7 +431,7 @@ class ReservationReceiptDownload(CustomerReceiptLookupMixin, APIView):
 class ReceiptVerification(APIView):
     authentication_classes = ()
     permission_classes = (AllowAny,)
-    renderer_classes = (JSONRenderer,)
+    renderer_classes = (JSONRenderer, ReceiptVerificationHTMLRenderer)
     throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "receipt_verification"
 
@@ -373,15 +440,19 @@ class ReceiptVerification(APIView):
 
         receipt = find_verified_receipt(token)
         if receipt is None:
-            return Response(
+            response = Response(
                 {"detail": "Receipt not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        return Response(
-            {
-                "receipt_number": receipt.number,
-                "status": "verified",
-                "amount_ugx": receipt.payment.amount_ugx,
-                "issued_at": receipt.payment.verified_at,
-            }
-        )
+        else:
+            response = Response(
+                {
+                    "receipt_number": receipt.number,
+                    "status": "verified",
+                    "amount_ugx": receipt.payment.amount_ugx,
+                    "issued_at": receipt.payment.verified_at,
+                }
+            )
+        response["Cache-Control"] = "no-store"
+        response["X-Robots-Tag"] = "noindex, nofollow"
+        return response
