@@ -1056,6 +1056,17 @@ class PaymentReceiptApiTests(TestCase):
         self.assertNotIn("email", response.data)
         self.assertNotIn("transaction_reference", response.data)
 
+        browser_response = self.client.get(
+            "/api/v1/receipts/verify/receipt-verification-test-token/",
+            HTTP_ACCEPT=(
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            ),
+        )
+
+        self.assertEqual(browser_response.status_code, 200)
+        self.assertEqual(browser_response["Content-Type"], "application/json")
+        self.assertEqual(browser_response.data["status"], "verified")
+
     def test_unverified_payment_cannot_generate_a_receipt(self):
         payment = Payment.objects.create(
             order=self.order,

@@ -6,6 +6,7 @@ from django.utils.dateparse import parse_date
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
+from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.throttling import ScopedRateThrottle
@@ -363,6 +364,7 @@ class ReservationReceiptDownload(CustomerReceiptLookupMixin, APIView):
 class ReceiptVerification(APIView):
     authentication_classes = ()
     permission_classes = (AllowAny,)
+    renderer_classes = (JSONRenderer,)
     throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "receipt_verification"
 
