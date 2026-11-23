@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .models import Category, Lodge, LodgeReservation, Order, Product
-from .reservation_rules import ACTIVE_RESERVATION_STATUSES
+from .reservation_rules import BOOKED_RESERVATION_STATUSES
 from .reservation_notifications import notify_reservation_status
 
 
@@ -70,7 +70,7 @@ def update_reservation_status(request, reservation_id):
         Lodge.objects.select_for_update().get(pk=reservation.lodge_id)
         conflict = LodgeReservation.objects.filter(
             lodge=reservation.lodge,
-            status__in=ACTIVE_RESERVATION_STATUSES,
+            status__in=BOOKED_RESERVATION_STATUSES,
             check_in__lt=reservation.check_out,
             check_out__gt=reservation.check_in,
         ).exclude(pk=reservation.pk).exists()

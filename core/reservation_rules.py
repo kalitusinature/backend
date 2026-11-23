@@ -11,6 +11,11 @@ ACTIVE_RESERVATION_STATUSES = (
     LodgeReservation.Status.CHECKED_IN,
 )
 
+BOOKED_RESERVATION_STATUSES = (
+    LodgeReservation.Status.CONFIRMED,
+    LodgeReservation.Status.CHECKED_IN,
+)
+
 ADVANCE_BOOKING_STATUSES = (
     LodgeReservation.Status.PENDING,
     LodgeReservation.Status.CONFIRMED,
@@ -83,7 +88,7 @@ def validate_lodge_stay(
         if reservation_periods is None:
             overlapping = LodgeReservation.objects.filter(
                 lodge=lodge,
-                status__in=ACTIVE_RESERVATION_STATUSES,
+                status__in=BOOKED_RESERVATION_STATUSES,
                 check_in__lt=check_out,
                 check_out__gt=check_in,
             )
@@ -99,7 +104,7 @@ def validate_lodge_stay(
                 in reservation_periods
             )
         if has_overlap:
-            errors["lodge"] = "This lodge already has a request for those dates."
+            errors["lodge"] = "This lodge already has a confirmed reservation for those dates."
 
     if errors:
         raise ValidationError(errors)

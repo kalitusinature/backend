@@ -577,7 +577,7 @@ class PublicOrderingApiTests(TestCase):
             response.data["reference"],
         )
 
-    def test_pending_reservation_and_blockouts_are_excluded_from_availability(self):
+    def test_pending_reservations_do_not_block_but_booked_stays_and_blockouts_do(self):
         lodge = Lodge.objects.create(name="Cedar Cottage", capacity=4)
         today = date.today()
         LodgeReservation.objects.create(
@@ -640,16 +640,31 @@ class PublicOrderingApiTests(TestCase):
             },
             format="json",
         )
+        confirmed_overlap = self.client.post(
+            "/api/v1/reservations/",
+            {
+                "lodge": lodge.slug,
+                "guest_name": "Guest During Confirmed Stay",
+                "email": "confirmed-overlap@example.com",
+                "phone": "+256700000004",
+                "check_in": (today + timedelta(days=2)).isoformat(),
+                "check_out": (today + timedelta(days=3)).isoformat(),
+                "adults": 1,
+                "children": 0,
+            },
+            format="json",
+        )
         self.assertEqual(overlapping.status_code, 200)
         self.assertEqual(blocked.status_code, 200)
         self.assertEqual(checked_in_overlap.status_code, 200)
-        self.assertEqual(overlapping.data, [])
+        self.assertEqual([item["slug"] for item in overlapping.data], [lodge.slug])
         self.assertEqual(blocked.data, [])
         self.assertEqual(checked_in_overlap.data, [])
-        self.assertEqual(duplicate.status_code, 400)
-        self.assertIn("lodge", duplicate.data)
+        self.assertEqual(duplicate.status_code, 201)
+        self.assertEqual(confirmed_overlap.status_code, 400)
+        self.assertIn("lodge", confirmed_overlap.data)
 
-    def test_lodge_calendar_marks_booked_and_blocked_checkin_dates_unavailable(self):
+    def test_lodge_calendar_distinguishes_bookings_from_unavailable_dates(self):
         lodge = Lodge.objects.create(name="Calendar Cottage", capacity=4)
         month_start = (date.today().replace(day=1) + timedelta(days=32)).replace(day=1)
         booked_check_in = month_start + timedelta(days=10)
@@ -659,6 +674,15 @@ class PublicOrderingApiTests(TestCase):
             phone="+256700000001",
             check_in=booked_check_in,
             check_out=booked_check_in + timedelta(days=2),
+            status=LodgeReservation.Status.CONFIRMED,
+        )
+        pending_check_in = month_start + timedelta(days=20)
+        LodgeReservation.objects.create(
+            lodge=lodge,
+            guest_name="Pending Guest",
+            phone="+256700000002",
+            check_in=pending_check_in,
+            check_out=pending_check_in + timedelta(days=2),
             status=LodgeReservation.Status.PENDING,
         )
         blocked_start = month_start + timedelta(days=15)
@@ -683,6 +707,60 @@ class PublicOrderingApiTests(TestCase):
         self.assertIn((booked_check_in - timedelta(days=1)).isoformat(), response.data["unavailable_dates"])
         self.assertIn((blocked_start - timedelta(days=1)).isoformat(), response.data["unavailable_dates"])
         self.assertIn((booked_check_in + timedelta(days=2)).isoformat(), response.data["available_dates"])
+        self.assertIn(booked_check_in.isoformat(), response.data["booked_dates"])
+        self.assertIn((booked_check_in - timedelta(days=1)).isoformat(), response.data["booked_dates"])
+        self.assertNotIn((blocked_start - timedelta(days=1)).isoformat(), response.data["booked_dates"])
+        self.assertIn(pending_check_in.isoformat(), response.data["available_dates"])
+
+    def test_lodge_calendar_returns_available_checkout_dates_for_selected_checkin(self):
+        lodge = Lodge.objects.create(name="Checkout Calendar Cottage", capacity=4)
+        month_start = (date.today().replace(day=1) + timedelta(days=32)).replace(day=1)
+        booked_check_in = month_start + timedelta(days=10)
+        LodgeReservation.objects.create(
+            lodge=lodge,
+            guest_name="Confirmed Guest",
+            phone="+256700000001",
+            check_in=booked_check_in,
+            check_out=booked_check_in + timedelta(days=2),
+            status=LodgeReservation.Status.CONFIRMED,
+        )
+        selected_check_in = booked_check_in - timedelta(days=1)
+
+        response = self.client.get(
+            f"/api/v1/lodges/{lodge.slug}/availability/",
+            {
+                "month": month_start.strftime("%Y-%m"),
+                "nights": 1,
+                "guests": 2,
+                "check_in": selected_check_in.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("available_check_out_dates", response.data)
+        self.assertEqual(response.data["check_in"], selected_check_in.isoformat())
+        self.assertIn(booked_check_in.isoformat(), response.data["available_check_out_dates"])
+        self.assertIn(
+            (booked_check_in + timedelta(days=1)).isoformat(),
+            response.data["booked_check_out_dates"],
+        )
+        self.assertNotIn(booked_check_in.isoformat(), response.data["booked_check_out_dates"])
+
+    def test_calendar_does_not_label_past_dates_as_booked(self):
+        lodge = Lodge.objects.create(name="Past Date Calendar Cottage")
+        today = timezone.localdate()
+
+        response = self.client.get(
+            f"/api/v1/lodges/{lodge.slug}/availability/",
+            {"month": today.strftime("%Y-%m"), "nights": 1, "guests": 1},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(today.isoformat(), response.data["available_dates"])
+        self.assertTrue(
+            any(day < today.isoformat() for day in response.data["unavailable_dates"])
+        )
+        self.assertEqual(response.data["booked_dates"], [])
 
     def test_public_reservation_enforces_lodge_stay_rules(self):
         lodge = Lodge.objects.create(name="Minimum Stay Lodge", min_nights=2)

@@ -24,7 +24,10 @@ from .models import (
     OrderItem,
     Product,
 )
-from .reservation_rules import ACTIVE_RESERVATION_STATUSES, validate_lodge_stay
+from .reservation_rules import (
+    BOOKED_RESERVATION_STATUSES,
+    validate_lodge_stay,
+)
 from .reservation_notifications import notify_new_reservation
 from .email_notifications import notify_order_created
 from .push_notifications import (
@@ -245,7 +248,7 @@ class LodgeList(generics.ListAPIView):
                         check_out=check_out,
                         adults=guests,
                         children=0,
-                        status=LodgeReservation.Status.PENDING,
+                        status=LodgeReservation.Status.CONFIRMED,
                     )
                 except ValidationError:
                     continue
@@ -296,56 +299,89 @@ class LodgeAvailability(APIView):
             )
 
         days_in_month = monthrange(month_start.year, month_start.month)[1]
-        search_end = date(
+        check_in_value = request.query_params.get("check_in")
+        selected_check_in = None
+        if check_in_value:
+            selected_check_in = parse_date(check_in_value)
+            if not selected_check_in:
+                raise ValidationError(
+                    {"check_in": "Use YYYY-MM-DD format for check-in."}
+                )
+
+        month_end = date(
             month_start.year, month_start.month, days_in_month
-        ) + timedelta(days=lodge.max_nights)
+        ) + timedelta(days=1)
+        search_start = selected_check_in or month_start
+        search_end = (
+            month_end
+            if selected_check_in
+            else month_end + timedelta(days=lodge.max_nights)
+        )
         reservation_periods = list(
             LodgeReservation.objects.filter(
                 lodge=lodge,
-                status__in=ACTIVE_RESERVATION_STATUSES,
+                status__in=BOOKED_RESERVATION_STATUSES,
                 check_in__lt=search_end,
-                check_out__gt=month_start,
+                check_out__gt=search_start,
             ).values_list("pk", "check_in", "check_out")
         )
         blockout_periods = list(
             lodge.blockouts.filter(
                 start_date__lt=search_end,
-                end_date__gt=month_start,
+                end_date__gt=search_start,
             ).values_list("start_date", "end_date")
         )
 
         available_dates = []
         unavailable_dates = []
+        booked_dates = []
         for day in range(days_in_month):
-            check_in = month_start + timedelta(days=day)
+            candidate_date = month_start + timedelta(days=day)
+            check_in = selected_check_in or candidate_date
+            check_out = (
+                candidate_date
+                if selected_check_in
+                else candidate_date + timedelta(days=nights)
+            )
+            is_booked = any(
+                reservation_start < check_out and reservation_end > check_in
+                for _, reservation_start, reservation_end in reservation_periods
+            )
             try:
                 validate_lodge_stay(
                     lodge=lodge,
                     check_in=check_in,
-                    check_out=check_in + timedelta(days=nights),
+                    check_out=check_out,
                     adults=guests,
                     children=0,
-                    status=LodgeReservation.Status.PENDING,
+                    status=LodgeReservation.Status.CONFIRMED,
                     reservation_periods=reservation_periods,
                     blockout_periods=blockout_periods,
                 )
             except ValidationError:
-                unavailable_dates.append(check_in.isoformat())
+                unavailable_dates.append(candidate_date.isoformat())
+                if is_booked:
+                    booked_dates.append(candidate_date.isoformat())
             else:
-                available_dates.append(check_in.isoformat())
+                available_dates.append(candidate_date.isoformat())
 
-        return Response(
-            {
-                "lodge": lodge.slug,
-                "month": month_value,
-                "nights": nights,
-                "min_nights": lodge.min_nights,
-                "max_nights": lodge.max_nights,
-                "capacity": lodge.capacity,
-                "available_dates": available_dates,
-                "unavailable_dates": unavailable_dates,
-            }
-        )
+        response_data = {
+            "lodge": lodge.slug,
+            "month": month_value,
+            "nights": nights,
+            "min_nights": lodge.min_nights,
+            "max_nights": lodge.max_nights,
+            "capacity": lodge.capacity,
+            "available_dates": available_dates,
+            "unavailable_dates": unavailable_dates,
+            "booked_dates": booked_dates,
+        }
+        if selected_check_in:
+            response_data["check_in"] = selected_check_in.isoformat()
+            response_data["available_check_out_dates"] = available_dates
+            response_data["unavailable_check_out_dates"] = unavailable_dates
+            response_data["booked_check_out_dates"] = booked_dates
+        return Response(response_data)
 
 
 class OrderCreate(APIView):

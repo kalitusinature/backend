@@ -14,6 +14,33 @@
                 .cj-reservation-field input:focus,.cj-reservation-field select:focus,.cj-reservation-field textarea:focus{outline:2px solid #008b92;outline-offset:1px}
                 .cj-reservation-field textarea{min-height:96px;resize:vertical}
                 .cj-reservation-help{display:block;color:#69736f;font-size:12px;line-height:1.45;margin-top:6px}
+                .cj-reservation-calendar[hidden]{display:none}
+                .cj-reservation-calendar{grid-column:1/-1;padding:18px;border:1px solid #dce6e0;border-radius:9px;background:#fbfdfc}
+                .cj-reservation-calendar-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+                .cj-reservation-calendar-heading{display:grid;gap:4px}
+                .cj-reservation-calendar-heading strong{color:#284b39;font-size:16px}
+                .cj-reservation-calendar-heading small,.cj-reservation-calendar-note{color:#69736f;font-size:12px;line-height:1.5}
+                .cj-reservation-calendar-actions{display:flex;align-items:center;gap:8px}
+                .cj-reservation-calendar-reset{padding:8px 10px;border:1px solid #d5dfda;border-radius:7px;background:#fff;color:#284b39;font-size:11px;font-weight:700;cursor:pointer}
+                .cj-reservation-calendar-nav{display:flex;gap:8px}
+                .cj-reservation-calendar-nav button{width:36px;height:36px;border:1px solid #d5dfda;border-radius:7px;background:#fff;color:#284b39;font-size:20px;cursor:pointer}
+                .cj-reservation-calendar-weekdays,.cj-reservation-calendar-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+                .cj-reservation-calendar-weekdays{margin-bottom:5px}
+                .cj-reservation-calendar-weekdays span{text-align:center;color:#69736f;font-size:11px;font-weight:700}
+                .cj-reservation-calendar-empty{min-height:42px}
+                .cj-reservation-calendar-day{position:relative;min-height:42px;border:1px solid #dce6e0;border-radius:6px;background:#fff;color:#284b39;font-size:13px;font-weight:700;cursor:pointer}
+                .cj-reservation-calendar-day:hover:not(:disabled){border-color:#008b92;background:#eef8f7}
+                .cj-reservation-calendar-day.is-in-range{border-radius:0;background:#e8f4ef}
+                .cj-reservation-calendar-day.is-range-start,.cj-reservation-calendar-day.is-range-end{border-color:#008b92;border-radius:6px;background:#008b92;color:#fff}
+                .cj-reservation-calendar-day.is-booked{border-color:#e4b7b2;background:#fff1ef;color:#a33e36;text-decoration:line-through}
+                .cj-reservation-calendar-day.is-unavailable,.cj-reservation-calendar-day.is-past{background:#f0f2f1;color:#a4ada8;cursor:not-allowed}
+                .cj-reservation-calendar-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;color:#58665f;font-size:11px}
+                .cj-reservation-calendar-legend span{display:inline-flex;align-items:center;gap:6px}
+                .cj-reservation-calendar-legend i{width:10px;height:10px;border:1px solid #b9daca;border-radius:3px;background:#e8f4ef}
+                .cj-reservation-calendar-legend .is-booked{border-color:#e4b7b2;background:#fff1ef}
+                .cj-reservation-calendar-legend .is-unavailable{border-color:#e0e5e2;background:#f0f2f1}
+                .cj-reservation-calendar-note{display:block;margin-top:10px}
+                .cj-reservation-calendar-message{margin-top:10px;color:#9e271d;font-size:12px}
                 .cj-reservation-submit{width:100%;min-height:52px;margin-top:24px;border:0;border-radius:7px;background:#008b92;color:#fff;font-size:16px;font-weight:800;cursor:pointer}
                 .cj-reservation-submit:hover:not(:disabled){background:#006f75}
                 .cj-reservation-submit:disabled{background:#9daaa6;cursor:not-allowed}
@@ -54,11 +81,37 @@
                                 </div>
                                 <div class="cj-reservation-field cj-reservation-date-field">
                                     <label for="cjCheckIn">Check-in</label>
-                                    <input id="cjCheckIn" name="check_in" type="date" required="required"/>
+                                    <input id="cjCheckIn" name="check_in" type="text" required="required" readonly="readonly" placeholder="Choose check-in date"/>
                                 </div>
                                 <div class="cj-reservation-field cj-reservation-date-field">
                                     <label for="cjCheckOut">Check-out</label>
-                                    <input id="cjCheckOut" name="check_out" type="date" required="required"/>
+                                    <input id="cjCheckOut" name="check_out" type="text" required="required" readonly="readonly" placeholder="Choose check-out date"/>
+                                </div>
+                                <div class="cj-reservation-calendar" id="cjReservationCalendar" hidden="hidden" aria-label="Select your stay dates">
+                                    <div class="cj-reservation-calendar-toolbar">
+                                        <div class="cj-reservation-calendar-heading">
+                                            <strong id="cjCalendarTitle"></strong>
+                                            <small id="cjCalendarPrompt">Choose a cottage to see available dates.</small>
+                                        </div>
+                                        <div class="cj-reservation-calendar-actions">
+                                            <button class="cj-reservation-calendar-reset" id="cjCalendarReset" type="button" hidden="hidden">Change check-in</button>
+                                            <div class="cj-reservation-calendar-nav">
+                                                <button id="cjCalendarPrevious" type="button" aria-label="Previous month">‹</button>
+                                                <button id="cjCalendarNext" type="button" aria-label="Next month">›</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="cj-reservation-calendar-weekdays" aria-hidden="true">
+                                        <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                                    </div>
+                                    <div class="cj-reservation-calendar-days" id="cjCalendarDays" role="group" aria-label="Dates in the selected month"></div>
+                                    <div class="cj-reservation-calendar-legend" aria-label="Date availability">
+                                        <span><i></i>Available</span>
+                                        <span><i class="is-booked"></i>Booked</span>
+                                        <span><i class="is-unavailable"></i>Unavailable</span>
+                                    </div>
+                                    <small class="cj-reservation-calendar-note">Only confirmed and checked-in stays block dates. Pending requests do not mark a date as booked.</small>
+                                    <div class="cj-reservation-calendar-message" id="cjCalendarMessage" role="status" aria-live="polite"></div>
                                 </div>
                                 <div class="cj-reservation-field">
                                     <label for="cjGuestName">Full name</label>
@@ -124,6 +177,14 @@
                     var checkOut=document.getElementById('cjCheckOut');
                     var adultsInput=document.getElementById('cjAdults');
                     var childrenInput=document.getElementById('cjChildren');
+                    var calendar=document.getElementById('cjReservationCalendar');
+                    var calendarTitle=document.getElementById('cjCalendarTitle');
+                    var calendarPrompt=document.getElementById('cjCalendarPrompt');
+                    var calendarDays=document.getElementById('cjCalendarDays');
+                    var calendarMessage=document.getElementById('cjCalendarMessage');
+                    var calendarPrevious=document.getElementById('cjCalendarPrevious');
+                    var calendarNext=document.getElementById('cjCalendarNext');
+                    var calendarReset=document.getElementById('cjCalendarReset');
                     var submitButton=document.getElementById('cjReservationSubmit');
                     var message=document.getElementById('cjReservationMessage');
                     var reservationCard=document.getElementById('cjReservationCard');
@@ -133,6 +194,11 @@
                     var availabilityDialogMessage=document.getElementById('cjAvailabilityDialogMessage');
                     var lodges=[];
                     var lodgeRequestId=0;
+                    var availabilityRequestId=0;
+                    var availabilityData=null;
+                    var selectionMode='check-in';
+                    var calendarMonth=new Date();
+                    calendarMonth.setDate(1);
                     var requestedSlug=new URLSearchParams(window.location.search).get('lodge')||'';
                     function localDateValue(date){
                         var year=date.getFullYear();
@@ -141,8 +207,12 @@
                         return year+'-'+month+'-'+day;
                     }
                     var today=localDateValue(new Date());
-                    checkIn.min=today;
-                    checkOut.min=today;
+                    function monthValue(date){
+                        return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
+                    }
+                    function displayDate(value){
+                        return new Intl.DateTimeFormat('en-UG',{day:'numeric',month:'short',year:'numeric'}).format(new Date(value+'T12:00:00'));
+                    }
                     function showMessage(state,text){
                         message.dataset.state=state;
                         message.textContent=text;
@@ -179,20 +249,132 @@
                         }
                         return 'The reservation service returned HTTP '+status+'. Please try again.';
                     }
+                    function renderCalendar(data){
+                        availabilityData=data;
+                        var month=calendarMonth.getMonth();
+                        var year=calendarMonth.getFullYear();
+                        var monthStart=new Date(year,month,1);
+                        var daysInMonth=new Date(year,month+1,0).getDate();
+                        var mondayOffset=(monthStart.getDay()+6)%7;
+                        var isCheckout=selectionMode==='check-out'&&Boolean(checkIn.value);
+                        var available=new Set(isCheckout?(data.available_check_out_dates||[]):(data.available_dates||[]));
+                        var booked=new Set(isCheckout?(data.booked_check_out_dates||[]):(data.booked_dates||[]));
+                        calendarTitle.textContent=new Intl.DateTimeFormat('en',{month:'long',year:'numeric'}).format(monthStart);
+                        calendarPrompt.textContent=isCheckout
+                            ?'Choose a check-out date after '+displayDate(checkIn.value)+'.'
+                            :'Choose a check-in date.';
+                        calendarReset.hidden=!checkIn.value;
+                        calendarReset.textContent=checkOut.value?'Choose new dates':'Change check-in';
+                        calendarDays.replaceChildren();
+                        for(var emptyIndex=0;emptyIndex<mondayOffset;emptyIndex++){
+                            var empty=document.createElement('span');
+                            empty.className='cj-reservation-calendar-empty';
+                            empty.setAttribute('aria-hidden','true');
+                            calendarDays.appendChild(empty);
+                        }
+                        for(var dayNumber=1;dayNumber<=daysInMonth;dayNumber++){
+                            var date=new Date(year,month,dayNumber);
+                            var value=localDateValue(date);
+                            var button=document.createElement('button');
+                            var past=value<today;
+                            var isAvailable=available.has(value);
+                            var isBooked=booked.has(value);
+                            var isInRange=Boolean(checkIn.value&&checkOut.value&&value>checkIn.value&&value<checkOut.value);
+                            button.type='button';
+                            button.className='cj-reservation-calendar-day';
+                            if(past)button.classList.add('is-past');
+                            else if(isBooked)button.classList.add('is-booked');
+                            else if(!isAvailable)button.classList.add('is-unavailable');
+                            if(isInRange)button.classList.add('is-in-range');
+                            if(value===checkIn.value)button.classList.add('is-range-start');
+                            if(value===checkOut.value)button.classList.add('is-range-end');
+                            button.textContent=String(dayNumber);
+                            button.disabled=past||!isAvailable;
+                            button.setAttribute('aria-label',displayDate(value)+(isBooked?', booked':isAvailable?', available':', unavailable'));
+                            button.setAttribute('aria-pressed',String(value===checkIn.value||value===checkOut.value));
+                            if(isAvailable){
+                                button.addEventListener('click',function(selectedDate){
+                                    return function(){selectCalendarDate(selectedDate);};
+                                }(value));
+                            }
+                            calendarDays.appendChild(button);
+                        }
+                        calendarMessage.textContent=available.size
+                            ?''
+                            :isCheckout
+                                ?'No valid check-out dates are available in this month. Try another month or check-in date.'
+                                :'No check-in dates are available in this month.';
+                        calendarPrevious.disabled=monthValue(calendarMonth)<=monthValue(new Date());
+                    }
+                    function loadAvailability(){
+                        var lodge=lodges.find(function(item){return item.slug===lodgeSelect.value;});
+                        if(!lodge){
+                            availabilityRequestId++;
+                            availabilityData=null;
+                            calendar.hidden=true;
+                            return;
+                        }
+                        var requestId=++availabilityRequestId;
+                        var isCheckout=selectionMode==='check-out'&&Boolean(checkIn.value);
+                        var query=new URLSearchParams({
+                            month:monthValue(calendarMonth),
+                            nights:String(lodge.min_nights),
+                            guests:String(Number(adultsInput.value||1)+Number(childrenInput.value||0))
+                        });
+                        if(isCheckout)query.set('check_in',checkIn.value);
+                        calendar.hidden=false;
+                        calendarMessage.textContent='Loading dates…';
+                        calendarDays.replaceChildren();
+                        fetch(apiBase+'/lodges/'+encodeURIComponent(lodge.slug)+'/availability/?'+query.toString(),{
+                            headers:{Accept:'application/json'}
+                        }).then(function(response){
+                            return response.text().then(function(text){
+                                var data=null;
+                                try{data=text?JSON.parse(text):null;}catch(parseError){}
+                                if(!response.ok)throw new Error(errorText(data,response.status));
+                                if(!data||!Array.isArray(data.available_dates)||!Array.isArray(data.booked_dates)){
+                                    throw new Error('The availability service returned an invalid calendar.');
+                                }
+                                if(isCheckout&&!Array.isArray(data.available_check_out_dates)){
+                                    throw new Error('The availability service cannot check out dates right now.');
+                                }
+                                return data;
+                            });
+                        }).then(function(data){
+                            if(requestId!==availabilityRequestId)return;
+                            renderCalendar(data);
+                        }).catch(function(error){
+                            if(requestId!==availabilityRequestId)return;
+                            availabilityData=null;
+                            calendarDays.replaceChildren();
+                            calendarMessage.textContent=error.message||'Could not load available dates. Please try again.';
+                        });
+                    }
+                    function selectCalendarDate(value){
+                        if(!availabilityData)return;
+                        var isCheckout=selectionMode==='check-out'&&Boolean(checkIn.value);
+                        var available=isCheckout
+                            ?availabilityData.available_check_out_dates||[]
+                            :availabilityData.available_dates||[];
+                        if(available.indexOf(value)===-1)return;
+                        if(isCheckout){
+                            checkOut.value=value;
+                            selectionMode='check-in';
+                        }else{
+                            checkIn.value=value;
+                            checkOut.value='';
+                            selectionMode='check-out';
+                        }
+                        hideMessage();
+                        loadAvailability();
+                    }
                     function loadLodges(){
                         var requestId=++lodgeRequestId;
                         var selectedSlug=lodgeSelect.value||requestedSlug;
-                        var query=new URLSearchParams();
-                        if(checkIn.value&&checkOut.value&&checkOut.value>checkIn.value){
-                            query.set('check_in',checkIn.value);
-                            query.set('check_out',checkOut.value);
-                            query.set('guests',String(Number(adultsInput.value||1)+Number(childrenInput.value||0)));
-                        }
-                        var url=apiBase+'/lodges/'+(query.toString()?'?'+query.toString():'');
                         lodgeSelect.disabled=true;
                         submitButton.disabled=true;
                         lodgeSelect.replaceChildren(new Option('Loading available stays…',''));
-                        fetch(url,{headers:{Accept:'application/json'}}).then(function(response){
+                        fetch(apiBase+'/lodges/',{headers:{Accept:'application/json'}}).then(function(response){
                             return response.text().then(function(text){
                                 var data=null;
                                 try{data=text?JSON.parse(text):null;}catch(parseError){}
@@ -203,7 +385,7 @@
                         }).then(function(data){
                             if(requestId!==lodgeRequestId)return;
                             lodges=data;
-                            lodgeSelect.replaceChildren(new Option(data.length?'Choose a cottage or lodge':query.toString()?'Choose different dates':'No stays currently available',''));
+                            lodgeSelect.replaceChildren(new Option(data.length?'Choose a cottage or lodge':'No stays currently available',''));
                             data.forEach(function(lodge){
                                 lodgeSelect.add(new Option(lodge.name+' · sleeps '+lodge.capacity,lodge.slug));
                             });
@@ -212,21 +394,14 @@
                             lodgeSelect.disabled=data.length===0;
                             submitButton.disabled=data.length===0;
                             if(!data.length){
-                                if(query.toString()){
-                                    lodgeHelp.textContent='';
-                                    showAvailabilityDialog('No cottage or lodge reservations are available for your selected dates. Choose different dates and check again.');
-                                }else{
-                                    lodgeHelp.textContent='No active cottages are listed yet. Please contact the resort.';
-                                }
+                                lodgeHelp.textContent='No active cottages are listed yet. Please contact the resort.';
                             }else{
                                 lodgeHelp.textContent=matchingLodge?'Your selected cottage is ready.':'Choose an active cottage or lodge from the list.';
-                                if(selectedSlug&&!matchingLodge&&query.toString()){
-                                    lodgeHelp.textContent='';
-                                    showAvailabilityDialog('The selected cottage is not available for your chosen dates. Choose different dates or select another cottage.');
-                                }else if(selectedSlug&&!matchingLodge)showMessage('error','That cottage is not currently listed as available. Please choose another stay.');
+                                if(selectedSlug&&!matchingLodge)showMessage('error','That cottage is not currently listed as available. Please choose another stay.');
                                 else hideMessage();
                             }
                             requestedSlug='';
+                            loadAvailability();
                         }).catch(function(error){
                             if(requestId!==lodgeRequestId)return;
                             lodges=[];
@@ -237,21 +412,32 @@
                             showMessage('error',error.message||'Could not load cottages. Please try again.');
                         });
                     }
-                    checkIn.addEventListener('change',function(){
-                        closeAvailabilityDialog();
-                        checkOut.min=checkIn.value||today;
-                        if(checkOut.value&&!(checkOut.value>checkIn.value))checkOut.value='';
-                        hideMessage();
-                        loadLodges();
+                    calendarPrevious.addEventListener('click',function(){
+                        calendarMonth.setMonth(calendarMonth.getMonth()-1);
+                        loadAvailability();
                     });
-                    checkOut.addEventListener('change',function(){
+                    calendarNext.addEventListener('click',function(){
+                        calendarMonth.setMonth(calendarMonth.getMonth()+1);
+                        loadAvailability();
+                    });
+                    calendarReset.addEventListener('click',function(){
+                        checkIn.value='';
+                        checkOut.value='';
+                        selectionMode='check-in';
+                        hideMessage();
+                        loadAvailability();
+                    });
+                    adultsInput.addEventListener('change',function(){closeAvailabilityDialog();loadAvailability();});
+                    childrenInput.addEventListener('change',function(){closeAvailabilityDialog();loadAvailability();});
+                    lodgeSelect.addEventListener('change',function(){
                         closeAvailabilityDialog();
                         hideMessage();
-                        loadLodges();
+                        if(!checkIn.value){
+                            selectionMode='check-in';
+                            checkOut.value='';
+                        }
+                        loadAvailability();
                     });
-                    adultsInput.addEventListener('change',function(){closeAvailabilityDialog();loadLodges();});
-                    childrenInput.addEventListener('change',function(){closeAvailabilityDialog();loadLodges();});
-                    lodgeSelect.addEventListener('change',function(){closeAvailabilityDialog();hideMessage();});
                     document.getElementById('cjAvailabilityDialogClose').addEventListener('click',closeAvailabilityDialog);
                     document.getElementById('cjAvailabilityDialogAction').addEventListener('click',closeAvailabilityDialog);
                     availabilityDialog.addEventListener('click',function(event){
@@ -306,7 +492,7 @@
                             successPage.focus();
                         }).catch(function(error){
                             var errorMessage=error.message||'Could not send your reservation request. Please try again.';
-                            if(/already has a request|unavailable for part|not available for those dates/i.test(errorMessage)){
+                            if(/already has a (?:confirmed )?reservation|unavailable for part|not available for those dates/i.test(errorMessage)){
                                 showAvailabilityDialog('The selected cottage is no longer available for these dates. Choose different dates or another cottage.');
                             }else{
                                 showMessage('error',errorMessage);

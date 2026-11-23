@@ -20,7 +20,7 @@ Django catalog administration: `http://127.0.0.1:8000/admin/`
 
 Health check: `http://127.0.0.1:8000/health/`
 
-Create categories, products, and lodges in Django admin before using the public API. Product prices are stored as whole UGX amounts. Lodge reservations are requests (`pending`) until staff confirms them. Pending and confirmed stays both reserve their dates; overlapping requests are rejected under a per-lodge database lock.
+Create categories, products, and lodges in Django admin before using the public API. Product prices are stored as whole UGX amounts. Lodge reservations are requests (`pending`) until staff confirms them. Only confirmed and checked-in stays reserve dates; multiple pending requests may overlap, and staff checks for conflicts when confirming.
 
 Set `CLOUDINARY_NAME`, `CLOUDINARY_KEY`, and `CLOUDINARY_SECRET` in the local
 `.env` file to enable product and lodge image uploads. Keep the Cloudinary API
@@ -63,7 +63,8 @@ All endpoints are under `/api/v1/`. JSON is expected for POST requests.
 - `GET /api/v1/products/`
 - `GET /api/v1/products/?category=drinks`
 - `GET /api/v1/lodges/`
-- `GET /api/v1/lodges/?check_in=2027-01-10&check_out=2027-01-12&guests=2` returns stays that satisfy capacity, booking limits, check-in days, blockouts, and pending/confirmed reservations.
+- `GET /api/v1/lodges/?check_in=2027-01-10&check_out=2027-01-12&guests=2` returns stays that satisfy capacity, booking limits, check-in days, blockouts, and confirmed/in-house reservations.
+- `GET /api/v1/lodges/<slug>/availability/?month=2027-01&nights=2&guests=2` returns available, booked, and unavailable check-in dates. Add `check_in=2027-01-10` to receive available, booked, and unavailable check-out dates for that arrival.
 
 Only active categories, available products, and active lodges are public.
 
@@ -117,7 +118,7 @@ The standalone Odoo page templates in this repository, including `cottages.html`
 }
 ```
 
-New requests are `pending`; a `201` response includes a unique reservation reference and booking status. Email is required. The server validates stay dates, lodge capacity and policies, blockouts, and pending/confirmed overlaps. Customers and the operations inbox receive reservation emails when requests are created and when staff changes a reservation status.
+New requests are `pending`; a `201` response includes a unique reservation reference and booking status. Email is required. The reservation page provides a calendar range picker for check-in and check-out. The server validates stay dates, lodge capacity and policies, blockouts, and confirmed/in-house overlaps. Pending requests remain visible to staff but do not appear as booked or block availability; staff checks for conflicts when confirming. Customers and the operations inbox receive reservation emails when requests are created and when staff changes a reservation status.
 
 The public form does not set reservation prices. Staff enters the total due in the Reservations page before recording payments.
 
