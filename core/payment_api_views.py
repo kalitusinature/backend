@@ -152,7 +152,9 @@ class StaffPaymentCreate(StaffApiMixin, APIView):
                 reservation = None
                 if data.get("order_id"):
                     order = get_object_or_404(
-                        Order.objects.select_for_update(),
+                        Order.objects.select_for_update().filter(
+                            archived_at__isnull=True
+                        ),
                         pk=data["order_id"],
                     )
                     if order.status == Order.Status.CANCELLED:

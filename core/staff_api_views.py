@@ -11,6 +11,7 @@ from django.utils.dateparse import parse_date
 from django.utils.crypto import get_random_string
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
+from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
@@ -27,7 +28,6 @@ from .models import (
     LodgeBlockout,
     LodgeReservation,
     Order,
-    Payment,
     Product,
     StaffProfile,
     StaffPushSubscription,
@@ -427,9 +427,10 @@ class StaffAccountPasswordReset(StaffApiMixin, APIView):
 
 class StaffDashboard(StaffApiMixin, APIView):
     def get(self, request):
+        active_orders = Order.objects.filter(archived_at__isnull=True)
         order_status_counts = {
             entry["status"]: entry["count"]
-            for entry in Order.objects.values("status").annotate(count=Count("id"))
+            for entry in active_orders.values("status").annotate(count=Count("id"))
         }
         reservation_status_counts = {
             entry["status"]: entry["count"]
@@ -439,9 +440,9 @@ class StaffDashboard(StaffApiMixin, APIView):
         }
         return Response(
             {
-                "orders_total": Order.objects.count(),
+                "orders_total": active_orders.count(),
                 "orders_by_status": order_status_counts,
-                "new_orders": Order.objects.filter(status=Order.Status.NEW).count(),
+                "new_orders": active_orders.filter(status=Order.Status.NEW).count(),
                 "reservations_total": sum(reservation_status_counts.values()),
                 "reservations_by_status": reservation_status_counts,
                 "pending_reservations": reservation_status_counts.get(
@@ -451,7 +452,7 @@ class StaffDashboard(StaffApiMixin, APIView):
                 "categories_total": Category.objects.count(),
                 "lodges_total": Lodge.objects.count(),
                 "recent_orders": StaffOrderSerializer(
-                    Order.objects.prefetch_related("items", "payments")[:5], many=True
+                    active_orders.prefetch_related("items", "payments")[:5], many=True
                 ).data,
                 "recent_reservations": StaffReservationSerializer(
                     LodgeReservation.objects.select_related("lodge").prefetch_related(
@@ -467,7 +468,9 @@ class StaffOrderList(StaffApiMixin, generics.ListAPIView):
     serializer_class = StaffOrderSerializer
 
     def get_queryset(self):
-        queryset = Order.objects.prefetch_related("items", "payments")
+        queryset = Order.objects.filter(archived_at__isnull=True).prefetch_related(
+            "items", "payments"
+        )
         status_filter = self.request.query_params.get("status")
         if status_filter and status_filter != "all":
             if status_filter not in Order.Status.values:
@@ -519,27 +522,29 @@ class StaffOrderList(StaffApiMixin, generics.ListAPIView):
             raise ValidationError({"ids": "Provide a non-empty list of order IDs."})
 
         order_ids = list(dict.fromkeys(order_ids))
-        orders = list(Order.objects.select_for_update().filter(pk__in=order_ids))
+        orders = list(
+            Order.objects.select_for_update().filter(
+                pk__in=order_ids,
+                archived_at__isnull=True,
+            )
+        )
         if len(orders) != len(order_ids):
             raise ValidationError(
                 {"ids": "One or more orders no longer exist. Reload the order list."}
             )
-        if Payment.objects.filter(order_id__in=order_ids).exists():
-            raise ValidationError(
-                {
-                    "ids": (
-                        "Orders with recorded payments cannot be deleted. "
-                        "Their financial records must be retained."
-                    )
-                }
-            )
-
-        Order.objects.filter(pk__in=order_ids).delete()
-        return Response({"deleted_count": len(order_ids)}, status=status.HTTP_200_OK)
+        archived_at = timezone.now()
+        Order.objects.filter(
+            pk__in=order_ids,
+            archived_at__isnull=True,
+        ).update(archived_at=archived_at, updated_at=archived_at)
+        return Response(
+            {"archived_count": len(orders)},
+            status=status.HTTP_200_OK,
+        )
 
 
 class StaffOrderUpdate(StaffApiMixin, generics.UpdateAPIView):
-    queryset = Order.objects.select_for_update()
+    queryset = Order.objects.select_for_update().filter(archived_at__isnull=True)
     serializer_class = StaffOrderUpdateSerializer
     http_method_names = ("patch", "options", "head")
 

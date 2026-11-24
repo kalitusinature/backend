@@ -23,15 +23,22 @@ class StaffLogoutView(LogoutView):
 @staff_member_required(login_url="staff_login")
 def dashboard(request):
     context = {
-        "order_count": Order.objects.exclude(status=Order.Status.CANCELLED).count(),
-        "new_order_count": Order.objects.filter(status=Order.Status.NEW).count(),
+        "order_count": Order.objects.filter(archived_at__isnull=True)
+        .exclude(status=Order.Status.CANCELLED)
+        .count(),
+        "new_order_count": Order.objects.filter(
+            archived_at__isnull=True,
+            status=Order.Status.NEW,
+        ).count(),
         "pending_reservation_count": LodgeReservation.objects.filter(
             status=LodgeReservation.Status.PENDING
         ).count(),
         "product_count": Product.objects.count(),
         "category_count": Category.objects.count(),
         "lodge_count": Lodge.objects.count(),
-        "orders": Order.objects.select_related().prefetch_related("items")[:12],
+        "orders": Order.objects.filter(archived_at__isnull=True)
+        .select_related()
+        .prefetch_related("items")[:12],
         "reservations": LodgeReservation.objects.select_related("lodge")[:12],
         "order_statuses": Order.Status.choices,
         "reservation_statuses": LodgeReservation.Status.choices,

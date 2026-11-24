@@ -437,7 +437,9 @@ class OrderTrack(APIView):
         serializer = OrderTrackingRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order = get_object_or_404(
-            Order.objects.prefetch_related("items", "payments__receipt"),
+            Order.objects.filter(archived_at__isnull=True).prefetch_related(
+                "items", "payments__receipt"
+            ),
             number__iexact=serializer.validated_data["number"].strip(),
             email__iexact=serializer.validated_data["email"],
         )
@@ -467,6 +469,7 @@ class OrderHistoryCodeRequest(APIView):
             )
         }
         recent_orders = Order.objects.filter(
+            archived_at__isnull=True,
             email__iexact=email,
             created_at__gt=now - ORDER_TRACKING_RETENTION,
         )
@@ -544,6 +547,7 @@ class OrderHistoryCodeVerify(APIView):
         verification.consumed_at = now
         verification.save(update_fields=["consumed_at"])
         orders = Order.objects.filter(
+            archived_at__isnull=True,
             email__iexact=email,
             created_at__gt=now - ORDER_TRACKING_RETENTION,
         ).prefetch_related("items", "payments__receipt")

@@ -396,6 +396,34 @@ class PublicOrderingApiTests(TestCase):
         send_code.assert_not_called()
         self.assertEqual(OrderEmailVerification.objects.count(), 0)
 
+    @patch("core.api_views.send_order_history_verification_code", return_value=True)
+    def test_archived_order_is_not_available_for_customer_tracking_or_history(
+        self, send_code
+    ):
+        order = Order.objects.create(
+            guest_name="Archived Guest",
+            phone="+256700000023",
+            email="archived@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 1",
+            archived_at=timezone.now(),
+        )
+
+        tracking_response = self.client.post(
+            "/api/v1/orders/track/",
+            {"number": order.number, "email": order.email},
+            format="json",
+        )
+        code_response = self.client.post(
+            "/api/v1/orders/history/request-code/",
+            {"email": order.email},
+            format="json",
+        )
+
+        self.assertEqual(tracking_response.status_code, 404)
+        self.assertEqual(code_response.status_code, 200)
+        send_code.assert_not_called()
+
     def test_customer_tracking_expires_after_two_days_but_order_remains_for_staff(self):
         order_response = self.client.post(
             "/api/v1/orders/",
@@ -1837,7 +1865,7 @@ class StaffApiTests(TestCase):
         )
         self.assertEqual(invalid_date_response.status_code, 400)
 
-    def test_staff_can_delete_orders_but_recorded_payments_are_preserved(self):
+    def test_staff_can_archive_orders_and_preserve_payment_history(self):
         unpaid_order = Order.objects.create(
             guest_name="Unpaid Guest",
             phone="+256700000011",
@@ -1850,11 +1878,20 @@ class StaffApiTests(TestCase):
             order_type=Order.OrderType.DINE_IN,
             location="Table 5",
         )
-        Payment.objects.create(
+        payment = Payment.objects.create(
             order=paid_order,
             amount_ugx=5000,
             method=Payment.Method.CASH,
             transaction_reference="ORDER-DELETE-TEST-PAYMENT",
+        )
+        receipt = PaymentReceipt.objects.create(
+            payment=payment,
+            number="ARCHIVE-RECEIPT-001",
+            verification_token_digest="archive-receipt-verification-token",
+            total_due_ugx=5000,
+            paid_to_date_ugx=5000,
+            balance_ugx=0,
+            pdf_data=b"",
         )
         payload = {"ids": [unpaid_order.pk, paid_order.pk]}
 
@@ -1864,22 +1901,36 @@ class StaffApiTests(TestCase):
         self.assertEqual(unauthenticated_response.status_code, 401)
 
         self.login_as_staff()
-        protected_response = self.client.delete(
+        archive_response = self.client.delete(
             "/api/v1/staff/orders/", payload, format="json"
         )
-        self.assertEqual(protected_response.status_code, 400)
+        self.assertEqual(archive_response.status_code, 200)
+        self.assertEqual(archive_response.data["archived_count"], 2)
         self.assertTrue(Order.objects.filter(pk=unpaid_order.pk).exists())
         self.assertTrue(Order.objects.filter(pk=paid_order.pk).exists())
-
-        delete_response = self.client.delete(
-            "/api/v1/staff/orders/",
-            {"ids": [unpaid_order.pk]},
-            format="json",
+        self.assertTrue(
+            Order.objects.filter(
+                pk=unpaid_order.pk,
+                archived_at__isnull=False,
+            ).exists()
         )
-        self.assertEqual(delete_response.status_code, 200)
-        self.assertEqual(delete_response.data["deleted_count"], 1)
-        self.assertFalse(Order.objects.filter(pk=unpaid_order.pk).exists())
-        self.assertTrue(Order.objects.filter(pk=paid_order.pk).exists())
+        self.assertTrue(
+            Order.objects.filter(
+                pk=paid_order.pk,
+                archived_at__isnull=False,
+            ).exists()
+        )
+        self.assertTrue(Payment.objects.filter(pk=payment.pk, order=paid_order).exists())
+        self.assertTrue(
+            PaymentReceipt.objects.filter(pk=receipt.pk, payment=payment).exists()
+        )
+
+        orders_response = self.client.get("/api/v1/staff/orders/")
+        dashboard_response = self.client.get("/api/v1/staff/dashboard/")
+        self.assertEqual(orders_response.status_code, 200)
+        self.assertEqual(orders_response.data, [])
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertEqual(dashboard_response.data["orders_total"], 0)
 
     def test_staff_can_register_and_remove_a_push_subscription(self):
         self.assertEqual(
