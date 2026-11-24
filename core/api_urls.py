@@ -1,5 +1,13 @@
 from django.urls import path
 
+from .chat_api_views import (
+    ChatCodeRequest,
+    ChatCodeVerify,
+    CustomerChatMessages,
+    StaffChatConversations,
+    StaffChatMessages,
+    StaffChatUnreadCount,
+)
 from .api_views import (
     CategoryList,
     GuestCartCreate,
@@ -140,6 +148,17 @@ urlpatterns = [
     ),
     path("reservations/", ReservationCreate.as_view(), name="api_reservations"),
     path(
+        "chats/request-code/",
+        ChatCodeRequest.as_view(),
+        name="api_chat_code_request",
+    ),
+    path(
+        "chats/verify-code/",
+        ChatCodeVerify.as_view(),
+        name="api_chat_code_verify",
+    ),
+    path("chats/messages/", CustomerChatMessages.as_view(), name="api_chat_messages"),
+    path(
         "reservations/track/",
         ReservationTrack.as_view(),
         name="api_reservation_track",
@@ -175,6 +194,26 @@ urlpatterns = [
         name="staff_api_payment_receipt_resend",
     ),
     path("staff/dashboard/", StaffDashboard.as_view(), name="staff_api_dashboard"),
+    path(
+        "staff/chats/unread/",
+        StaffChatUnreadCount.as_view(),
+        name="staff_api_chat_unread",
+    ),
+    path(
+        "staff/chats/",
+        StaffChatConversations.as_view(),
+        name="staff_api_chats",
+    ),
+    path(
+        "staff/chats/<int:pk>/messages/",
+        StaffChatMessages.as_view(),
+        name="staff_api_chat_messages",
+    ),
+    path(
+        "staff/chats/<int:pk>/messages/send/",
+        StaffChatConversations.as_view(),
+        name="staff_api_chat_send",
+    ),
     path("staff/orders/", StaffOrderList.as_view(), name="staff_api_orders"),
     path(
         "staff/orders/<int:pk>/",

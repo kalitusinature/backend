@@ -19,6 +19,9 @@ from rest_framework.test import APIClient
 
 from .models import (
     Category,
+    ChatConversation,
+    ChatEmailVerification,
+    ChatMessage,
     GuestCart,
     Lodge,
     LodgeBlockout,
@@ -395,6 +398,83 @@ class PublicOrderingApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         send_code.assert_not_called()
         self.assertEqual(OrderEmailVerification.objects.count(), 0)
+
+    @patch("core.chat_api_views.send_chat_verification_code", return_value=True)
+    @patch("core.chat_api_views.send_chat_admin_notification", return_value=True)
+    def test_guest_can_verify_email_and_exchange_messages_with_staff(
+        self, send_admin_notification, send_code
+    ):
+        code_response = self.client.post(
+            "/api/v1/chats/request-code/",
+            {"name": "Chat Guest", "email": "CHAT@example.com"},
+            format="json",
+        )
+        code = send_code.call_args.args[1]
+        verify_response = self.client.post(
+            "/api/v1/chats/verify-code/",
+            {"email": "chat@example.com", "code": code},
+            format="json",
+        )
+
+        self.assertEqual(code_response.status_code, 200)
+        self.assertEqual(verify_response.status_code, 200)
+        self.assertEqual(verify_response.data["conversation"]["guest_name"], "Chat Guest")
+        self.assertEqual(len(verify_response.data["messages"]), 0)
+        self.assertEqual(
+            ChatEmailVerification.objects.filter(consumed_at__isnull=False).count(),
+            1,
+        )
+
+        anonymous_message = self.client.post(
+            "/api/v1/chats/messages/",
+            {"body": "Hello"},
+            format="json",
+        )
+        self.assertEqual(anonymous_message.status_code, 401)
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Chat {verify_response.data['token']}"
+        )
+        customer_message = self.client.post(
+            "/api/v1/chats/messages/",
+            {"body": "Can you help me with a booking?"},
+            format="json",
+        )
+        history_response = self.client.get("/api/v1/chats/messages/")
+
+        self.assertEqual(customer_message.status_code, 201)
+        self.assertEqual(customer_message.data["sender"], ChatMessage.Sender.CUSTOMER)
+        self.assertEqual(history_response.status_code, 200)
+        self.assertEqual(len(history_response.data["messages"]), 1)
+        send_admin_notification.assert_called_once()
+
+    @patch("core.chat_api_views.send_chat_verification_code", return_value=True)
+    def test_chat_email_code_is_single_use_and_limited_to_five_attempts(self, send_code):
+        self.client.post(
+            "/api/v1/chats/request-code/",
+            {"name": "Chat Guest", "email": "chat-code@example.com"},
+            format="json",
+        )
+        correct_code = send_code.call_args.args[1]
+        for _ in range(5):
+            response = self.client.post(
+                "/api/v1/chats/verify-code/",
+                {
+                    "email": "chat-code@example.com",
+                    "code": "000000" if correct_code != "000000" else "000001",
+                },
+                format="json",
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            self.client.post(
+                "/api/v1/chats/verify-code/",
+                {"email": "chat-code@example.com", "code": correct_code},
+                format="json",
+            ).status_code,
+            400,
+        )
+        self.assertFalse(ChatConversation.objects.exists())
 
     @patch("core.api_views.send_order_history_verification_code", return_value=True)
     def test_archived_order_is_not_available_for_customer_tracking_or_history(
@@ -1931,6 +2011,46 @@ class StaffApiTests(TestCase):
         self.assertEqual(orders_response.data, [])
         self.assertEqual(dashboard_response.status_code, 200)
         self.assertEqual(dashboard_response.data["orders_total"], 0)
+
+    def test_staff_can_read_reply_and_clear_unread_customer_chat(self):
+        conversation = ChatConversation.objects.create(
+            guest_name="Chat Guest",
+            email="chat-guest@example.com",
+        )
+        customer_message = ChatMessage.objects.create(
+            conversation=conversation,
+            sender=ChatMessage.Sender.CUSTOMER,
+            body="Is the lodge available?",
+        )
+        self.assertEqual(
+            self.client.get("/api/v1/staff/chats/").status_code,
+            401,
+        )
+        self.login_as_staff()
+
+        inbox_response = self.client.get("/api/v1/staff/chats/")
+        unread_response = self.client.get("/api/v1/staff/chats/unread/")
+        messages_response = self.client.get(
+            f"/api/v1/staff/chats/{conversation.pk}/messages/"
+        )
+        reply_response = self.client.post(
+            f"/api/v1/staff/chats/{conversation.pk}/messages/send/",
+            {"body": "Yes, we can help with that."},
+            format="json",
+        )
+        updated_unread_response = self.client.get("/api/v1/staff/chats/unread/")
+
+        self.assertEqual(inbox_response.status_code, 200)
+        self.assertEqual(inbox_response.data[0]["id"], conversation.pk)
+        self.assertEqual(inbox_response.data[0]["unread_count"], 1)
+        self.assertEqual(unread_response.data["count"], 1)
+        self.assertEqual(messages_response.status_code, 200)
+        self.assertEqual(messages_response.data["messages"][0]["id"], customer_message.pk)
+        customer_message.refresh_from_db()
+        self.assertIsNotNone(customer_message.staff_read_at)
+        self.assertEqual(reply_response.status_code, 201)
+        self.assertEqual(reply_response.data["sender"], ChatMessage.Sender.STAFF)
+        self.assertEqual(updated_unread_response.data["count"], 0)
 
     def test_staff_can_register_and_remove_a_push_subscription(self):
         self.assertEqual(

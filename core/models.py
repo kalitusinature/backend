@@ -252,6 +252,64 @@ class OrderEmailVerification(models.Model):
         ordering = ["-created_at"]
 
 
+class ChatConversation(models.Model):
+    email = models.EmailField(unique=True)
+    guest_name = models.CharField(max_length=120)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        verbose_name = "chat conversation"
+        verbose_name_plural = "chat conversations"
+
+    def __str__(self):
+        return f"{self.guest_name} ({self.email})"
+
+
+class ChatEmailVerification(models.Model):
+    name = models.CharField(max_length=120)
+    email = models.EmailField(db_index=True)
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField(db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ChatMessage(models.Model):
+    class Sender(models.TextChoices):
+        CUSTOMER = "customer", "Customer"
+        STAFF = "staff", "Resort team"
+
+    conversation = models.ForeignKey(
+        ChatConversation,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    sender = models.CharField(max_length=10, choices=Sender.choices)
+    staff_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="chat_messages",
+        null=True,
+        blank=True,
+    )
+    body = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    staff_read_at = models.DateTimeField(null=True, blank=True)
+    customer_read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return f"{self.sender}: {self.body[:60]}"
+
+
 class LodgeReservation(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending Review"

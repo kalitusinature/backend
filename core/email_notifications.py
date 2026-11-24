@@ -15,7 +15,7 @@ from django.core.mail import EmailMultiAlternatives, send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from .models import LodgeReservation, Order, Payment, PaymentReceipt
+from .models import ChatConversation, ChatMessage, LodgeReservation, Order, Payment, PaymentReceipt
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +413,66 @@ def send_order_history_verification_code(email: str, code: str) -> bool:
         message,
         [email],
         "order-history-verification",
+        html_message=html_message,
+    )
+
+
+def send_chat_verification_code(email: str, code: str) -> bool:
+    subject = "Your Kalitusi chat verification code"
+    message = (
+        f"Your chat verification code is {code}.\n\n"
+        "It expires in 10 minutes and can only be used once. "
+        "If you did not request it, you can ignore this email."
+    )
+    html_message = _email_layout(
+        "Verify your email to chat with us",
+        "Use this one-time code to open your Kalitusi Resort support chat.",
+        (
+            '<p style="padding:16px;border-radius:8px;background:#f4f7f5;'
+            'color:#234b3b;font-size:28px;font-weight:700;letter-spacing:8px;'
+            f'text-align:center;">{escape(code)}</p>'
+            '<p style="line-height:1.6;">This code expires in 10 minutes and '
+            'can only be used once. If you did not request it, ignore this email.</p>'
+        ),
+    )
+    return _send_email(
+        subject,
+        message,
+        [email],
+        "customer-chat-verification",
+        html_message=html_message,
+    )
+
+
+def send_chat_admin_notification(
+    conversation: ChatConversation,
+    message: ChatMessage,
+) -> bool:
+    subject = f"New customer chat from {conversation.guest_name}"
+    message_text = (
+        f"New message from {conversation.guest_name} ({conversation.email}):\n\n"
+        f"{message.body}\n\n"
+        f"Reply in the Kalitusi admin portal: {settings.ADMIN_PORTAL_URL}"
+    )
+    html_message = _email_layout(
+        subject,
+        f"New support message from {conversation.guest_name} ({conversation.email}).",
+        (
+            '<blockquote style="margin:0;padding:16px;border-left:3px solid #008b92;'
+            'background:#f4f7f5;line-height:1.6;">'
+            f"{escape(message.body)}</blockquote>"
+        ),
+        closing_html=(
+            '<tr><td style="padding-top:24px;color:#64736c;font-size:13px;">'
+            f'<a href="{escape(settings.ADMIN_PORTAL_URL, quote=True)}">'
+            "Open the admin portal to reply.</a></td></tr>"
+        ),
+    )
+    return _send_email(
+        subject,
+        message_text,
+        _staff_recipients(f"customer-chat-{conversation.pk}"),
+        f"customer-chat-{conversation.pk}",
         html_message=html_message,
     )
 
