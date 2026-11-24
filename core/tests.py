@@ -1,6 +1,6 @@
 import base64
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
@@ -24,6 +24,7 @@ from .models import (
     LodgeBlockout,
     LodgeReservation,
     Order,
+    OrderEmailVerification,
     OrderItem,
     Payment,
     PaymentReceipt,
@@ -321,6 +322,79 @@ class PublicOrderingApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+    @patch("core.api_views.send_order_history_verification_code", return_value=True)
+    def test_customer_can_view_only_recent_orders_after_single_use_email_code(
+        self, send_code
+    ):
+        recent_order = Order.objects.create(
+            guest_name="Recent Guest",
+            phone="+256700000020",
+            email="guest@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 1",
+        )
+        expired_order = Order.objects.create(
+            guest_name="Expired Guest",
+            phone="+256700000021",
+            email="guest@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 2",
+        )
+        other_customer_order = Order.objects.create(
+            guest_name="Other Guest",
+            phone="+256700000022",
+            email="other@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 3",
+        )
+        Order.objects.filter(pk=expired_order.pk).update(
+            created_at=timezone.now() - timedelta(days=2, minutes=1)
+        )
+
+        request_response = self.client.post(
+            "/api/v1/orders/history/request-code/",
+            {"email": "GUEST@example.com"},
+            format="json",
+        )
+        code = send_code.call_args.args[1]
+        verify_response = self.client.post(
+            "/api/v1/orders/history/verify-code/",
+            {"email": "guest@example.com", "code": code},
+            format="json",
+        )
+        replay_response = self.client.post(
+            "/api/v1/orders/history/verify-code/",
+            {"email": "guest@example.com", "code": code},
+            format="json",
+        )
+
+        self.assertEqual(request_response.status_code, 200)
+        self.assertEqual(
+            [order["number"] for order in verify_response.data["orders"]],
+            [recent_order.number],
+        )
+        self.assertNotIn("email", verify_response.data["orders"][0])
+        self.assertNotIn("guest_name", verify_response.data["orders"][0])
+        self.assertNotIn("phone", verify_response.data["orders"][0])
+        self.assertEqual(replay_response.status_code, 400)
+        self.assertTrue(Order.objects.filter(pk=other_customer_order.pk).exists())
+        self.assertEqual(
+            OrderEmailVerification.objects.filter(consumed_at__isnull=False).count(),
+            1,
+        )
+
+    @patch("core.api_views.send_order_history_verification_code", return_value=True)
+    def test_order_history_code_is_not_sent_without_recent_orders(self, send_code):
+        response = self.client.post(
+            "/api/v1/orders/history/request-code/",
+            {"email": "no-orders@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        send_code.assert_not_called()
+        self.assertEqual(OrderEmailVerification.objects.count(), 0)
 
     def test_customer_tracking_expires_after_two_days_but_order_remains_for_staff(self):
         order_response = self.client.post(
@@ -1711,6 +1785,101 @@ class StaffApiTests(TestCase):
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Token {response.data['token']}"
         )
+
+    def test_staff_order_list_filters_by_customer_status_date_and_month(self):
+        matching_order = Order.objects.create(
+            guest_name="Alice Guest",
+            phone="+256700000010",
+            email="alice@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 1",
+            status=Order.Status.NEW,
+        )
+        different_status = Order.objects.create(
+            guest_name="Alice Guest",
+            phone="+256700000010",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 2",
+            status=Order.Status.READY,
+        )
+        different_month = Order.objects.create(
+            guest_name="Alice Guest",
+            phone="+256700000010",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 3",
+        )
+        may_tenth = timezone.make_aware(datetime(2025, 5, 10, 12))
+        june_tenth = timezone.make_aware(datetime(2025, 6, 10, 12))
+        Order.objects.filter(pk=matching_order.pk).update(created_at=may_tenth)
+        Order.objects.filter(pk=different_status.pk).update(created_at=may_tenth)
+        Order.objects.filter(pk=different_month.pk).update(created_at=june_tenth)
+        self.login_as_staff()
+
+        month_response = self.client.get(
+            "/api/v1/staff/orders/",
+            {"q": "alice@example.com", "status": "new", "month": "2025-05"},
+        )
+        date_response = self.client.get(
+            "/api/v1/staff/orders/",
+            {"q": "256700000010", "date": "2025-05-10"},
+        )
+        invalid_date_response = self.client.get(
+            "/api/v1/staff/orders/",
+            {"date": "2025-05-10", "month": "2025-05"},
+        )
+
+        self.assertEqual(month_response.status_code, 200)
+        self.assertEqual([o["id"] for o in month_response.data], [matching_order.pk])
+        self.assertEqual(date_response.status_code, 200)
+        self.assertEqual(
+            {o["id"] for o in date_response.data},
+            {matching_order.pk, different_status.pk},
+        )
+        self.assertEqual(invalid_date_response.status_code, 400)
+
+    def test_staff_can_delete_orders_but_recorded_payments_are_preserved(self):
+        unpaid_order = Order.objects.create(
+            guest_name="Unpaid Guest",
+            phone="+256700000011",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 4",
+        )
+        paid_order = Order.objects.create(
+            guest_name="Paid Guest",
+            phone="+256700000012",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 5",
+        )
+        Payment.objects.create(
+            order=paid_order,
+            amount_ugx=5000,
+            method=Payment.Method.CASH,
+            transaction_reference="ORDER-DELETE-TEST-PAYMENT",
+        )
+        payload = {"ids": [unpaid_order.pk, paid_order.pk]}
+
+        unauthenticated_response = self.client.delete(
+            "/api/v1/staff/orders/", payload, format="json"
+        )
+        self.assertEqual(unauthenticated_response.status_code, 401)
+
+        self.login_as_staff()
+        protected_response = self.client.delete(
+            "/api/v1/staff/orders/", payload, format="json"
+        )
+        self.assertEqual(protected_response.status_code, 400)
+        self.assertTrue(Order.objects.filter(pk=unpaid_order.pk).exists())
+        self.assertTrue(Order.objects.filter(pk=paid_order.pk).exists())
+
+        delete_response = self.client.delete(
+            "/api/v1/staff/orders/",
+            {"ids": [unpaid_order.pk]},
+            format="json",
+        )
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(delete_response.data["deleted_count"], 1)
+        self.assertFalse(Order.objects.filter(pk=unpaid_order.pk).exists())
+        self.assertTrue(Order.objects.filter(pk=paid_order.pk).exists())
 
     def test_staff_can_register_and_remove_a_push_subscription(self):
         self.assertEqual(

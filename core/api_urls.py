@@ -9,6 +9,8 @@ from .api_views import (
     LodgeAvailability,
     LodgeList,
     OrderCreate,
+    OrderHistoryCodeRequest,
+    OrderHistoryCodeVerify,
     OrderTrack,
     ProductList,
     ReservationCreate,
@@ -119,6 +121,16 @@ urlpatterns = [
         name="api_lodge_availability",
     ),
     path("orders/", OrderCreate.as_view(), name="api_orders"),
+    path(
+        "orders/history/request-code/",
+        OrderHistoryCodeRequest.as_view(),
+        name="api_order_history_code_request",
+    ),
+    path(
+        "orders/history/verify-code/",
+        OrderHistoryCodeVerify.as_view(),
+        name="api_order_history_code_verify",
+    ),
     path("orders/track/", OrderTrack.as_view(), name="api_order_track"),
     path("orders/receipts/", OrderReceiptList.as_view(), name="api_order_receipts"),
     path(

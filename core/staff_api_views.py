@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, password_validation
 from django.contrib.auth.tokens import default_token_generator
@@ -25,6 +27,7 @@ from .models import (
     LodgeBlockout,
     LodgeReservation,
     Order,
+    Payment,
     Product,
     StaffProfile,
     StaffPushSubscription,
@@ -466,14 +469,73 @@ class StaffOrderList(StaffApiMixin, generics.ListAPIView):
     def get_queryset(self):
         queryset = Order.objects.prefetch_related("items", "payments")
         status_filter = self.request.query_params.get("status")
-        if status_filter and status_filter in Order.Status.values:
+        if status_filter and status_filter != "all":
+            if status_filter not in Order.Status.values:
+                raise ValidationError({"status": "Unknown order status."})
             queryset = queryset.filter(status=status_filter)
         query = self.request.query_params.get("q", "").strip()
         if query:
-            queryset = queryset.filter(number__icontains=query) | queryset.filter(
-                guest_name__icontains=query
+            queryset = queryset.filter(
+                Q(number__icontains=query)
+                | Q(guest_name__icontains=query)
+                | Q(phone__icontains=query)
+                | Q(email__icontains=query)
+            )
+        date_filter = self.request.query_params.get("date")
+        month_filter = self.request.query_params.get("month")
+        if date_filter and month_filter:
+            raise ValidationError(
+                {"date": "Choose either a single date or a month, not both."}
+            )
+        if date_filter:
+            parsed_date = parse_date(date_filter)
+            if not parsed_date:
+                raise ValidationError({"date": "Use YYYY-MM-DD format."})
+            queryset = queryset.filter(created_at__date=parsed_date)
+        if month_filter:
+            try:
+                parsed_month = datetime.strptime(month_filter, "%Y-%m")
+            except ValueError as error:
+                raise ValidationError({"month": "Use YYYY-MM format."}) from error
+            if parsed_month.strftime("%Y-%m") != month_filter:
+                raise ValidationError({"month": "Use YYYY-MM format."})
+            queryset = queryset.filter(
+                created_at__year=parsed_month.year,
+                created_at__month=parsed_month.month,
             )
         return queryset
+
+    @transaction.atomic
+    def delete(self, request, *args, **kwargs):
+        order_ids = request.data.get("ids")
+        if (
+            not isinstance(order_ids, list)
+            or not order_ids
+            or any(
+                isinstance(order_id, bool) or not isinstance(order_id, int)
+                for order_id in order_ids
+            )
+        ):
+            raise ValidationError({"ids": "Provide a non-empty list of order IDs."})
+
+        order_ids = list(dict.fromkeys(order_ids))
+        orders = list(Order.objects.select_for_update().filter(pk__in=order_ids))
+        if len(orders) != len(order_ids):
+            raise ValidationError(
+                {"ids": "One or more orders no longer exist. Reload the order list."}
+            )
+        if Payment.objects.filter(order_id__in=order_ids).exists():
+            raise ValidationError(
+                {
+                    "ids": (
+                        "Orders with recorded payments cannot be deleted. "
+                        "Their financial records must be retained."
+                    )
+                }
+            )
+
+        Order.objects.filter(pk__in=order_ids).delete()
+        return Response({"deleted_count": len(order_ids)}, status=status.HTTP_200_OK)
 
 
 class StaffOrderUpdate(StaffApiMixin, generics.UpdateAPIView):

@@ -146,6 +146,8 @@ REST_FRAMEWORK = {
         "anon": "300/hour",
         "order_create": "30/hour",
         "order_track": "600/hour",
+        "order_history_code": "10/hour",
+        "order_history_verify": "20/hour",
         "reservation_create": "10/hour",
         "staff_login": "10/hour",
         "staff_password_reset_request": "5/hour",

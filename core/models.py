@@ -239,6 +239,18 @@ class OrderItem(models.Model):
         return f"{self.quantity} × {self.product_name}"
 
 
+class OrderEmailVerification(models.Model):
+    email = models.EmailField(db_index=True)
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField(db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
 class LodgeReservation(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending Review"

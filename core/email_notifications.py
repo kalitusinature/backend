@@ -390,6 +390,33 @@ def _email_layout(
     )
 
 
+def send_order_history_verification_code(email: str, code: str) -> bool:
+    subject = "Your Kalitusi order history verification code"
+    message = (
+        f"Your verification code is {code}.\n\n"
+        "It expires in 10 minutes and can only be used once. "
+        "If you did not request this code, you can ignore this email."
+    )
+    html_message = _email_layout(
+        "Verify your order history",
+        "Use this one-time code to view orders placed with your email address.",
+        (
+            '<p style="padding:16px;border-radius:8px;background:#f4f7f5;'
+            'color:#234b3b;font-size:28px;font-weight:700;letter-spacing:8px;'
+            f'text-align:center;">{escape(code)}</p>'
+            '<p style="line-height:1.6;">This code expires in 10 minutes and '
+            'can only be used once. If you did not request it, ignore this email.</p>'
+        ),
+    )
+    return _send_email(
+        subject,
+        message,
+        [email],
+        "order-history-verification",
+        html_message=html_message,
+    )
+
+
 def _details_table_html(rows: list[tuple[str, str]]) -> str:
     table_rows = "".join(
         '<tr>'

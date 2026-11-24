@@ -231,6 +231,14 @@ class OrderTrackingRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=254)
 
 
+class OrderHistoryCodeRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(max_length=254)
+
+
+class OrderHistoryCodeVerifySerializer(OrderHistoryCodeRequestSerializer):
+    code = serializers.RegexField(regex=r"^\d{6}$", max_length=6)
+
+
 class OrderReceiptLookupRequestSerializer(serializers.Serializer):
     number = serializers.CharField(max_length=20)
     email = serializers.EmailField(max_length=254)

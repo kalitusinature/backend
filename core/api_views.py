@@ -3,6 +3,7 @@ import secrets
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 
+from django.contrib.auth.hashers import check_password, make_password
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
@@ -21,6 +22,7 @@ from .models import (
     Lodge,
     LodgeReservation,
     Order,
+    OrderEmailVerification,
     OrderItem,
     Product,
 )
@@ -29,7 +31,10 @@ from .reservation_rules import (
     validate_lodge_stay,
 )
 from .reservation_notifications import notify_new_reservation
-from .email_notifications import notify_order_created
+from .email_notifications import (
+    notify_order_created,
+    send_order_history_verification_code,
+)
 from .push_notifications import (
     notify_new_order,
     notify_new_reservation as notify_staff_new_reservation,
@@ -41,6 +46,8 @@ from .serializers import (
     GuestCartSerializer,
     LodgeSerializer,
     OrderCreateSerializer,
+    OrderHistoryCodeRequestSerializer,
+    OrderHistoryCodeVerifySerializer,
     OrderReceiptSerializer,
     OrderTrackingRequestSerializer,
     OrderTrackingSerializer,
@@ -440,6 +447,107 @@ class OrderTrack(APIView):
                 status=status.HTTP_410_GONE,
             )
         return Response(OrderTrackingSerializer(order).data)
+
+
+class OrderHistoryCodeRequest(APIView):
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "order_history_code"
+
+    def post(self, request):
+        serializer = OrderHistoryCodeRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"].strip().casefold()
+        now = timezone.now()
+        generic_response = {
+            "detail": (
+                "If this email has orders from the last two days, "
+                "a verification code will be sent."
+            )
+        }
+        recent_orders = Order.objects.filter(
+            email__iexact=email,
+            created_at__gt=now - ORDER_TRACKING_RETENTION,
+        )
+        if not recent_orders.exists():
+            return Response(generic_response)
+
+        OrderEmailVerification.objects.filter(
+            created_at__lt=now - timedelta(days=1),
+        ).delete()
+        recent_requests = OrderEmailVerification.objects.filter(
+            email__iexact=email,
+            created_at__gte=now - timedelta(hours=1),
+        ).count()
+        if recent_requests >= 3:
+            return Response(generic_response)
+
+        OrderEmailVerification.objects.filter(
+            email__iexact=email,
+            consumed_at__isnull=True,
+        ).update(consumed_at=now)
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        verification = OrderEmailVerification.objects.create(
+            email=email,
+            code_hash=make_password(code),
+            expires_at=now + timedelta(minutes=10),
+        )
+        if not send_order_history_verification_code(email, code):
+            verification.consumed_at = now
+            verification.save(update_fields=["consumed_at"])
+            return Response(
+                {"detail": "Could not send a verification code. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(generic_response)
+
+
+class OrderHistoryCodeVerify(APIView):
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "order_history_verify"
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = OrderHistoryCodeVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"].strip().casefold()
+        code = serializer.validated_data["code"]
+        now = timezone.now()
+        verification = (
+            OrderEmailVerification.objects.select_for_update()
+            .filter(email__iexact=email, consumed_at__isnull=True)
+            .first()
+        )
+        if verification is None or verification.expires_at <= now:
+            return Response(
+                {"detail": "The verification code is invalid or expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if verification.attempts >= 5:
+            return Response(
+                {"detail": "Too many incorrect codes. Request a new code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not check_password(code, verification.code_hash):
+            verification.attempts += 1
+            if verification.attempts >= 5:
+                verification.consumed_at = now
+            verification.save(update_fields=["attempts", "consumed_at"])
+            return Response(
+                {"detail": "The verification code is invalid or expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        verification.consumed_at = now
+        verification.save(update_fields=["consumed_at"])
+        orders = Order.objects.filter(
+            email__iexact=email,
+            created_at__gt=now - ORDER_TRACKING_RETENTION,
+        ).prefetch_related("items", "payments__receipt")
+        return Response({"orders": OrderTrackingSerializer(orders, many=True).data})
 
 
 class ReservationCreate(APIView):
