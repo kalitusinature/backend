@@ -122,7 +122,7 @@ New requests are `pending`; a `201` response includes a unique reservation refer
 
 The public form does not set reservation prices; a new reservation's total due is UGX 0. In the staff Reservations page, use **Edit details** to set the total before **Record payment** appears. Staff records each received payment with its transaction or counter receipt reference. The separate review invitation is sent when the stay is checked out and verified payments cover the total due.
 
-The customer reservation form is hosted by Django at `/reservation/` on the backend domain. The Odoo cottages page's **Book Now** links open that backend page and pass the lodge slug in the `lodge` query parameter. There is no need to create a `/reservation` page in Odoo. After updating `cottages.html`, publish that template in Odoo so its links point to the backend form.
+The customer reservation form is the Odoo `/reservation` page. The Odoo cottages page's **Book Now** links open that page and pass the lodge slug in the `lodge` query parameter. The reservation page uses the shared Odoo header and sends availability and reservation requests to the production API at `https://api.kalitusi.com/api/v1`. Its **Back to cottages** links return to `/cottages`. Publish the updated `cottages.html` and `reservation.html` templates in Odoo.
 
 ## Staff portal
 
@@ -174,9 +174,9 @@ Product and lodge review summaries are public at
 `GET /products/<slug>/reviews/` and `GET /lodges/<slug>/reviews/`. Review
 submissions use `GET, POST /reviews/access/` with a signed link token; links are
 issued only for completed, fully paid orders or checked-out, fully paid stays.
-Set `CUSTOMER_REVIEW_PAGE_URL` to the published Odoo customer-review page URL.
-The default is
-`https://kalitusi-nature-resort.odoo.com/customer-review`. A separate review
+Set `CUSTOMER_REVIEW_PAGE_URL` only if you need to override the published
+customer-review page URL. The default is
+`https://kalitusi.com/customer-review`. A separate review
 invitation email is sent as soon as an order is both completed and fully paid,
 or a stay is both checked out and fully paid. Clicking an email star opens the
 private review page with that rating preselected; customers can add a comment

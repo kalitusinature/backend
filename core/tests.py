@@ -2978,7 +2978,7 @@ class SupportTicketApiTests(TestCase):
 
 
 @override_settings(
-    CUSTOMER_REVIEW_PAGE_URL="https://kalitusi-nature-resort.odoo.com/customer-review"
+    CUSTOMER_REVIEW_PAGE_URL="https://kalitusi.com/customer-review"
 )
 class CustomerReviewApiTests(TestCase):
     def setUp(self):
@@ -3098,9 +3098,10 @@ class CustomerReviewApiTests(TestCase):
         self.assertEqual(rated_product["review_count"], 1)
         self.assertEqual(order_response.status_code, 200)
         self.assertEqual(len(order_response.data["review_links"]), 1)
-        self.assertIn(
-            "/customer-review?token=",
-            order_response.data["review_links"][0]["url"],
+        self.assertTrue(
+            order_response.data["review_links"][0]["url"].startswith(
+                "https://kalitusi.com/customer-review?token="
+            )
         )
         self.assertEqual(CustomerReview.objects.count(), 1)
 

@@ -22,6 +22,7 @@
                 .cj-cottage-policy{font-size:13px;color:#5d6965;margin:0 0 20px}
                 .cj-cottage-rating{margin:0 0 12px;color:#8a641c;font-size:13px;font-weight:700}
                 .cj-cottage-book{display:inline-flex;align-items:center;justify-content:center;min-height:46px;margin-top:auto;padding:0 20px;border-radius:7px;background:#008b92;color:#fff;text-decoration:none;font-weight:800;border:0}
+                .cj-cottage-body>.cj-cottage-book{align-self:center}
                 .cj-cottage-book:hover,.cj-cottage-book:focus{background:#006f75;color:#fff}
                 .cj-cottages-status{margin:0 auto 22px;max-width:720px;text-align:center;color:#5d6965;line-height:1.6}
                 .cj-cottages-status[data-state="error"]{color:#9e271d}
@@ -263,7 +264,6 @@
                     }
 
                     var apiBase=(window.CJ_API_BASE_URL||'https://api.kalitusi.com/api/v1').replace(/\/+$/,'');
-                    var reservationBase=(window.CJ_RESERVATION_BASE_URL||apiBase.replace(/\/api\/v1$/,'')).replace(/\/+$/,'');
                     var grid=document.getElementById('cjCottagesGrid');
                     var status=document.getElementById('cjCottagesStatus');
 
@@ -313,8 +313,8 @@
                         return imgs.filter(function(v){ return typeof v==='string' && v; });
                     }
                     function reservationHref(lodge){
-                        if(lodge && lodge.slug) return reservationBase+'/reservation/?lodge='+encodeURIComponent(lodge.slug);
-                        return reservationBase+'/reservation/';
+                        if(lodge && lodge.slug) return '/reservation?lodge='+encodeURIComponent(lodge.slug);
+                        return '/reservation';
                     }
                     function setActiveImage(container,index){
                         var images=container.querySelectorAll('img');

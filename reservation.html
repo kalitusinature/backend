@@ -65,6 +65,7 @@
                 @media(max-width:620px){.cj-reservation-container{width:calc(100% - 24px);margin:24px auto 56px}.cj-reservation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cj-reservation-field.full,.cj-reservation-grid>.cj-reservation-field:not(.cj-reservation-date-field){grid-column:1/-1}.cj-reservation-date-field{min-width:0}.cj-reservation-date-field input{min-width:0;padding:12px 8px;font-size:13px}}
             </style>
             <main class="cj-reservation-page">
+                <t t-call="website.cj_header"/>
                 <div class="cj-reservation-container">
                     <section class="cj-reservation-card" id="cjReservationCard" aria-labelledby="cjReservationTitle">
                         <h1 id="cjReservationTitle">Request a cottage stay</h1>

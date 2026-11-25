@@ -181,7 +181,7 @@ SUPPORT_TICKET_EMAIL = os.environ.get(
 ).strip()
 CUSTOMER_REVIEW_PAGE_URL = os.environ.get(
     "CUSTOMER_REVIEW_PAGE_URL",
-    "https://kalitusi-nature-resort.odoo.com/customer-review",
+    "https://kalitusi.com/customer-review",
 ).strip()
 STAFF_NOTIFICATION_EMAIL = (
     os.environ.get("STAFF_NOTIFICATION_EMAIL", "").strip()
