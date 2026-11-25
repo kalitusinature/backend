@@ -120,7 +120,7 @@ The standalone Odoo page templates in this repository, including `cottages.html`
 
 New requests are `pending`; a `201` response includes a unique reservation reference and booking status. Email is required. The reservation page provides a calendar range picker for check-in and check-out. The server validates stay dates, lodge capacity and policies, blockouts, and confirmed/in-house overlaps. Pending requests remain visible to staff but do not appear as booked or block availability; staff checks for conflicts when confirming. Customers and the operations inbox receive reservation emails when requests are created and when staff changes a reservation status.
 
-The public form does not set reservation prices. Staff enters the total due in the Reservations page before recording payments.
+The public form does not set reservation prices; a new reservation's total due is UGX 0. In the staff Reservations page, use **Edit details** to set the total before **Record payment** appears. Staff records each received payment with its transaction or counter receipt reference. The separate review invitation is sent when the stay is checked out and verified payments cover the total due.
 
 The customer reservation form is hosted by Django at `/reservation/` on the backend domain. The Odoo cottages page's **Book Now** links open that backend page and pass the lodge slug in the `lodge` query parameter. There is no need to create a `/reservation` page in Odoo. After updating `cottages.html`, publish that template in Odoo so its links point to the backend form.
 

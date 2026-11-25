@@ -641,14 +641,17 @@ def _send_review_invitation_email(
     )
 
 
-def send_order_review_invitation_email(order: Order) -> bool:
+def send_order_review_invitation_email(order: Order) -> bool | None:
+    links = order_review_invitation_links(order)
+    if not links:
+        return None
     review_items = [
         {
             "name": link["product_name"],
             "url": link["url"],
             "rating_urls": link["rating_urls"],
         }
-        for link in order_review_invitation_links(order)
+        for link in links
     ]
     return _send_review_invitation_email(
         subject=f"Rate your Kalitusi order - {order.number}",
@@ -665,19 +668,17 @@ def send_order_review_invitation_email(order: Order) -> bool:
 
 def send_reservation_review_invitation_email(
     reservation: LodgeReservation,
-) -> bool:
+) -> bool | None:
     links = reservation_review_invitation_links(reservation)
-    review_items = (
-        [
-            {
-                "name": reservation.lodge.name,
-                "url": links["url"],
-                "rating_urls": links["rating_urls"],
-            }
-        ]
-        if links
-        else []
-    )
+    if not links:
+        return None
+    review_items = [
+        {
+            "name": reservation.lodge.name,
+            "url": links["url"],
+            "rating_urls": links["rating_urls"],
+        }
+    ]
     return _send_review_invitation_email(
         subject=f"Rate your Kalitusi stay - {reservation.reference}",
         guest_name=reservation.guest_name,

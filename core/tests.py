@@ -1080,6 +1080,7 @@ class PaymentReceiptApiTests(TestCase):
         partial = self._record_payment()
         self.assertEqual(partial.status_code, 201)
         self.assertTrue(partial.data["email_sent"])
+        self.assertIsNone(partial.data["review_email_sent"])
         self.assertEqual(partial.data["balance_ugx"], 15000)
         self.assertEqual(partial.data["payment_status"], Order.PaymentStatus.PARTIAL)
         self.order.refresh_from_db()
@@ -1102,6 +1103,7 @@ class PaymentReceiptApiTests(TestCase):
         self.assertEqual(final.status_code, 201)
         self.assertEqual(final.data["balance_ugx"], 0)
         self.assertEqual(final.data["payment_status"], Order.PaymentStatus.PAID)
+        self.assertIsNone(final.data["review_email_sent"])
         self.order.refresh_from_db()
         self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
         self.assertEqual(PaymentReceipt.objects.filter(payment__order=self.order).count(), 2)
@@ -1117,6 +1119,7 @@ class PaymentReceiptApiTests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(mail.outbox), 2)
+        self.assertTrue(response.data["review_email_sent"])
         self.assertNotIn("/customer-review?token=", mail.outbox[0].body)
         invitation = mail.outbox[1]
         self.assertIn("Rate your Kalitusi order", invitation.subject)
@@ -1139,6 +1142,7 @@ class PaymentReceiptApiTests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(mail.outbox), 2)
+        self.assertTrue(response.data["review_email_sent"])
         self.assertNotIn("/customer-review?token=", mail.outbox[0].body)
         invitation = mail.outbox[1]
         self.assertIn("Rate your Kalitusi stay", invitation.subject)

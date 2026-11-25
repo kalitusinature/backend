@@ -246,9 +246,11 @@ class StaffPaymentCreate(StaffApiMixin, APIView):
 
         email_sent = send_payment_receipt_email(payment)
         if payment.order_id:
-            send_order_review_invitation_email(payment.order)
+            review_email_sent = send_order_review_invitation_email(payment.order)
         else:
-            send_reservation_review_invitation_email(payment.reservation)
+            review_email_sent = send_reservation_review_invitation_email(
+                payment.reservation
+            )
         payment = (
             Payment.objects.select_related(
                 "order",
@@ -263,6 +265,7 @@ class StaffPaymentCreate(StaffApiMixin, APIView):
             (payment.order or payment.reservation).email
         )
         response_data["email_sent"] = email_sent
+        response_data["review_email_sent"] = review_email_sent
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
