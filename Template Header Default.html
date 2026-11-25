@@ -119,7 +119,7 @@
                     var originalFetch=window.fetch;
                     window.fetch=function(input,options){
                         var url=typeof input==='string'?input:(input&amp;&amp;input.url)||'';
-                        if(url.indexOf('/api/v1/')===-1||url.indexOf('/cart/')!==-1)return originalFetch.apply(this,arguments);
+                        if(url.indexOf('/api/v1/')===-1||url.indexOf('/cart/')!==-1||url.indexOf('/chats/')!==-1)return originalFetch.apply(this,arguments);
                         beginRequest();
                         var complete=false;
                         function finish(){

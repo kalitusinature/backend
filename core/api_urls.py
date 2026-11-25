@@ -62,6 +62,8 @@ from .payment_api_views import (
     StaffPaymentReceiptList,
     StaffPaymentReceiptResend,
 )
+from .support_api_views import StaffSupportTicketList, SupportTicketCreate
+from .review_api_views import LodgeReviewListCreate, ProductReviewListCreate
 
 urlpatterns = [
     path("auth/token/", StaffLogin.as_view(), name="staff_api_login"),
@@ -114,6 +116,11 @@ urlpatterns = [
     ),
     path("categories/", CategoryList.as_view(), name="api_categories"),
     path("products/", ProductList.as_view(), name="api_products"),
+    path(
+        "products/<slug:slug>/reviews/",
+        ProductReviewListCreate.as_view(),
+        name="api_product_reviews",
+    ),
     path("cart/", GuestCartView.as_view(), name="api_cart"),
     path("cart/create/", GuestCartCreate.as_view(), name="api_cart_create"),
     path("cart/items/", GuestCartItemCreate.as_view(), name="api_cart_items"),
@@ -123,6 +130,11 @@ urlpatterns = [
         name="api_cart_item_detail",
     ),
     path("lodges/", LodgeList.as_view(), name="api_lodges"),
+    path(
+        "lodges/<slug:slug>/reviews/",
+        LodgeReviewListCreate.as_view(),
+        name="api_lodge_reviews",
+    ),
     path(
         "lodges/<slug:slug>/availability/",
         LodgeAvailability.as_view(),
@@ -147,6 +159,11 @@ urlpatterns = [
         name="api_order_receipt_download",
     ),
     path("reservations/", ReservationCreate.as_view(), name="api_reservations"),
+    path(
+        "support-tickets/",
+        SupportTicketCreate.as_view(),
+        name="api_support_tickets",
+    ),
     path(
         "chats/request-code/",
         ChatCodeRequest.as_view(),
@@ -215,6 +232,11 @@ urlpatterns = [
         name="staff_api_chat_send",
     ),
     path("staff/orders/", StaffOrderList.as_view(), name="staff_api_orders"),
+    path(
+        "staff/support-tickets/",
+        StaffSupportTicketList.as_view(),
+        name="staff_api_support_tickets",
+    ),
     path(
         "staff/orders/<int:pk>/",
         StaffOrderUpdate.as_view(),

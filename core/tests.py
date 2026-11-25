@@ -22,6 +22,7 @@ from .models import (
     ChatConversation,
     ChatEmailVerification,
     ChatMessage,
+    CustomerReview,
     GuestCart,
     Lodge,
     LodgeBlockout,
@@ -34,6 +35,7 @@ from .models import (
     Product,
     StaffProfile,
     StaffPushSubscription,
+    SupportTicket,
 )
 from .email_notifications import (
     notify_order_created,
@@ -2859,3 +2861,267 @@ class StaffApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.client.delete(f"/api/v1/staff/lodge-blockouts/{blockout_id}/")
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEFAULT_FROM_EMAIL="notifications@kalitusi.com",
+    EMAIL_HOST="smtp.test",
+    RESEND_API_KEY="",
+    SUPPORT_TICKET_EMAIL="kalitusinature@gmail.com",
+)
+class SupportTicketApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.payload = {
+            "name": "Support Guest",
+            "email": "guest@example.com",
+            "phone": "+256700000000",
+            "subject": "Booking question",
+            "message": "Can you help me with a booking?",
+        }
+
+    def test_public_submission_is_saved_and_emailed_to_support(self):
+        response = self.client.post(
+            "/api/v1/support-tickets/",
+            self.payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        ticket = SupportTicket.objects.get()
+        self.assertEqual(ticket.name, self.payload["name"])
+        self.assertTrue(ticket.email_sent)
+        self.assertTrue(response.data["email_sent"])
+        self.assertEqual(mail.outbox[0].to, ["kalitusinature@gmail.com"])
+        self.assertIn(self.payload["message"], mail.outbox[0].body)
+
+    @patch("core.support_api_views.send_support_ticket_notification", return_value=False)
+    def test_ticket_is_kept_in_portal_and_email_failure_is_reported(self, send_email):
+        response = self.client.post(
+            "/api/v1/support-tickets/",
+            self.payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.data["email_sent"])
+        self.assertFalse(SupportTicket.objects.get().email_sent)
+        send_email.assert_called_once()
+
+    def test_staff_portal_lists_tickets_and_rejects_anonymous_requests(self):
+        ticket = SupportTicket.objects.create(**self.payload)
+        anonymous_response = self.client.get("/api/v1/staff/support-tickets/")
+        staff = get_user_model().objects.create_user(
+            username="support-admin",
+            password="staff-password",
+            is_staff=True,
+        )
+        token = Token.objects.create(user=staff)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        staff_response = self.client.get("/api/v1/staff/support-tickets/")
+
+        self.assertEqual(anonymous_response.status_code, 401)
+        self.assertEqual(staff_response.status_code, 200)
+        self.assertEqual(staff_response.data["count"], 1)
+        self.assertEqual(staff_response.data["results"][0]["id"], ticket.pk)
+        self.assertEqual(
+            staff_response.data["results"][0]["message"],
+            self.payload["message"],
+        )
+
+
+class CustomerReviewApiTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.category = Category.objects.create(name="Breakfast")
+        self.product = Product.objects.create(
+            name="Resort Pancakes",
+            category=self.category,
+            price_ugx=12000,
+        )
+        self.other_product = Product.objects.create(
+            name="Fresh Juice",
+            category=self.category,
+            price_ugx=5000,
+        )
+        self.lodge = Lodge.objects.create(name="Review Cottage", capacity=2)
+
+    def create_completed_order(self, product=None, status=Order.Status.COMPLETED):
+        order = Order.objects.create(
+            guest_name="Review Guest",
+            phone="+256700000000",
+            email="reviewer@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 1",
+            status=status,
+        )
+        if product:
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                product_name=product.name,
+                unit_price_ugx=product.price_ugx,
+                quantity=1,
+                line_total_ugx=product.price_ugx,
+            )
+        return order
+
+    def create_completed_stay(self, lodge=None, status=LodgeReservation.Status.COMPLETED):
+        return LodgeReservation.objects.create(
+            lodge=lodge or self.lodge,
+            guest_name="Cottage Guest",
+            email="stay@example.com",
+            phone="+256700000001",
+            check_in=date(2025, 6, 10),
+            check_out=date(2025, 6, 12),
+            status=status,
+        )
+
+    def test_completed_order_customer_can_rate_a_purchased_product_once(self):
+        order = self.create_completed_order(self.product)
+        payload = {
+            "order_number": order.number,
+            "email": "REVIEWER@example.com",
+            "rating": 5,
+            "comment": "Fresh and delicious.",
+        }
+
+        response = self.client.post(
+            f"/api/v1/products/{self.product.slug}/reviews/",
+            payload,
+            format="json",
+        )
+        duplicate_response = self.client.post(
+            f"/api/v1/products/{self.product.slug}/reviews/",
+            payload,
+            format="json",
+        )
+        list_response = self.client.get(
+            f"/api/v1/products/{self.product.slug}/reviews/"
+        )
+        product_response = self.client.get("/api/v1/products/")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["reviewer_name"], "Review Guest")
+        self.assertEqual(duplicate_response.status_code, 400)
+        self.assertEqual(list_response.data["review_count"], 1)
+        self.assertEqual(list_response.data["average_rating"], 5.0)
+        rated_product = next(
+            item for item in product_response.data if item["slug"] == self.product.slug
+        )
+        self.assertEqual(rated_product["review_count"], 1)
+        self.assertEqual(CustomerReview.objects.count(), 1)
+
+    def test_product_review_requires_matching_completed_order_and_product(self):
+        incomplete_order = self.create_completed_order(
+            self.product,
+            status=Order.Status.NEW,
+        )
+        other_product_order = self.create_completed_order(self.other_product)
+        payload = {
+            "email": "reviewer@example.com",
+            "rating": 4,
+            "comment": "Good.",
+        }
+
+        incomplete_response = self.client.post(
+            f"/api/v1/products/{self.product.slug}/reviews/",
+            {**payload, "order_number": incomplete_order.number},
+            format="json",
+        )
+        mismatched_product_response = self.client.post(
+            f"/api/v1/products/{self.product.slug}/reviews/",
+            {**payload, "order_number": other_product_order.number},
+            format="json",
+        )
+        mismatched_email_response = self.client.post(
+            f"/api/v1/products/{self.product.slug}/reviews/",
+            {**payload, "order_number": other_product_order.number, "email": "wrong@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(incomplete_response.status_code, 400)
+        self.assertEqual(mismatched_product_response.status_code, 400)
+        self.assertEqual(mismatched_email_response.status_code, 400)
+        self.assertEqual(CustomerReview.objects.count(), 0)
+
+    def test_product_review_rating_must_be_between_one_and_five(self):
+        order = self.create_completed_order(self.product)
+        payload = {
+            "order_number": order.number,
+            "email": "reviewer@example.com",
+            "comment": "A test review.",
+        }
+
+        for rating in (0, 6):
+            with self.subTest(rating=rating):
+                response = self.client.post(
+                    f"/api/v1/products/{self.product.slug}/reviews/",
+                    {**payload, "rating": rating},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+
+        self.assertEqual(CustomerReview.objects.count(), 0)
+
+    def test_checked_out_guest_can_rate_their_cottage_once(self):
+        reservation = self.create_completed_stay()
+        payload = {
+            "reservation_reference": reservation.reference,
+            "email": "stay@example.com",
+            "rating": 4,
+            "comment": "A peaceful stay.",
+        }
+
+        response = self.client.post(
+            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
+            payload,
+            format="json",
+        )
+        duplicate_response = self.client.post(
+            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
+            payload,
+            format="json",
+        )
+        list_response = self.client.get(f"/api/v1/lodges/{self.lodge.slug}/reviews/")
+        lodge_response = self.client.get("/api/v1/lodges/")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["reviewer_name"], "Cottage Guest")
+        self.assertEqual(duplicate_response.status_code, 400)
+        self.assertEqual(list_response.data["review_count"], 1)
+        rated_lodge = next(
+            item for item in lodge_response.data if item["slug"] == self.lodge.slug
+        )
+        self.assertEqual(rated_lodge["review_count"], 1)
+        self.assertEqual(CustomerReview.objects.count(), 1)
+
+    def test_cottage_review_requires_matching_checked_out_stay(self):
+        pending_stay = self.create_completed_stay(status=LodgeReservation.Status.PENDING)
+        other_lodge = Lodge.objects.create(name="Other Review Cottage", capacity=2)
+        different_lodge_stay = self.create_completed_stay(lodge=other_lodge)
+        payload = {"email": "stay@example.com", "rating": 5, "comment": "Wonderful."}
+
+        pending_response = self.client.post(
+            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
+            {**payload, "reservation_reference": pending_stay.reference},
+            format="json",
+        )
+        different_lodge_response = self.client.post(
+            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
+            {**payload, "reservation_reference": different_lodge_stay.reference},
+            format="json",
+        )
+        wrong_email_response = self.client.post(
+            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
+            {**payload, "reservation_reference": different_lodge_stay.reference, "email": "wrong@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(pending_response.status_code, 400)
+        self.assertEqual(different_lodge_response.status_code, 400)
+        self.assertEqual(wrong_email_response.status_code, 400)
+        self.assertEqual(CustomerReview.objects.count(), 0)

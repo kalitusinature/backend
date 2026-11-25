@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import transaction
+from django.db.models import Avg, Count
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
 from django.utils import timezone
@@ -210,7 +211,10 @@ class ProductList(generics.ListAPIView):
     def get_queryset(self):
         queryset = Product.objects.filter(
             is_available=True, category__is_active=True
-        ).select_related("category")
+        ).select_related("category").annotate(
+            review_count=Count("reviews"),
+            average_rating=Avg("reviews__rating"),
+        )
         category = self.request.query_params.get("category")
         if category:
             queryset = queryset.filter(category__slug=category)
@@ -224,7 +228,10 @@ class LodgeList(generics.ListAPIView):
     serializer_class = LodgeSerializer
 
     def get_queryset(self):
-        queryset = Lodge.objects.filter(is_active=True).prefetch_related("images")
+        queryset = Lodge.objects.filter(is_active=True).prefetch_related("images").annotate(
+            review_count=Count("reviews"),
+            average_rating=Avg("reviews__rating"),
+        )
         check_in_value = self.request.query_params.get("check_in")
         check_out_value = self.request.query_params.get("check_out")
         if bool(check_in_value) != bool(check_out_value):

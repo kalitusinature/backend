@@ -151,6 +151,8 @@ REST_FRAMEWORK = {
         "chat_code_request": "10/hour",
         "chat_code_verify": "20/hour",
         "chat_messages": "60/hour",
+        "support_ticket_create": "10/hour",
+        "review_create": "20/hour",
         "reservation_create": "10/hour",
         "staff_login": "10/hour",
         "staff_password_reset_request": "5/hour",
@@ -174,6 +176,9 @@ RESEND_API_KEY = (
     or EMAIL_HOST_PASSWORD.strip()
 )
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER).strip()
+SUPPORT_TICKET_EMAIL = os.environ.get(
+    "SUPPORT_TICKET_EMAIL", "kalitusinature@gmail.com"
+).strip()
 STAFF_NOTIFICATION_EMAIL = (
     os.environ.get("STAFF_NOTIFICATION_EMAIL", "").strip()
     or os.environ.get("RESERVATION_NOTIFICATION_EMAIL", "").strip()

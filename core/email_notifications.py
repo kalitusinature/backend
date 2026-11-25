@@ -15,7 +15,15 @@ from django.core.mail import EmailMultiAlternatives, send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from .models import ChatConversation, ChatMessage, LodgeReservation, Order, Payment, PaymentReceipt
+from .models import (
+    ChatConversation,
+    ChatMessage,
+    LodgeReservation,
+    Order,
+    Payment,
+    PaymentReceipt,
+    SupportTicket,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -473,6 +481,58 @@ def send_chat_admin_notification(
         message_text,
         _staff_recipients(f"customer-chat-{conversation.pk}"),
         f"customer-chat-{conversation.pk}",
+        html_message=html_message,
+    )
+
+
+def send_support_ticket_notification(ticket: SupportTicket) -> bool:
+    recipient = settings.SUPPORT_TICKET_EMAIL
+    if not recipient:
+        logger.warning(
+            "Support ticket email not sent for ticket %s: SUPPORT_TICKET_EMAIL is unset.",
+            ticket.pk,
+        )
+        return False
+
+    subject = f"Support ticket #{ticket.pk}: {ticket.subject}"
+    message = (
+        f"Support ticket #{ticket.pk}\n\n"
+        f"Name: {ticket.name}\n"
+        f"Email: {ticket.email}\n"
+        f"Phone: {ticket.phone or 'Not provided'}\n"
+        f"Subject: {ticket.subject}\n\n"
+        f"Message:\n{ticket.message}\n\n"
+        f"View support tickets in the admin portal: {settings.ADMIN_PORTAL_URL}"
+    )
+    details_html = _details_table_html(
+        [
+            ("Ticket", f"#{ticket.pk}"),
+            ("Name", ticket.name),
+            ("Email", ticket.email),
+            ("Phone", ticket.phone or "Not provided"),
+            ("Subject", ticket.subject),
+        ]
+    )
+    html_message = _email_layout(
+        subject,
+        f"New support ticket from {ticket.name}.",
+        (
+            f"{details_html}"
+            '<blockquote style="margin:0;padding:16px;border-left:3px solid #008b92;'
+            'background:#f4f7f5;line-height:1.6;white-space:pre-wrap;">'
+            f"{escape(ticket.message)}</blockquote>"
+        ),
+        closing_html=(
+            '<tr><td style="padding-top:24px;color:#64736c;font-size:13px;">'
+            f'<a href="{escape(settings.ADMIN_PORTAL_URL, quote=True)}">'
+            "Open the admin portal to review this ticket.</a></td></tr>"
+        ),
+    )
+    return _send_email(
+        subject,
+        message,
+        [recipient],
+        f"support-ticket-{ticket.pk}",
         html_message=html_message,
     )
 

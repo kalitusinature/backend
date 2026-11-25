@@ -1,7 +1,7 @@
 import hashlib
 
 from rest_framework import serializers
-from django.db.models import Sum
+from django.db.models import Avg, Count, Sum
 
 from .models import (
     Category,
@@ -28,6 +28,8 @@ class ProductSerializer(serializers.ModelSerializer):
     category_slug = serializers.CharField(source="category.slug", read_only=True)
     price = serializers.IntegerField(source="price_ugx", read_only=True)
     image = serializers.URLField(source="image_url", read_only=True)
+    average_rating = serializers.FloatField(read_only=True, allow_null=True)
+    review_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Product
@@ -41,6 +43,8 @@ class ProductSerializer(serializers.ModelSerializer):
             "price",
             "image",
             "is_featured",
+            "average_rating",
+            "review_count",
         )
 
 
@@ -92,6 +96,8 @@ class GuestCartItemQuantitySerializer(serializers.Serializer):
 
 class LodgeSerializer(serializers.ModelSerializer):
     images = serializers.SerializerMethodField()
+    average_rating = serializers.FloatField(read_only=True, allow_null=True)
+    review_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Lodge
@@ -106,6 +112,8 @@ class LodgeSerializer(serializers.ModelSerializer):
             "checkin_weekdays",
             "image_url",
             "images",
+            "average_rating",
+            "review_count",
         )
 
     def get_images(self, lodge):

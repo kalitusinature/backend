@@ -65,7 +65,6 @@
                 @media(max-width:620px){.cj-reservation-container{width:calc(100% - 24px);margin:24px auto 56px}.cj-reservation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cj-reservation-field.full,.cj-reservation-grid>.cj-reservation-field:not(.cj-reservation-date-field){grid-column:1/-1}.cj-reservation-date-field{min-width:0}.cj-reservation-date-field input{min-width:0;padding:12px 8px;font-size:13px}}
             </style>
             <main class="cj-reservation-page">
-                <t t-call="website.cj_header"/>
                 <div class="cj-reservation-container">
                     <section class="cj-reservation-card" id="cjReservationCard" aria-labelledby="cjReservationTitle">
                         <h1 id="cjReservationTitle">Request a cottage stay</h1>
@@ -80,12 +79,12 @@
                                     <small class="cj-reservation-help" id="cjLodgeHelp">Choose your preferred stay.</small>
                                 </div>
                                 <div class="cj-reservation-field cj-reservation-date-field">
-                                    <label for="cjCheckIn">Check-in</label>
-                                    <input id="cjCheckIn" name="check_in" type="text" required="required" readonly="readonly" placeholder="Choose check-in date"/>
+                                    <label for="cjCheckIn">From</label>
+                                    <input id="cjCheckIn" name="check_in" type="text" required="required" readonly="readonly" placeholder="Select from date"/>
                                 </div>
                                 <div class="cj-reservation-field cj-reservation-date-field">
-                                    <label for="cjCheckOut">Check-out</label>
-                                    <input id="cjCheckOut" name="check_out" type="text" required="required" readonly="readonly" placeholder="Choose check-out date"/>
+                                    <label for="cjCheckOut">To</label>
+                                    <input id="cjCheckOut" name="check_out" type="text" required="required" readonly="readonly" placeholder="Select to date"/>
                                 </div>
                                 <div class="cj-reservation-calendar" id="cjReservationCalendar" hidden="hidden" aria-label="Select your stay dates">
                                     <div class="cj-reservation-calendar-toolbar">
@@ -94,7 +93,7 @@
                                             <small id="cjCalendarPrompt">Choose a cottage to see available dates.</small>
                                         </div>
                                         <div class="cj-reservation-calendar-actions">
-                                            <button class="cj-reservation-calendar-reset" id="cjCalendarReset" type="button" hidden="hidden">Change check-in</button>
+                                            <button class="cj-reservation-calendar-reset" id="cjCalendarReset" type="button" hidden="hidden">Change from date</button>
                                             <div class="cj-reservation-calendar-nav">
                                                 <button id="cjCalendarPrevious" type="button" aria-label="Previous month">‹</button>
                                                 <button id="cjCalendarNext" type="button" aria-label="Next month">›</button>
@@ -261,10 +260,10 @@
                         var booked=new Set(isCheckout?(data.booked_check_out_dates||[]):(data.booked_dates||[]));
                         calendarTitle.textContent=new Intl.DateTimeFormat('en',{month:'long',year:'numeric'}).format(monthStart);
                         calendarPrompt.textContent=isCheckout
-                            ?'Choose a check-out date after '+displayDate(checkIn.value)+'.'
-                            :'Choose a check-in date.';
+                            ?'Select a To date after '+displayDate(checkIn.value)+'.'
+                            :'Select a From date.';
                         calendarReset.hidden=!checkIn.value;
-                        calendarReset.textContent=checkOut.value?'Choose new dates':'Change check-in';
+                        calendarReset.textContent=checkOut.value?'Choose new dates':'Change from date';
                         calendarDays.replaceChildren();
                         for(var emptyIndex=0;emptyIndex<mondayOffset;emptyIndex++){
                             var empty=document.createElement('span');
@@ -364,6 +363,7 @@
                             checkIn.value=value;
                             checkOut.value='';
                             selectionMode='check-out';
+                            checkOut.focus();
                         }
                         hideMessage();
                         loadAvailability();

@@ -310,6 +310,22 @@ class ChatMessage(models.Model):
         return f"{self.sender}: {self.body[:60]}"
 
 
+class SupportTicket(models.Model):
+    name = models.CharField(max_length=120)
+    email = models.EmailField()
+    phone = models.CharField(max_length=40, blank=True)
+    subject = models.CharField(max_length=200)
+    message = models.TextField(max_length=5000)
+    email_sent = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self):
+        return f"Ticket #{self.pk}: {self.subject}"
+
+
 class LodgeReservation(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending Review"
@@ -363,6 +379,81 @@ class LodgeReservation(models.Model):
 
     def __str__(self):
         return f"{self.reference} — {self.guest_name}"
+
+
+class CustomerReview(models.Model):
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+        null=True,
+        blank=True,
+    )
+    lodge = models.ForeignKey(
+        Lodge,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+        null=True,
+        blank=True,
+    )
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="customer_reviews",
+        null=True,
+        blank=True,
+    )
+    reservation = models.ForeignKey(
+        LodgeReservation,
+        on_delete=models.CASCADE,
+        related_name="customer_reviews",
+        null=True,
+        blank=True,
+    )
+    reviewer_name = models.CharField(max_length=120)
+    rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    comment = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        product__isnull=False,
+                        lodge__isnull=True,
+                        order__isnull=False,
+                        reservation__isnull=True,
+                    )
+                    | models.Q(
+                        product__isnull=True,
+                        lodge__isnull=False,
+                        order__isnull=True,
+                        reservation__isnull=False,
+                    )
+                ),
+                name="review_target_matches_source",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(rating__gte=1, rating__lte=5),
+                name="review_rating_1_to_5",
+            ),
+            models.UniqueConstraint(
+                fields=("product", "order"),
+                name="uniq_product_order_review",
+            ),
+            models.UniqueConstraint(
+                fields=("lodge", "reservation"),
+                name="uniq_lodge_reservation_review",
+            ),
+        ]
+
+    def __str__(self):
+        target = self.product or self.lodge
+        return f"{self.rating}/5 review for {target}"
 
 
 class Payment(models.Model):

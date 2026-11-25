@@ -32,6 +32,7 @@
                 .cj-card-title { display:block; text-align:center; }
                 .cj-card-title h3 { margin:0; font-size:20px; line-height:1.2; height:24px; overflow:hidden; text-align:center; }
                 .cj-price { display:block; color:var(--cj-red); font-weight:900; white-space:nowrap; margin-top:8px; text-align:center; }
+                .cj-card-rating { margin:8px 0 0; color:#8a641c; font-size:13px; font-weight:700; text-align:center; }
                 .cj-card p { color:#777; line-height:1.45; height:42px; margin:10px 0 12px; overflow:hidden; }
                 .cj-add { width:70%; max-width:220px; border:0; border-radius:0; background:var(--cj-red); color:#fff; height:46px; font-weight:800; cursor:pointer; margin:12px auto 0; }
                 .cj-add:hover { background:#006F75; }
@@ -54,6 +55,7 @@
                     .cj-card-title h3{font-size:15px; height:18px}
                     .cj-card p{font-size:13px; height:38px; min-height:38px}
                     .cj-price{font-size:13px}
+                    .cj-card-rating{font-size:12px}
                     .cj-add{width:100%; max-width:none; height:42px; font-size:13px}
                     .cj-heading h2{font-size:34px}
                 }
@@ -61,6 +63,124 @@
 
             <main class="cj-menu">
                 <t t-call="website.cj_header"/>
+                <style>
+                    .cj-chat-launcher{position:fixed;left:24px;bottom:24px;z-index:2147482001;width:58px;height:58px;border:0;border-radius:50%;color:#fff;background:#008B92;box-shadow:0 12px 30px rgba(8,76,72,.25);font-size:25px;cursor:pointer;animation:cjChatBounce .8s ease-in-out infinite,cjChatVisibility 8s steps(1,end) infinite}
+                    .cj-chat-launcher::before{content:"Chat with Us";position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);padding:8px 11px;border-radius:999px;background:#fff;color:#203b38;box-shadow:0 4px 14px rgba(12,46,43,.18);font:600 13px/1 Arial,Helvetica,sans-serif;white-space:nowrap;pointer-events:none}
+                    .cj-chat-launcher[hidden]{display:none!important}
+                    .cj-chat-panel{position:fixed;left:24px;right:auto;bottom:94px;z-index:2147482001;display:flex;width:min(380px,calc(100vw - 28px));height:min(560px,calc(100vh - 130px));flex-direction:column;overflow:hidden;border:1px solid #dfe9e4;border-radius:16px;background:#fff;box-shadow:0 22px 65px rgba(12,46,43,.22);color:#203b38;font-family:Arial,Helvetica,sans-serif}
+                    .cj-chat-panel[hidden],.cj-chat-form[hidden],.cj-chat-thread[hidden]{display:none!important}
+                    .cj-chat-header{display:flex;align-items:center;justify-content:space-between;padding:15px 17px;color:#fff;background:#087d79}
+                    .cj-chat-header strong{font-size:16px}.cj-chat-header small{display:block;margin-top:4px;color:#d7eeea;font-size:11px}
+                    .cj-chat-close{width:34px;height:34px;border:0;border-radius:50%;color:#fff;background:rgba(255,255,255,.15);font-size:22px;cursor:pointer}
+                    .cj-chat-content{display:flex;min-height:0;flex:1;flex-direction:column;padding:15px}
+                    .cj-chat-form{display:grid;gap:10px;margin:auto 0}
+                    .cj-chat-copy{margin:0;color:#718079;font-size:13px;line-height:1.5}
+                    .cj-chat-field{display:grid;gap:5px;color:#53645c;font-size:12px;font-weight:700}
+                    .cj-chat-field input,.cj-chat-field textarea{width:100%;min-height:42px;padding:10px;border:1px solid #dce5e0;border-radius:8px;color:#243b34;font:inherit}
+                    .cj-chat-submit{min-height:42px;padding:0 14px;border:0;border-radius:8px;color:#fff;background:#008B92;font-size:12px;font-weight:800;cursor:pointer}
+                    .cj-chat-submit:disabled{opacity:.6;cursor:wait}
+                    .cj-chat-error{min-height:18px;margin:9px 0;color:#a63d36;font-size:12px}
+                    .cj-chat-thread{display:flex;min-height:0;flex:1;flex-direction:column}
+                    .cj-chat-messages{display:flex;min-height:0;flex:1;flex-direction:column;gap:9px;overflow:auto;padding:2px 2px 12px}
+                    .cj-chat-bubble{max-width:88%;padding:10px 12px;border-radius:12px;background:#f0f5f2;color:#354b41;font-size:13px;line-height:1.45;overflow-wrap:anywhere;white-space:pre-wrap}
+                    .cj-chat-bubble-customer{align-self:flex-end;background:#e1f2ef}
+                    .cj-chat-time{display:block;margin-top:5px;color:#87968e;font-size:10px}
+                    .cj-chat-composer{display:grid;grid-template-columns:1fr auto;align-items:end;gap:8px;padding-top:10px;border-top:1px solid #edf1ee}
+                    .cj-chat-composer textarea{min-height:43px;max-height:100px;resize:vertical}
+                    .cj-chat-identity{padding:0;border:0;color:#007a80;background:transparent;font-size:11px;text-align:left;text-decoration:underline;cursor:pointer}
+                    @keyframes cjChatBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+                    @keyframes cjChatVisibility{0%,49.99%{opacity:1;visibility:visible}50%,100%{opacity:0;visibility:hidden}}
+                    @media(max-width:620px){.cj-chat-launcher{left:14px;right:auto;bottom:14px;width:54px;height:54px}.cj-chat-panel{left:10px;right:auto;bottom:78px;height:min(570px,calc(100vh - 100px))}}
+                    @media(prefers-reduced-motion:reduce){.cj-chat-launcher{animation:none}}
+                </style>
+                <div id="cjChatWidget">
+                    <button class="cj-chat-launcher" id="cjChatLauncher" type="button" aria-label="Chat with Kalitusi" aria-expanded="false" aria-controls="cjChatPanel">✉</button>
+                    <section class="cj-chat-panel" id="cjChatPanel" role="dialog" aria-modal="false" aria-labelledby="cjChatTitle" hidden="hidden">
+                        <header class="cj-chat-header"><div><strong id="cjChatTitle">Chat with Kalitusi</strong><small>We’re here to help</small></div><button class="cj-chat-close" id="cjChatClose" type="button" aria-label="Close chat">×</button></header>
+                        <div class="cj-chat-content">
+                            <form class="cj-chat-form" id="cjChatIdentityForm">
+                                <p class="cj-chat-copy">Verify your email to start a private conversation with our team.</p>
+                                <label class="cj-chat-field">Your name<input id="cjChatName" maxlength="120" autocomplete="name" required="required"/></label>
+                                <label class="cj-chat-field">Email address<input id="cjChatEmail" type="email" maxlength="254" autocomplete="email" required="required"/></label>
+                                <button class="cj-chat-submit" id="cjChatRequestCode" type="submit">Email verification code</button>
+                            </form>
+                            <form class="cj-chat-form" id="cjChatCodeForm" hidden="hidden">
+                                <p class="cj-chat-copy">Enter the 6-digit code sent to your email address.</p>
+                                <label class="cj-chat-field">Verification code<input id="cjChatCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required="required"/></label>
+                                <button class="cj-chat-submit" id="cjChatVerifyCode" type="submit">Verify email</button>
+                                <button class="cj-chat-identity" id="cjChatChangeEmail" type="button">Use a different email</button>
+                            </form>
+                            <p class="cj-chat-error" id="cjChatError" role="status" aria-live="polite"></p>
+                            <div class="cj-chat-thread" id="cjChatThread" hidden="hidden">
+                                <div class="cj-chat-messages" id="cjChatMessages" aria-live="polite"></div>
+                                <form class="cj-chat-composer" id="cjChatMessageForm"><label class="cj-chat-field" style="min-width:0">Message<textarea id="cjChatMessage" maxlength="2000" rows="2" required="required" placeholder="Type your message…"></textarea></label><button class="cj-chat-submit" id="cjChatSend" type="submit">Send</button></form>
+                                <button class="cj-chat-identity" id="cjChatSignOut" type="button" style="margin-top:9px">End this chat session</button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+                <script>
+                    (function(){
+                        var apiBase=(window.CJ_API_BASE_URL||'https://api.kalitusi.com/api/v1').replace(/\/+$/,'');
+                        var panel=document.getElementById('cjChatPanel'),launcher=document.getElementById('cjChatLauncher');
+                        var identity=document.getElementById('cjChatIdentityForm'),codeForm=document.getElementById('cjChatCodeForm');
+                        var thread=document.getElementById('cjChatThread'),error=document.getElementById('cjChatError');
+                        var list=document.getElementById('cjChatMessages'),messageInput=document.getElementById('cjChatMessage');
+                        var busy=false,polling=null,storageKey='cjChatAccessToken';
+                        function showError(text){error.textContent=text||'';}
+                        function showIdentity(){identity.hidden=false;codeForm.hidden=true;thread.hidden=true;window.clearInterval(polling);polling=null;}
+                        async function request(path,method,body){
+                            var headers={'Accept':'application/json','Content-Type':'application/json'};
+                            var token=sessionStorage.getItem(storageKey);
+                            if(token)headers.Authorization='Chat '+token;
+                            var response=await fetch(apiBase+path,{method:method||'GET',headers:headers,body:body?JSON.stringify(body):undefined});
+                            var data=await response.json().catch(function(){return {};});
+                            if(!response.ok)throw new Error(data.detail||'Chat request failed (HTTP '+response.status+').');
+                            return data;
+                        }
+                        function renderMessages(messages){
+                            var atBottom=list.scrollHeight-list.scrollTop-list.clientHeight<50;
+                            list.replaceChildren();
+                            if(!messages.length){var welcome=document.createElement('p');welcome.className='cj-chat-bubble';welcome.textContent='Hello! Send us a message and our team will reply here.';list.appendChild(welcome);}
+                            messages.forEach(function(message){
+                                var bubble=document.createElement('div'),body=document.createElement('span'),time=document.createElement('small');
+                                bubble.className='cj-chat-bubble'+(message.sender==='customer'?' cj-chat-bubble-customer':'');
+                                body.textContent=message.body;time.className='cj-chat-time';
+                                time.textContent=(message.sender==='customer'?'You':'Kalitusi team')+' · '+new Date(message.created_at).toLocaleString();
+                                bubble.appendChild(body);bubble.appendChild(time);list.appendChild(bubble);
+                            });
+                            if(atBottom)list.scrollTop=list.scrollHeight;
+                        }
+                        async function loadMessages(){
+                            if(busy||panel.hidden||!sessionStorage.getItem(storageKey))return;
+                            try{var data=await request('/chats/messages/');if(!Array.isArray(data.messages))throw new Error('Invalid chat response.');renderMessages(data.messages);identity.hidden=true;codeForm.hidden=true;thread.hidden=false;showError('');}
+                            catch(failure){showError(failure.message);if(failure.message.toLowerCase().indexOf('session')!==-1||failure.message.indexOf('Verify your email')!==-1){sessionStorage.removeItem(storageKey);showIdentity();}}
+                        }
+                        function openPanel(){
+                            panel.hidden=false;launcher.hidden=true;launcher.setAttribute('aria-expanded','true');showError('');
+                            if(sessionStorage.getItem(storageKey)){loadMessages();if(!polling)polling=window.setInterval(loadMessages,5000);}else showIdentity();
+                        }
+                        launcher.addEventListener('click',function(){if(panel.hidden)openPanel();else{panel.hidden=true;launcher.hidden=false;launcher.setAttribute('aria-expanded','false');}});
+                        document.getElementById('cjChatClose').addEventListener('click',function(){panel.hidden=true;launcher.hidden=false;launcher.setAttribute('aria-expanded','false');});
+                        identity.addEventListener('submit',async function(event){
+                            event.preventDefault();if(busy)return;busy=true;var button=document.getElementById('cjChatRequestCode');button.disabled=true;showError('Sending your verification code…');
+                            try{var data=await request('/chats/request-code/','POST',{name:document.getElementById('cjChatName').value.trim(),email:document.getElementById('cjChatEmail').value.trim()});identity.hidden=true;codeForm.hidden=false;document.getElementById('cjChatCode').focus();showError(data.detail||'Check your email for the code.');}
+                            catch(failure){showError(failure.message);}finally{busy=false;button.disabled=false;}
+                        });
+                        codeForm.addEventListener('submit',async function(event){
+                            event.preventDefault();if(busy)return;busy=true;var button=document.getElementById('cjChatVerifyCode');button.disabled=true;showError('Verifying your email…');
+                            try{var data=await request('/chats/verify-code/','POST',{email:document.getElementById('cjChatEmail').value.trim(),code:document.getElementById('cjChatCode').value.trim()});if(!data.token||!Array.isArray(data.messages))throw new Error('Invalid chat response.');sessionStorage.setItem(storageKey,data.token);renderMessages(data.messages);identity.hidden=true;codeForm.hidden=true;thread.hidden=false;showError('');if(!polling)polling=window.setInterval(loadMessages,5000);}
+                            catch(failure){showError(failure.message);}finally{busy=false;button.disabled=false;}
+                        });
+                        document.getElementById('cjChatChangeEmail').addEventListener('click',function(){codeForm.hidden=true;identity.hidden=false;document.getElementById('cjChatCode').value='';showError('');});
+                        document.getElementById('cjChatMessageForm').addEventListener('submit',async function(event){
+                            event.preventDefault();var body=messageInput.value.trim();if(!body||busy)return;busy=true;var button=document.getElementById('cjChatSend');button.disabled=true;
+                            try{await request('/chats/messages/','POST',{body:body});messageInput.value='';}catch(failure){showError(failure.message);}finally{busy=false;button.disabled=false;loadMessages();}
+                        });
+                        document.getElementById('cjChatSignOut').addEventListener('click',function(){sessionStorage.removeItem(storageKey);list.replaceChildren();identity.reset();codeForm.reset();showIdentity();showError('Chat session ended.');});
+                        document.addEventListener('keydown',function(event){if(event.key==='Escape'&&!panel.hidden){panel.hidden=true;launcher.hidden=false;launcher.setAttribute('aria-expanded','false');}});
+                    })();
+                </script>
 
                 <section class="cj-hero">
                     <div class="cj-hero-inner">
@@ -155,7 +275,7 @@
                         var originalFetch=window.fetch;
                         window.fetch=function(input,options){
                             var url=typeof input==='string'?input:(input&&input.url)||'';
-                            if(url.indexOf('/api/v1/')===-1||url.indexOf('/cart/')!==-1)return originalFetch.apply(this,arguments);
+                            if(url.indexOf('/api/v1/')===-1||url.indexOf('/cart/')!==-1||url.indexOf('/chats/')!==-1)return originalFetch.apply(this,arguments);
                             beginRequest();
                             var complete=false;
                             function finish(){if(complete)return;complete=true;endRequest();}
@@ -209,7 +329,8 @@
                         grid.innerHTML=list.map(function(p){
                             var image=safeImageUrl(p.image);
                             var imageMarkup=image?'<img class="cj-card-image" src="'+escapeHtml(image)+'" alt="'+escapeHtml(p.name)+'"/>':'<div class="cj-card-image" aria-hidden="true"></div>';
-                            return '<article class="cj-card" data-product-id="'+escapeHtml(p.slug)+'" role="link" tabindex="0" aria-label="View '+escapeHtml(p.name)+'">'+imageMarkup+'<div class="cj-card-body"><div class="cj-card-title"><h3>'+escapeHtml(p.name)+'</h3><span class="cj-price">UGX '+Number(p.price).toLocaleString('en-UG')+'</span></div><p>'+escapeHtml(p.description)+'</p><button class="cj-add" type="button" data-id="'+escapeHtml(p.slug)+'">Order Now</button></div></article>';
+                            var rating=p.review_count?'<div class="cj-card-rating" aria-label="Rated '+Number(p.average_rating).toFixed(1)+' out of 5">★ '+Number(p.average_rating).toFixed(1)+' ('+p.review_count+' review'+(p.review_count===1?'':'s')+')</div>':'<div class="cj-card-rating">No reviews yet</div>';
+                            return '<article class="cj-card" data-product-id="'+escapeHtml(p.slug)+'" role="link" tabindex="0" aria-label="View '+escapeHtml(p.name)+'">'+imageMarkup+'<div class="cj-card-body"><div class="cj-card-title"><h3>'+escapeHtml(p.name)+'</h3><span class="cj-price">UGX '+Number(p.price).toLocaleString('en-UG')+'</span></div>'+rating+'<p>'+escapeHtml(p.description)+'</p><button class="cj-add" type="button" data-id="'+escapeHtml(p.slug)+'">Order Now</button></div></article>';
                         }).join('');
                     }
                     function renderCategories(){

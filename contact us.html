@@ -1,0 +1,271 @@
+<t t-name="website.contact-us-1">
+    <t t-call="website.layout">
+        <div id="wrap" class="oe_structure oe_empty">
+            <style>
+                .cj-support-page{--cj-ink:#173a36;--cj-muted:#647a74;--cj-teal:#008b92;--cj-line:#dfe9e5;min-height:100vh;padding:54px 20px 90px;background:#f3f7f5;color:var(--cj-ink);font-family:Arial,Helvetica,sans-serif}
+                .cj-support-shell{width:min(1160px,100%);margin:0 auto}
+                .cj-support-hero{position:relative;overflow:hidden;padding:clamp(30px,6vw,64px);border-radius:26px;background:linear-gradient(120deg,#0d4643,#087d79 62%,#12a4a0);color:#fff}
+                .cj-support-hero:after{position:absolute;right:-75px;bottom:-180px;width:420px;height:420px;border:1px solid rgba(255,255,255,.15);border-radius:50%;content:""}
+                .cj-support-eyebrow{display:inline-flex;align-items:center;gap:8px;margin:0 0 16px;padding:8px 12px;border:1px solid rgba(255,255,255,.25);border-radius:999px;color:#dcf7f0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+                .cj-support-eyebrow:before{width:7px;height:7px;border-radius:50%;background:#7de0b0;content:""}
+                .cj-support-hero h1{position:relative;z-index:1;max-width:680px;margin:0;font-size:clamp(36px,6vw,62px);line-height:1.04;letter-spacing:-.04em}
+                .cj-support-hero p{position:relative;z-index:1;max-width:560px;margin:18px 0 0;color:#d9eeea;font-size:17px;line-height:1.65}
+                .cj-support-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"ticket chat";gap:22px;margin-top:24px;align-items:stretch}
+                .cj-support-options-chat-open{grid-template-areas:"chat chat"}
+                .cj-support-chat-card{grid-area:chat}
+                .cj-support-ticket-card{grid-area:ticket}
+                .cj-support-options-chat-open .cj-support-ticket-card{display:none}
+                .cj-support-options-chat-open .cj-support-chat-card{grid-column:1/-1}
+                .cj-support-options-chat-open .cj-support-chat-content{height:min(68vh,680px);min-height:420px}
+                .cj-support-card{min-width:0;padding:clamp(22px,3vw,34px);border:1px solid var(--cj-line);border-radius:20px;background:#fff;box-shadow:0 12px 32px rgba(20,66,57,.06)}
+                .cj-support-card-heading{display:flex;align-items:flex-start;gap:14px;margin-bottom:22px}
+                .cj-support-heading-copy{display:flex;min-width:0;flex:1;align-items:flex-start;gap:14px}
+                .cj-support-switch{padding:9px 12px;border:1px solid #cfe1dc;border-radius:8px;background:#fff;color:#087d79;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer}
+                .cj-support-switch:hover{background:#f0f8f5}
+                .cj-support-switch[hidden]{display:none!important}
+                .cj-support-icon{display:grid;width:46px;height:46px;flex:0 0 46px;place-items:center;border-radius:14px;background:#e4f4ef;color:#087d79;font-size:21px;font-weight:700}
+                .cj-support-card h2{margin:0;color:var(--cj-ink);font-size:23px;letter-spacing:-.02em}
+                .cj-support-card-heading p{margin:7px 0 0;color:var(--cj-muted);font-size:14px;line-height:1.5}
+                .cj-support-chat-start{display:flex;min-height:275px;flex-direction:column;align-items:flex-start;justify-content:center;padding:25px;border:1px solid #d5ebe4;border-radius:16px;background:linear-gradient(145deg,#f5fbf8,#eaf6f2)}
+                .cj-support-chat-start strong{font-size:18px}
+                .cj-support-chat-start p{max-width:330px;margin:9px 0 20px;color:var(--cj-muted);font-size:14px;line-height:1.6}
+                .cj-support-start-button,.cj-support-submit{display:inline-flex;min-height:46px;align-items:center;justify-content:center;padding:0 20px;border:0;border-radius:9px;background:var(--cj-teal);color:#fff;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer}
+                .cj-support-start-button:hover,.cj-support-submit:hover{background:#006f75;color:#fff}
+                .cj-support-start-button:focus-visible,.cj-support-submit:focus-visible,.cj-support-page input:focus-visible,.cj-support-page textarea:focus-visible{outline:3px solid rgba(0,139,146,.25);outline-offset:2px}
+                .cj-support-chatbox[hidden],.cj-support-chat-form[hidden],.cj-support-chat-thread[hidden],.cj-support-chat-start[hidden]{display:none!important}
+                .cj-support-chatbox{overflow:hidden;border:1px solid var(--cj-line);border-radius:15px;background:#fff}
+                .cj-support-chat-header{padding:15px 18px;background:#087d79;color:#fff}
+                .cj-support-chat-header strong{font-size:15px}
+                .cj-support-chat-header small{display:block;margin-top:4px;color:#d7eeea;font-size:12px}
+                .cj-support-chat-content{display:flex;height:390px;flex-direction:column;padding:16px}
+                .cj-support-chat-form{display:grid;gap:12px;margin:auto 0}
+                .cj-support-chat-copy{margin:0;color:var(--cj-muted);font-size:13px;line-height:1.55}
+                .cj-support-label{display:grid;gap:6px;color:#50665f;font-size:12px;font-weight:700}
+                .cj-support-label input,.cj-support-label textarea{width:100%;min-height:43px;padding:10px 12px;border:1px solid #d7e3de;border-radius:8px;background:#fff;color:var(--cj-ink);font:inherit}
+                .cj-support-chat-button{min-height:43px;padding:0 15px;border:0;border-radius:8px;background:var(--cj-teal);color:#fff;font-size:13px;font-weight:700;cursor:pointer}
+                .cj-support-chat-button:disabled{opacity:.6;cursor:wait}
+                .cj-support-change-email{padding:0;border:0;background:transparent;color:#007a80;font-size:12px;text-align:left;text-decoration:underline;cursor:pointer}
+                .cj-support-chat-error{min-height:18px;margin:9px 0;color:#a63d36;font-size:12px}
+                .cj-support-chat-thread{display:flex;min-height:0;flex:1;flex-direction:column}
+                .cj-support-messages{display:flex;min-height:0;flex:1;flex-direction:column;gap:9px;overflow:auto;padding:2px 2px 12px}
+                .cj-support-bubble{max-width:88%;padding:10px 12px;border-radius:12px;background:#f0f5f2;color:#354b41;font-size:13px;line-height:1.45;overflow-wrap:anywhere;white-space:pre-wrap}
+                .cj-support-bubble-customer{align-self:flex-end;background:#e1f2ef}
+                .cj-support-time{display:block;margin-top:5px;color:#87968e;font-size:10px}
+                .cj-support-composer{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px;padding-top:10px;border-top:1px solid #edf1ee}
+                .cj-support-ticket-form{display:grid;gap:15px}
+                .cj-support-ticket-fields{display:grid;gap:15px}
+                .cj-support-ticket-field{display:grid;gap:6px;color:#50665f;font-size:12px;font-weight:700}
+                .cj-support-ticket-field input,.cj-support-ticket-field textarea{width:100%;min-height:44px;padding:10px 12px;border:1px solid #d7e3de;border-radius:8px;background:#fff;color:var(--cj-ink);font:14px Arial,Helvetica,sans-serif}
+                .cj-support-ticket-field textarea{min-height:130px;resize:vertical}
+                .cj-support-ticket-result{min-height:18px;margin:0;color:#18764b;font-size:13px;line-height:1.5}
+                .cj-support-ticket-result[data-state="warning"],.cj-support-ticket-result[data-state="error"]{color:#a64b20}
+                .cj-support-ticket-note{margin:14px 0 0;color:var(--cj-muted);font-size:12px;line-height:1.5}
+                @media(max-width:760px){.cj-support-page{padding:24px 14px 56px}.cj-support-options{grid-template-columns:1fr;grid-template-areas:"chat" "ticket"}.cj-support-hero{border-radius:20px}.cj-support-chat-content{height:370px}.cj-support-options-chat-open .cj-support-chat-content{height:min(58vh,520px);min-height:340px}.cj-support-card-heading{flex-wrap:wrap}.cj-support-switch{margin-left:60px}}
+            </style>
+
+            <main class="cj-support-page">
+                <div class="cj-support-shell">
+                    <header class="cj-support-hero">
+                        <p class="cj-support-eyebrow">Kalitusi customer care</p>
+                        <h1>How can we help?</h1>
+                        <p>Choose the support option that works for you. Chat with our team for a quick conversation, or send us a ticket and we’ll follow up by email.</p>
+                    </header>
+
+                    <div class="cj-support-options">
+                        <section class="cj-support-card cj-support-chat-card" aria-labelledby="cjSupportChatHeading">
+                            <div class="cj-support-card-heading">
+                                <div class="cj-support-heading-copy">
+                                    <span class="cj-support-icon" aria-hidden="true">↗</span>
+                                    <div><h2 id="cjSupportChatHeading">Chat with Us</h2><p>Talk directly with the Kalitusi team.</p></div>
+                                </div>
+                                <button class="cj-support-switch" id="cjSupportShowTicketButton" type="button" aria-controls="cjSupportTicketCard" aria-expanded="false" hidden="hidden">Show ticket form</button>
+                            </div>
+                            <div class="cj-support-chat-start" id="cjSupportChatStart">
+                                <strong>Need an answer now?</strong>
+                                <p>Start a private chat. Verify your email once, then send messages and read our replies right here.</p>
+                                <button class="cj-support-start-button" id="cjSupportStartButton" type="button">Start a chat</button>
+                            </div>
+                            <div class="cj-support-chatbox" id="cjSupportChatBox" hidden="hidden">
+                                <header class="cj-support-chat-header"><strong>Chat with Kalitusi</strong><small>Our team will reply in this conversation</small></header>
+                                <div class="cj-support-chat-content">
+                                    <form class="cj-support-chat-form" id="cjSupportIdentityForm">
+                                        <p class="cj-support-chat-copy">Verify your email to start a private conversation with our team.</p>
+                                        <label class="cj-support-label">Your name<input id="cjSupportName" maxlength="120" autocomplete="name" required="required"/></label>
+                                        <label class="cj-support-label">Email address<input id="cjSupportEmail" type="email" maxlength="254" autocomplete="email" required="required"/></label>
+                                        <button class="cj-support-chat-button" id="cjSupportRequestCode" type="submit">Email verification code</button>
+                                    </form>
+                                    <form class="cj-support-chat-form" id="cjSupportCodeForm" hidden="hidden">
+                                        <p class="cj-support-chat-copy">Enter the 6-digit code sent to your email address.</p>
+                                        <label class="cj-support-label">Verification code<input id="cjSupportCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required="required"/></label>
+                                        <button class="cj-support-chat-button" id="cjSupportVerifyCode" type="submit">Verify email</button>
+                                        <button class="cj-support-change-email" id="cjSupportChangeEmail" type="button">Use a different email</button>
+                                    </form>
+                                    <p class="cj-support-chat-error" id="cjSupportChatError" role="status" aria-live="polite"></p>
+                                    <div class="cj-support-chat-thread" id="cjSupportChatThread" hidden="hidden">
+                                        <div class="cj-support-messages" id="cjSupportMessages" aria-live="polite"></div>
+                                        <form class="cj-support-composer" id="cjSupportMessageForm">
+                                            <label class="cj-support-label" style="min-width:0">Message<textarea id="cjSupportMessage" maxlength="2000" rows="2" required="required" placeholder="Type your message…"></textarea></label>
+                                            <button class="cj-support-chat-button" id="cjSupportSend" type="submit">Send</button>
+                                        </form>
+                                        <button class="cj-support-change-email" id="cjSupportSignOut" type="button" style="margin-top:9px">End this chat session</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="cj-support-card cj-support-ticket-card" id="cjSupportTicketCard" aria-labelledby="cjSupportTicketHeading">
+                            <div class="cj-support-card-heading">
+                                <span class="cj-support-icon" aria-hidden="true">✉</span>
+                                <div><h2 id="cjSupportTicketHeading" tabindex="-1">Send a Ticket</h2><p>Leave the details and we’ll get back to you by email.</p></div>
+                            </div>
+                            <section class="cj-support-ticket-form">
+                                <div class="container-fluid p-0">
+                                    <form id="cjSupportTicketForm" method="post">
+                                        <div class="cj-support-ticket-fields">
+                                            <label class="cj-support-ticket-field" for="cjSupportTicketName">Your Name *
+                                                <input type="text" name="name" required="required" maxlength="120" autocomplete="name" id="cjSupportTicketName"/>
+                                            </label>
+                                            <label class="cj-support-ticket-field" for="cjSupportTicketEmail">Your Email *
+                                                <input type="email" name="email" required="required" maxlength="254" autocomplete="email" id="cjSupportTicketEmail"/>
+                                            </label>
+                                            <label class="cj-support-ticket-field" for="cjSupportTicketPhone">Phone Number
+                                                <input type="tel" name="phone" maxlength="40" autocomplete="tel" id="cjSupportTicketPhone"/>
+                                            </label>
+                                            <label class="cj-support-ticket-field" for="cjSupportTicketSubject">Subject *
+                                                <input type="text" name="subject" required="required" maxlength="200" id="cjSupportTicketSubject"/>
+                                            </label>
+                                            <label class="cj-support-ticket-field" for="cjSupportTicketDetails">How can we help? *
+                                                <textarea name="message" required="required" maxlength="5000" id="cjSupportTicketDetails" rows="4"></textarea>
+                                            </label>
+                                        </div>
+                                        <p class="cj-support-ticket-result" id="cjSupportTicketResult" role="status" aria-live="polite"></p>
+                                        <button class="cj-support-submit" id="cjSupportTicketSubmit" type="submit">Send support ticket</button>
+                                    </form>
+                                </div>
+                            </section>
+                            <p class="cj-support-ticket-note">Your request will be saved in the admin portal and emailed to our support team.</p>
+                        </section>
+                    </div>
+                </div>
+            </main>
+            <script>
+                (function(){
+                    var apiBase=(window.CJ_API_BASE_URL||'https://api.kalitusi.com/api/v1').replace(/\/+$/,'');
+                    var chatStart=document.getElementById('cjSupportChatStart'),chatBox=document.getElementById('cjSupportChatBox');
+                    var identity=document.getElementById('cjSupportIdentityForm'),codeForm=document.getElementById('cjSupportCodeForm');
+                    var thread=document.getElementById('cjSupportChatThread'),error=document.getElementById('cjSupportChatError');
+                    var list=document.getElementById('cjSupportMessages'),messageInput=document.getElementById('cjSupportMessage');
+                    var ticketForm=document.getElementById('cjSupportTicketForm');
+                    var ticketSubmit=document.getElementById('cjSupportTicketSubmit');
+                    var ticketResult=document.getElementById('cjSupportTicketResult');
+                    var busy=false,polling=null,storageKey='cjChatAccessToken';
+                    function showError(text){error.textContent=text||'';}
+                    function showIdentity(){identity.hidden=false;codeForm.hidden=true;thread.hidden=true;window.clearInterval(polling);polling=null;}
+                    async function request(path,method,body){
+                        var headers={'Accept':'application/json','Content-Type':'application/json'};
+                        var token=sessionStorage.getItem(storageKey);
+                        if(token)headers.Authorization='Chat '+token;
+                        var response=await fetch(apiBase+path,{method:method||'GET',headers:headers,body:body?JSON.stringify(body):undefined});
+                        var data=await response.json().catch(function(){return {};});
+                        if(!response.ok)throw new Error(data.detail||'Chat request failed (HTTP '+response.status+').');
+                        return data;
+                    }
+                    function renderMessages(messages){
+                        var atBottom=list.scrollHeight-list.scrollTop-list.clientHeight<50;
+                        list.replaceChildren();
+                        if(!messages.length){var welcome=document.createElement('p');welcome.className='cj-support-bubble';welcome.textContent='Hello! Send us a message and our team will reply here.';list.appendChild(welcome);}
+                        messages.forEach(function(message){
+                            var bubble=document.createElement('div'),body=document.createElement('span'),time=document.createElement('small');
+                            bubble.className='cj-support-bubble'+(message.sender==='customer'?' cj-support-bubble-customer':'');
+                            body.textContent=message.body;time.className='cj-support-time';
+                            time.textContent=(message.sender==='customer'?'You':'Kalitusi team')+' · '+new Date(message.created_at).toLocaleString();
+                            bubble.appendChild(body);bubble.appendChild(time);list.appendChild(bubble);
+                        });
+                        if(atBottom)list.scrollTop=list.scrollHeight;
+                    }
+                    async function loadMessages(){
+                        if(busy||chatBox.hidden||!sessionStorage.getItem(storageKey))return;
+                        try{var data=await request('/chats/messages/');if(!Array.isArray(data.messages))throw new Error('Invalid chat response.');renderMessages(data.messages);identity.hidden=true;codeForm.hidden=true;thread.hidden=false;showError('');}
+                        catch(failure){showError(failure.message);if(failure.message.toLowerCase().indexOf('session')!==-1||failure.message.indexOf('Verify your email')!==-1){sessionStorage.removeItem(storageKey);showIdentity();}}
+                    }
+                    document.getElementById('cjSupportStartButton').addEventListener('click',function(){
+                        document.querySelector('.cj-support-options').classList.add('cj-support-options-chat-open');
+                        var ticketButton=document.getElementById('cjSupportShowTicketButton');
+                        ticketButton.hidden=false;ticketButton.setAttribute('aria-expanded','false');ticketButton.textContent='Show ticket form';
+                        chatStart.hidden=true;chatBox.hidden=false;showError('');
+                        if(sessionStorage.getItem(storageKey)){loadMessages();if(!polling)polling=window.setInterval(loadMessages,5000);}else showIdentity();
+                    });
+                    document.getElementById('cjSupportShowTicketButton').addEventListener('click',function(){
+                        var options=document.querySelector('.cj-support-options');
+                        var ticketOpen=this.getAttribute('aria-expanded')==='true';
+                        if(ticketOpen){
+                            options.classList.add('cj-support-options-chat-open');
+                            this.setAttribute('aria-expanded','false');this.textContent='Show ticket form';
+                            document.getElementById('cjSupportChatHeading').focus();
+                        }else{
+                            options.classList.remove('cj-support-options-chat-open');
+                            this.setAttribute('aria-expanded','true');this.textContent='Hide ticket form';
+                            document.getElementById('cjSupportTicketHeading').focus();
+                        }
+                    });
+                    identity.addEventListener('submit',async function(event){
+                        event.preventDefault();if(busy)return;busy=true;var button=document.getElementById('cjSupportRequestCode');button.disabled=true;showError('Sending your verification code…');
+                        try{var data=await request('/chats/request-code/','POST',{name:document.getElementById('cjSupportName').value.trim(),email:document.getElementById('cjSupportEmail').value.trim()});identity.hidden=true;codeForm.hidden=false;document.getElementById('cjSupportCode').focus();showError(data.detail||'Check your email for the code.');}
+                        catch(failure){showError(failure.message);}finally{busy=false;button.disabled=false;}
+                    });
+                    codeForm.addEventListener('submit',async function(event){
+                        event.preventDefault();if(busy)return;busy=true;var button=document.getElementById('cjSupportVerifyCode');button.disabled=true;showError('Verifying your email…');
+                        try{var data=await request('/chats/verify-code/','POST',{email:document.getElementById('cjSupportEmail').value.trim(),code:document.getElementById('cjSupportCode').value.trim()});if(!data.token||!Array.isArray(data.messages))throw new Error('Invalid chat response.');sessionStorage.setItem(storageKey,data.token);renderMessages(data.messages);identity.hidden=true;codeForm.hidden=true;thread.hidden=false;showError('');if(!polling)polling=window.setInterval(loadMessages,5000);}
+                        catch(failure){showError(failure.message);}finally{busy=false;button.disabled=false;}
+                    });
+                    document.getElementById('cjSupportChangeEmail').addEventListener('click',function(){codeForm.hidden=true;identity.hidden=false;document.getElementById('cjSupportCode').value='';showError('');});
+                    document.getElementById('cjSupportMessageForm').addEventListener('submit',async function(event){
+                        event.preventDefault();var body=messageInput.value.trim();if(!body||busy)return;busy=true;var button=document.getElementById('cjSupportSend');button.disabled=true;
+                        try{await request('/chats/messages/','POST',{body:body});messageInput.value='';}catch(failure){showError(failure.message);}finally{busy=false;button.disabled=false;loadMessages();}
+                    });
+                    document.getElementById('cjSupportSignOut').addEventListener('click',function(){sessionStorage.removeItem(storageKey);list.replaceChildren();identity.reset();codeForm.reset();showIdentity();showError('Chat session ended.');});
+                    ticketForm.addEventListener('submit',async function(event){
+                        event.preventDefault();
+                        if(ticketSubmit.disabled)return;
+                        ticketSubmit.disabled=true;ticketSubmit.textContent='Sending…';
+                        ticketResult.dataset.state='';ticketResult.textContent='Sending your support ticket…';
+                        try{
+                            var response=await fetch(apiBase+'/support-tickets/',{
+                                method:'POST',
+                                headers:{'Accept':'application/json','Content-Type':'application/json'},
+                                body:JSON.stringify({
+                                    name:document.getElementById('cjSupportTicketName').value.trim(),
+                                    email:document.getElementById('cjSupportTicketEmail').value.trim(),
+                                    phone:document.getElementById('cjSupportTicketPhone').value.trim(),
+                                    subject:document.getElementById('cjSupportTicketSubject').value.trim(),
+                                    message:document.getElementById('cjSupportTicketDetails').value.trim()
+                                })
+                            });
+                            var result=await response.json().catch(function(){return {};});
+                            if(!response.ok){
+                                var details=Object.keys(result).map(function(key){
+                                    var value=result[key];
+                                    return key+': '+(Array.isArray(value)?value.join(' '):value);
+                                }).join(' ');
+                                throw new Error(result.detail||details||'Your ticket could not be sent. Please try again.');
+                            }
+                            ticketForm.reset();
+                            if(result.email_sent){
+                                ticketResult.dataset.state='success';
+                                ticketResult.textContent='Your ticket is saved in the admin portal, and an email copy was sent to our support team.';
+                            }else{
+                                ticketResult.dataset.state='warning';
+                                ticketResult.textContent='Your ticket is saved in the admin portal, but its email copy could not be delivered. Please contact us by chat if this is urgent.';
+                            }
+                        }catch(failure){
+                            ticketResult.dataset.state='error';
+                            ticketResult.textContent=failure instanceof Error?failure.message:'Your ticket could not be sent. Please try again.';
+                        }finally{
+                            ticketSubmit.disabled=false;ticketSubmit.textContent='Send support ticket';
+                        }
+                    });
+                })();
+            </script>
+        </div>
+    </t>
+</t>

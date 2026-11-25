@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Category,
+    CustomerReview,
     Lodge,
     LodgeImage,
     LodgeReservation,
@@ -10,6 +11,7 @@ from .models import (
     Payment,
     PaymentReceipt,
     Product,
+    SupportTicket,
 )
 
 
@@ -160,4 +162,35 @@ class PaymentReceiptAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(CustomerReview)
+class CustomerReviewAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "reviewer_name",
+        "rating",
+        "product",
+        "lodge",
+        "created_at",
+    )
+    list_filter = ("rating", "created_at")
+    search_fields = ("reviewer_name", "comment", "product__name", "lodge__name")
+    readonly_fields = tuple(field.name for field in CustomerReview._meta.fields)
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(SupportTicket)
+class SupportTicketAdmin(admin.ModelAdmin):
+    list_display = ("id", "subject", "name", "email", "email_sent", "created_at")
+    list_filter = ("email_sent", "created_at")
+    search_fields = ("name", "email", "phone", "subject", "message")
+    readonly_fields = tuple(field.name for field in SupportTicket._meta.fields)
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
         return False
