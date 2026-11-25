@@ -34,6 +34,8 @@
                 .cj-reservation-receipt small{display:block;margin-top:4px;color:#89968f}
                 .cj-reservation-receipt button{min-height:36px;padding:0 12px;border:0;border-radius:6px;color:#fff;background:#008B92;font-size:12px;font-weight:800;cursor:pointer}
                 .cj-reservation-update-note{margin:18px 0 0;color:#6f7a74;font-size:12px;line-height:1.5}
+                .cj-reservation-review-link{display:inline-flex;min-height:42px;align-items:center;margin:8px 0 0;padding:0 15px;border-radius:6px;background:#008b92;color:#fff;text-decoration:none;font-size:13px;font-weight:800}
+                .cj-reservation-review-link:hover{background:#006f75;color:#fff}
                 @media(max-width:680px){.cj-reservations-container{width:calc(100% - 24px);margin:28px auto 56px}.cj-reservations-heading h1{font-size:32px}.cj-reservations-lookup{grid-template-columns:1fr}.cj-reservations-submit{width:100%}.cj-reservation-meta{grid-template-columns:1fr 1fr}}
                 @media(max-width:420px){.cj-reservation-result-heading{align-items:flex-start;flex-direction:column}.cj-reservation-meta{grid-template-columns:1fr}.cj-reservation-receipt{align-items:flex-start;flex-direction:column}}
             </style>
@@ -148,6 +150,14 @@
                         addMeta(meta,'Paid to date',formatAmount(reservation.amount_paid_ugx));
                         addMeta(meta,'Outstanding balance',formatAmount(reservation.balance_ugx));
                         result.appendChild(meta);
+
+                        if(reservation.review_url){
+                            var reviewLink=document.createElement('a');
+                            reviewLink.className='cj-reservation-review-link';
+                            reviewLink.href=reservation.review_url;
+                            reviewLink.textContent='Review your stay';
+                            result.appendChild(reviewLink);
+                        }
 
                         if(Array.isArray(reservation.receipts)&&reservation.receipts.length){
                             var section=document.createElement('section');

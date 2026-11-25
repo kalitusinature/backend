@@ -24,6 +24,7 @@ from .models import (
     PaymentReceipt,
     SupportTicket,
 )
+from .review_tokens import order_review_links, reservation_review_url
 
 logger = logging.getLogger(__name__)
 
@@ -554,6 +555,58 @@ def _details_table_html(rows: list[tuple[str, str]]) -> str:
     )
 
 
+def _review_links_text(links: list[dict[str, str]]) -> str:
+    if not links:
+        return ""
+    return "Your order is completed and paid. Review your items:\n" + "\n".join(
+        f"{link['product_name']}: {link['url']}" for link in links
+    )
+
+
+def _review_links_html(links: list[dict[str, str]]) -> str:
+    if not links:
+        return ""
+    buttons = "".join(
+        '<p style="margin:12px 0;">'
+        f'<a href="{escape(link["url"], quote=True)}" '
+        'style="display:inline-block;padding:11px 18px;'
+        'background:#008b92;color:#ffffff;text-decoration:none;'
+        'border-radius:7px;font-weight:bold;">'
+        f'Review {escape(link["product_name"])}</a></p>'
+        for link in links
+    )
+    return (
+        '<h2 style="margin:24px 0 12px;font-size:18px;color:#234b3b;">'
+        "Share your experience</h2>"
+        '<p style="line-height:1.6;">Your order is complete and paid. '
+        "Tell us what you thought.</p>"
+        f"{buttons}"
+    )
+
+
+def _reservation_review_link_text(review_url: str | None) -> str:
+    if not review_url:
+        return ""
+    return f"\n\nShare your experience from your completed, paid stay:\n{review_url}"
+
+
+def _reservation_review_link_html(review_url: str | None) -> str:
+    if not review_url:
+        return ""
+    return (
+        '<h2 style="margin:24px 0 12px;font-size:18px;color:#234b3b;">'
+        "Share your experience</h2>"
+        '<p style="line-height:1.6;">Your stay is checked out and paid. '
+        "Tell us what you thought.</p>"
+        '<p style="margin:12px 0;">'
+        f'<a href="{escape(review_url, quote=True)}" '
+        'style="display:inline-block;padding:11px 18px;'
+        'background:#008b92;color:#ffffff;text-decoration:none;'
+        'border-radius:7px;font-weight:bold;">'
+        "Review your stay</a></p>"
+    )
+
+
 def _order_email_html(order: Order) -> str:
     item_rows = []
     for item in order.items.select_related("product").all():
@@ -697,6 +750,8 @@ def _reservation_customer_email(
         "Experience Nature. Experience Kalitusi."
     )
     notice_text = f"\n\n{copy['notice']}" if copy["notice"] else ""
+    review_url = reservation_review_url(reservation)
+    review_text = _reservation_review_link_text(review_url)
     body = (
         f"{heading}\n\n"
         f"Hello {reservation.guest_name},\n\n"
@@ -706,6 +761,7 @@ def _reservation_customer_email(
         f"{next_heading}\n"
         f"{copy['next_step']}"
         f"{notice_text}\n\n"
+        f"{review_text}\n\n"
         f"{copy['closing']}\n\n"
         f"{signoff}"
     )
@@ -722,6 +778,7 @@ def _reservation_customer_email(
         f"{escape(next_heading)}</h2>"
         f'<p style="line-height:1.6;">{escape(copy["next_step"])}</p>'
         f"{notice_html}"
+        f"{_reservation_review_link_html(review_url)}"
     )
     closing_html = (
         '<tr><td style="padding-top:24px;color:#64736c;'
@@ -844,6 +901,9 @@ def notify_order_updated(
         f"Total: UGX {order.total_ugx:,}"
     )
     order_html = _order_email_html(order)
+    review_links = order_review_links(order)
+    review_links_text = _review_links_text(review_links)
+    review_links_html = _review_links_html(review_links)
     if order.email:
         if order.status != previous_status:
             heading, intro, detail, next_step = ORDER_STATUS_EMAIL_COPY.get(
@@ -907,6 +967,8 @@ def notify_order_updated(
                 closing_text,
             ]
         )
+        if review_links_text:
+            customer_parts.insert(-1, review_links_text)
         content_html = (
             f'<p style="line-height:1.6;">{escape(intro)}</p>'
             f'<p style="line-height:1.6;">{escape(detail)}</p>'
@@ -919,6 +981,7 @@ def notify_order_updated(
             + '<h2 style="margin:24px 0 12px;font-size:18px;color:#234b3b;">'
             "What's Next?</h2>"
             f'<p style="line-height:1.6;">{escape(next_step)}</p>'
+            f"{review_links_html}"
         )
         _send_email(
             f"{heading} - {order.number}",
@@ -1046,6 +1109,14 @@ def send_payment_receipt_email(payment: Payment) -> bool:
         payment_type = "Reservation"
         booking_reference = payment.reservation.reference
     payment_status = "Paid in full" if receipt.balance_ugx == 0 else "Partially paid"
+    if payment.order_id:
+        review_links = order_review_links(payment.order)
+        review_links_text = _review_links_text(review_links)
+        review_links_html = _review_links_html(review_links)
+    else:
+        review_url = reservation_review_url(payment.reservation)
+        review_links_text = _reservation_review_link_text(review_url)
+        review_links_html = _reservation_review_link_html(review_url)
     text = (
         f"Hello {target.guest_name},\n\n"
         "Thank you for your payment to Kalitusi Nature Resort. "
@@ -1056,6 +1127,7 @@ def send_payment_receipt_email(payment: Payment) -> bool:
         f"Total paid: UGX {receipt.paid_to_date_ugx:,}\n"
         f"Outstanding balance: UGX {receipt.balance_ugx:,}\n"
         f"Payment status: {payment_status}\n\n"
+        f"{review_links_text}\n\n"
         "Warm regards,\nKalitusi Nature Resort\n"
         "Experience Nature. Experience Kalitusi."
     )
@@ -1074,6 +1146,7 @@ def send_payment_receipt_email(payment: Payment) -> bool:
         '<p style="line-height:1.6;">Thank you for your payment to '
         "Kalitusi Nature Resort. Your payment receipt is attached as a PDF.</p>"
         f"{payment_details_html}"
+        f"{review_links_html}"
     )
     return _send_email(
         f"Payment receipt {receipt.number}",

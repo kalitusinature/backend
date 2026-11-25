@@ -63,7 +63,11 @@ from .payment_api_views import (
     StaffPaymentReceiptResend,
 )
 from .support_api_views import StaffSupportTicketList, SupportTicketCreate
-from .review_api_views import LodgeReviewListCreate, ProductReviewListCreate
+from .review_api_views import (
+    LodgeReviewListCreate,
+    ProductReviewListCreate,
+    ReviewAccessView,
+)
 
 urlpatterns = [
     path("auth/token/", StaffLogin.as_view(), name="staff_api_login"),
@@ -135,6 +139,7 @@ urlpatterns = [
         LodgeReviewListCreate.as_view(),
         name="api_lodge_reviews",
     ),
+    path("reviews/access/", ReviewAccessView.as_view(), name="api_review_access"),
     path(
         "lodges/<slug:slug>/availability/",
         LodgeAvailability.as_view(),

@@ -2,18 +2,18 @@ from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle
 from rest_framework.views import APIView
 
-from .models import Lodge, Product
+from .models import CustomerReview, Lodge, Product
 from .review_serializers import (
     CustomerReviewSerializer,
-    LodgeReviewCreateSerializer,
-    ProductReviewCreateSerializer,
+    ReviewAccessSubmitSerializer,
 )
+from .review_tokens import resolve_review_link
 
 
 class PublicReviewListCreate(APIView):
@@ -38,48 +38,10 @@ class PublicReviewListCreate(APIView):
             "reviews": CustomerReviewSerializer(reviews[:100], many=True).data,
         }
 
-    @staticmethod
-    def create_review(serializer, duplicate_message):
-        serializer.is_valid(raise_exception=True)
-        try:
-            with transaction.atomic():
-                review = serializer.save()
-        except IntegrityError:
-            duplicate_fields = (
-                "product",
-                "order",
-                "lodge",
-                "reservation",
-            )
-            duplicate_lookup = {
-                field: serializer.validated_data[field]
-                for field in duplicate_fields
-                if field in serializer.validated_data
-            }
-            if not CustomerReview.objects.filter(**duplicate_lookup).exists():
-                raise
-            raise ValidationError({"detail": duplicate_message})
-        return Response(
-            CustomerReviewSerializer(review).data,
-            status=status.HTTP_201_CREATED,
-        )
-
-
 class ProductReviewListCreate(PublicReviewListCreate):
     def get(self, request, slug):
         product = get_object_or_404(Product, slug=slug)
         return Response(self.serialize_reviews(product.reviews.all()))
-
-    def post(self, request, slug):
-        product = get_object_or_404(Product, slug=slug)
-        serializer = ProductReviewCreateSerializer(
-            data=request.data,
-            context={"product": product},
-        )
-        return self.create_review(
-            serializer,
-            "This order has already reviewed this item.",
-        )
 
 
 class LodgeReviewListCreate(PublicReviewListCreate):
@@ -87,13 +49,71 @@ class LodgeReviewListCreate(PublicReviewListCreate):
         lodge = get_object_or_404(Lodge, slug=slug)
         return Response(self.serialize_reviews(lodge.reviews.all()))
 
-    def post(self, request, slug):
-        lodge = get_object_or_404(Lodge, slug=slug)
-        serializer = LodgeReviewCreateSerializer(
-            data=request.data,
-            context={"lodge": lodge},
+
+class ReviewAccessView(PublicReviewListCreate):
+    def get(self, request):
+        context = resolve_review_link(request.query_params.get("token", ""))
+        if context is None:
+            raise NotFound("This review link is invalid or no longer eligible.")
+        target = context["target"]
+        return Response(
+            {
+                "kind": context["kind"],
+                "name": target.name,
+                "slug": target.slug,
+                "can_review": context["review"] is None,
+                **self.serialize_reviews(target.reviews.all()),
+            }
         )
-        return self.create_review(
-            serializer,
-            "This stay has already reviewed this cottage.",
+
+    def post(self, request):
+        serializer = ReviewAccessSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        token = serializer.validated_data["token"]
+        with transaction.atomic():
+            context = resolve_review_link(token, for_update=True)
+            if context is None:
+                raise NotFound("This review link is invalid or no longer eligible.")
+            if context["review"] is not None:
+                raise ValidationError(
+                    {"detail": "This completed visit was already reviewed."}
+                )
+
+            review_fields = {
+                "reviewer_name": (
+                    context["order"].guest_name
+                    if context["kind"] == "product"
+                    else context["reservation"].guest_name
+                ),
+                "rating": serializer.validated_data["rating"],
+                "comment": serializer.validated_data["comment"],
+            }
+            if context["kind"] == "product":
+                review_fields.update(
+                    product=context["target"],
+                    order=context["order"],
+                )
+            else:
+                review_fields.update(
+                    lodge=context["target"],
+                    reservation=context["reservation"],
+                )
+
+            review_lookup = {
+                key: review_fields[key]
+                for key in ("product", "order", "lodge", "reservation")
+                if key in review_fields
+            }
+            try:
+                with transaction.atomic():
+                    review = CustomerReview.objects.create(**review_fields)
+            except IntegrityError:
+                if not CustomerReview.objects.filter(**review_lookup).exists():
+                    raise
+                raise ValidationError(
+                    {"detail": "This completed visit was already reviewed."}
+                )
+        return Response(
+            CustomerReviewSerializer(review).data,
+            status=status.HTTP_201_CREATED,
         )

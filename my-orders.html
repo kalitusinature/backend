@@ -42,6 +42,10 @@
                 .cj-order-item strong{color:#34483c;white-space:nowrap}
                 .cj-order-total{display:flex;justify-content:space-between;gap:16px;margin-top:16px;color:#34483c;font-size:17px;font-weight:800}
                 .cj-order-update-note{margin:18px 0 0;color:#6f7a74;font-size:12px;line-height:1.5}
+                .cj-order-review-links{margin-top:22px;padding-top:18px;border-top:1px solid #edf1ee}
+                .cj-order-review-links h3{margin:0 0 8px;color:#41534a;font-size:15px}
+                .cj-order-review-link{display:inline-flex;min-height:38px;align-items:center;margin:6px 8px 0 0;padding:0 13px;border-radius:6px;background:#008b92;color:#fff;text-decoration:none;font-size:12px;font-weight:800}
+                .cj-order-review-link:hover{background:#006f75;color:#fff}
                 .cj-order-receipts{margin-top:24px;padding-top:18px;border-top:1px solid #edf1ee}
                 .cj-order-receipts h3{margin:0 0 10px;color:#41534a;font-size:15px}
                 .cj-order-receipt{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #eff2f0;color:#5e6d65;font-size:12px}
@@ -382,6 +386,22 @@
                         total.appendChild(totalLabel);
                         total.appendChild(totalAmount);
                         card.appendChild(total);
+
+                        if(Array.isArray(order.review_links)&&order.review_links.length){
+                            var reviewSection=document.createElement('section');
+                            var reviewTitle=document.createElement('h3');
+                            reviewSection.className='cj-order-review-links';
+                            reviewTitle.textContent='Review your completed order';
+                            reviewSection.appendChild(reviewTitle);
+                            order.review_links.forEach(function(review){
+                                var link=document.createElement('a');
+                                link.className='cj-order-review-link';
+                                link.href=review.url;
+                                link.textContent='Review '+review.product_name;
+                                reviewSection.appendChild(link);
+                            });
+                            card.appendChild(reviewSection);
+                        }
 
                         var updateNote=document.createElement('p');
                         updateNote.className='cj-order-update-note';

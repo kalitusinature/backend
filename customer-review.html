@@ -1,0 +1,171 @@
+<t t-name="website.customer-review">
+    <t t-call="website.layout">
+        <div id="wrap" class="oe_structure oe_empty">
+            <style>
+                .cj-review-page{min-height:75vh;background:#f4f7f6;color:#203b38;font-family:Arial,Helvetica,sans-serif}
+                .cj-review-container{width:min(760px,calc(100% - 32px));margin:46px auto 80px}
+                .cj-review-card{padding:clamp(22px,5vw,38px);border:1px solid #e1e8e5;border-radius:14px;background:#fff;box-shadow:0 14px 36px rgba(21,35,31,.08)}
+                .cj-review-eyebrow{color:#008b92;font-size:11px;font-weight:800;letter-spacing:1.5px}
+                .cj-review-card h1{margin:8px 0 12px;font-size:clamp(28px,5vw,38px);letter-spacing:-.7px}
+                .cj-review-copy,.cj-review-status{color:#65756e;line-height:1.6}
+                .cj-review-status{min-height:24px;margin:12px 0}
+                .cj-review-status.error{color:#a63d36}
+                .cj-review-list{display:grid;gap:12px;margin:20px 0}
+                .cj-review-item{padding:14px;border:1px solid #e8ece9;border-radius:9px;background:#fbfcfb}
+                .cj-review-item-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+                .cj-review-stars{color:#a57516;letter-spacing:1px}
+                .cj-review-date{color:#78837f;font-size:12px}
+                .cj-review-comment{margin:8px 0 0;color:#4f5b57;line-height:1.55;white-space:pre-line}
+                .cj-review-form{display:grid;gap:13px;margin-top:24px;padding-top:22px;border-top:1px solid #e5ebe8}
+                .cj-review-form[hidden]{display:none}
+                .cj-review-form h2{margin:0;font-size:21px}
+                .cj-review-field{display:grid;gap:6px;color:#53645c;font-size:13px;font-weight:700}
+                .cj-review-field select,.cj-review-field textarea{width:100%;padding:11px;border:1px solid #dfe4e1;border-radius:7px;font:inherit;color:#203b38;background:#fff}
+                .cj-review-field textarea{min-height:110px;resize:vertical}
+                .cj-review-submit{min-height:46px;padding:0 18px;border:0;border-radius:7px;background:#008b92;color:#fff;font-weight:800;cursor:pointer}
+                .cj-review-submit:disabled{opacity:.6;cursor:wait}
+                .cj-review-back{display:inline-block;margin-top:22px;color:#007a80;font-weight:700;text-decoration:none}
+                @media(max-width:540px){.cj-review-container{width:calc(100% - 24px);margin:26px auto 56px}.cj-review-item-head{flex-wrap:wrap}}
+            </style>
+            <main class="cj-review-page">
+                <t t-call="website.cj_header"/>
+                <div class="cj-review-container">
+                    <section class="cj-review-card" aria-labelledby="cjReviewTitle">
+                        <span class="cj-review-eyebrow">VERIFIED CUSTOMER REVIEW</span>
+                        <h1 id="cjReviewTitle">Share your experience</h1>
+                        <p class="cj-review-copy" id="cjReviewIntro">This private review link is checking your completed visit.</p>
+                        <p class="cj-review-status" id="cjReviewStatus" role="status" aria-live="polite">Checking your review link…</p>
+                        <div class="cj-review-list" id="cjReviewList"></div>
+                        <form class="cj-review-form" id="cjReviewForm" hidden="hidden">
+                            <h2>Rate your experience</h2>
+                            <label class="cj-review-field">Rating
+                                <select name="rating" required="required">
+                                    <option value="">Choose a rating</option>
+                                    <option value="5">5 — Excellent</option>
+                                    <option value="4">4 — Very good</option>
+                                    <option value="3">3 — Good</option>
+                                    <option value="2">2 — Fair</option>
+                                    <option value="1">1 — Poor</option>
+                                </select>
+                            </label>
+                            <label class="cj-review-field">Your review
+                                <textarea name="comment" maxlength="2000" required="required"></textarea>
+                            </label>
+                            <p class="cj-review-status" id="cjReviewFormStatus" role="status" aria-live="polite"></p>
+                            <button class="cj-review-submit" type="submit">Submit review</button>
+                        </form>
+                        <a class="cj-review-back" href="/menu">Back to Kalitusi</a>
+                    </section>
+                </div>
+            </main>
+            <script>
+                (function(){
+                    var noIndex=document.createElement('meta');
+                    noIndex.name='robots';
+                    noIndex.content='noindex,nofollow';
+                    document.head.appendChild(noIndex);
+                    var referrer=document.createElement('meta');
+                    referrer.name='referrer';
+                    referrer.content='no-referrer';
+                    document.head.appendChild(referrer);
+
+                    var apiBase=(window.CJ_API_BASE_URL||'https://api.kalitusi.com/api/v1').replace(/\/+$/,'');
+                    var token=new URLSearchParams(window.location.search).get('token')||'';
+                    var title=document.getElementById('cjReviewTitle');
+                    var intro=document.getElementById('cjReviewIntro');
+                    var status=document.getElementById('cjReviewStatus');
+                    var form=document.getElementById('cjReviewForm');
+                    var formStatus=document.getElementById('cjReviewFormStatus');
+                    var list=document.getElementById('cjReviewList');
+
+                    function showStatus(message,isError){
+                        status.textContent=message;
+                        status.classList.toggle('error',Boolean(isError));
+                    }
+                    function renderReviews(reviews){
+                        list.replaceChildren();
+                        reviews.forEach(function(review){
+                            var item=document.createElement('article');
+                            item.className='cj-review-item';
+                            var head=document.createElement('div');
+                            head.className='cj-review-item-head';
+                            var name=document.createElement('strong');
+                            name.textContent=review.reviewer_name;
+                            var stars=document.createElement('span');
+                            stars.className='cj-review-stars';
+                            stars.setAttribute('aria-label',review.rating+' out of 5 stars');
+                            stars.textContent='★'.repeat(review.rating)+'☆'.repeat(5-review.rating);
+                            var date=document.createElement('time');
+                            date.className='cj-review-date';
+                            date.dateTime=review.created_at;
+                            date.textContent=new Date(review.created_at).toLocaleDateString();
+                            head.append(name,stars,date);
+                            var comment=document.createElement('p');
+                            comment.className='cj-review-comment';
+                            comment.textContent=review.comment;
+                            item.append(head,comment);
+                            list.appendChild(item);
+                        });
+                    }
+                    async function loadReviewLink(){
+                        if(!token){
+                            showStatus('This review link is missing or invalid.',true);
+                            return;
+                        }
+                        try{
+                            var response=await fetch(apiBase+'/reviews/access/?'+new URLSearchParams({token:token}),{headers:{Accept:'application/json'}});
+                            var data=await response.json();
+                            if(!response.ok)throw new Error(data.detail||'This review link is invalid or no longer eligible.');
+                            title.textContent='Review '+data.name;
+                            intro.textContent=data.kind==='product'
+                                ?'Thank you for your completed and paid order. Share feedback on this item.'
+                                :'Thank you for your checked-out and paid stay. Share feedback on this cottage.';
+                            renderReviews(data.reviews);
+                            if(data.review_count){
+                                showStatus(Number(data.average_rating).toFixed(1)+' out of 5 from '+data.review_count+' review'+(data.review_count===1?'':'s')+'.');
+                            }else{
+                                showStatus('No reviews yet.');
+                            }
+                            form.hidden=!data.can_review;
+                            if(!data.can_review)showStatus('A review has already been submitted for this completed visit.');
+                        }catch(error){
+                            form.hidden=true;
+                            showStatus(error.message||'This review link is invalid or no longer eligible.',true);
+                        }
+                    }
+                    form.addEventListener('submit',async function(event){
+                        event.preventDefault();
+                        var button=form.querySelector('button[type="submit"]');
+                        if(button.disabled)return;
+                        button.disabled=true;
+                        formStatus.textContent='Submitting your review…';
+                        formStatus.classList.remove('error');
+                        try{
+                            var response=await fetch(apiBase+'/reviews/access/',{
+                                method:'POST',
+                                headers:{Accept:'application/json','Content-Type':'application/json'},
+                                body:JSON.stringify({
+                                    token:token,
+                                    rating:Number(new FormData(form).get('rating')),
+                                    comment:new FormData(form).get('comment')
+                                })
+                            });
+                            var data=await response.json();
+                            if(!response.ok)throw new Error(data.detail||Object.values(data).flat().join(' ')||'Could not submit your review.');
+                            form.reset();
+                            form.hidden=true;
+                            formStatus.textContent='Thank you. Your review has been published.';
+                            await loadReviewLink();
+                        }catch(error){
+                            formStatus.textContent=error.message||'Could not submit your review. Please try again.';
+                            formStatus.classList.add('error');
+                        }finally{
+                            button.disabled=false;
+                        }
+                    });
+                    loadReviewLink();
+                })();
+            </script>
+        </div>
+    </t>
+</t>

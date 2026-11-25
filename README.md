@@ -170,6 +170,15 @@ The portal uses these protected endpoints after login:
 
 Customer receipt lookups are `POST /orders/receipts/` and `POST /reservations/track/`. Customer PDF downloads use the corresponding `/orders/receipts/download/` and `/reservations/receipts/download/` endpoints; both require a matching booking reference and email in the request body. `GET /receipts/verify/<opaque-token>/` is limited to receipt verification metadata.
 
+Product and lodge review summaries are public at
+`GET /products/<slug>/reviews/` and `GET /lodges/<slug>/reviews/`. Review
+submissions use `GET, POST /reviews/access/` with a signed link token; links are
+issued only for completed, fully paid orders or checked-out, fully paid stays.
+Set `CUSTOMER_REVIEW_PAGE_URL` to the published Odoo customer-review page URL.
+The default is
+`https://kalitusi-nature-resort.odoo.com/customer-review`. Completion/payment
+emails and verified order or reservation pages provide the private links.
+
 Uploaded product images are optimized in the browser and sent to Cloudinary by
 the authenticated backend. PostgreSQL stores the secure delivery URL and asset
 ID; existing image URLs remain supported.
@@ -199,7 +208,8 @@ Order and reservation emails include HTML tables, the resort logo, and product
 or lodge images when available, alongside a plain-text alternative. Verified
 payment confirmation emails attach the generated PDF receipt. Customer order
 updates use distinct messages for confirmation, preparation, readiness, and
-completion.
+completion. Review links are included only after an order is completed and paid
+or a stay is checked out and fully paid.
 
 The admin login includes a password-reset flow for active staff accounts. A
 reset link is sent only to the email address saved on the staff account; set

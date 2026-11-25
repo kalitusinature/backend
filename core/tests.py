@@ -45,6 +45,7 @@ from .email_notifications import (
 )
 from .payment_receipts import create_payment_receipt
 from .push_notifications import notify_new_order
+from .review_tokens import lodge_review_token, product_review_token
 
 
 @override_settings(
@@ -2932,6 +2933,9 @@ class SupportTicketApiTests(TestCase):
         )
 
 
+@override_settings(
+    CUSTOMER_REVIEW_PAGE_URL="https://kalitusi-nature-resort.odoo.com/customer-review"
+)
 class CustomerReviewApiTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -2949,7 +2953,12 @@ class CustomerReviewApiTests(TestCase):
         )
         self.lodge = Lodge.objects.create(name="Review Cottage", capacity=2)
 
-    def create_completed_order(self, product=None, status=Order.Status.COMPLETED):
+    def create_completed_order(
+        self,
+        product=None,
+        status=Order.Status.COMPLETED,
+        paid=True,
+    ):
         order = Order.objects.create(
             guest_name="Review Guest",
             phone="+256700000000",
@@ -2957,6 +2966,10 @@ class CustomerReviewApiTests(TestCase):
             order_type=Order.OrderType.DINE_IN,
             location="Table 1",
             status=status,
+            payment_status=(
+                Order.PaymentStatus.PAID if paid else Order.PaymentStatus.UNPAID
+            ),
+            total_ugx=product.price_ugx if product else 12000,
         )
         if product:
             OrderItem.objects.create(
@@ -2969,8 +2982,13 @@ class CustomerReviewApiTests(TestCase):
             )
         return order
 
-    def create_completed_stay(self, lodge=None, status=LodgeReservation.Status.COMPLETED):
-        return LodgeReservation.objects.create(
+    def create_completed_stay(
+        self,
+        lodge=None,
+        status=LodgeReservation.Status.COMPLETED,
+        paid=True,
+    ):
+        reservation = LodgeReservation.objects.create(
             lodge=lodge or self.lodge,
             guest_name="Cottage Guest",
             email="stay@example.com",
@@ -2978,24 +2996,42 @@ class CustomerReviewApiTests(TestCase):
             check_in=date(2025, 6, 10),
             check_out=date(2025, 6, 12),
             status=status,
+            total_due_ugx=100000,
         )
+        if paid:
+            Payment.objects.create(
+                reservation=reservation,
+                amount_ugx=reservation.total_due_ugx,
+                method=Payment.Method.CASH,
+                transaction_reference=f"REVIEW-{uuid.uuid4().hex}",
+            )
+        return reservation
 
     def test_completed_order_customer_can_rate_a_purchased_product_once(self):
         order = self.create_completed_order(self.product)
+        token = product_review_token(order, self.product)
         payload = {
-            "order_number": order.number,
-            "email": "REVIEWER@example.com",
+            "token": token,
             "rating": 5,
             "comment": "Fresh and delicious.",
         }
 
+        access_response = self.client.get(
+            "/api/v1/reviews/access/",
+            {"token": token},
+        )
+        order_response = self.client.post(
+            "/api/v1/orders/track/",
+            {"number": order.number, "email": order.email},
+            format="json",
+        )
         response = self.client.post(
-            f"/api/v1/products/{self.product.slug}/reviews/",
+            "/api/v1/reviews/access/",
             payload,
             format="json",
         )
         duplicate_response = self.client.post(
-            f"/api/v1/products/{self.product.slug}/reviews/",
+            "/api/v1/reviews/access/",
             payload,
             format="json",
         )
@@ -3004,6 +3040,9 @@ class CustomerReviewApiTests(TestCase):
         )
         product_response = self.client.get("/api/v1/products/")
 
+        self.assertEqual(access_response.status_code, 200)
+        self.assertEqual(access_response.data["kind"], "product")
+        self.assertTrue(access_response.data["can_review"])
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["reviewer_name"], "Review Guest")
         self.assertEqual(duplicate_response.status_code, 400)
@@ -3013,53 +3052,55 @@ class CustomerReviewApiTests(TestCase):
             item for item in product_response.data if item["slug"] == self.product.slug
         )
         self.assertEqual(rated_product["review_count"], 1)
+        self.assertEqual(order_response.status_code, 200)
+        self.assertEqual(len(order_response.data["review_links"]), 1)
+        self.assertIn(
+            "/customer-review?token=",
+            order_response.data["review_links"][0]["url"],
+        )
         self.assertEqual(CustomerReview.objects.count(), 1)
 
-    def test_product_review_requires_matching_completed_order_and_product(self):
+    def test_product_review_link_requires_completed_paid_matching_order_item(self):
         incomplete_order = self.create_completed_order(
             self.product,
             status=Order.Status.NEW,
         )
+        unpaid_order = self.create_completed_order(self.product, paid=False)
         other_product_order = self.create_completed_order(self.other_product)
-        payload = {
-            "email": "reviewer@example.com",
-            "rating": 4,
-            "comment": "Good.",
-        }
-
-        incomplete_response = self.client.post(
-            f"/api/v1/products/{self.product.slug}/reviews/",
-            {**payload, "order_number": incomplete_order.number},
-            format="json",
-        )
-        mismatched_product_response = self.client.post(
-            f"/api/v1/products/{self.product.slug}/reviews/",
-            {**payload, "order_number": other_product_order.number},
-            format="json",
-        )
-        mismatched_email_response = self.client.post(
-            f"/api/v1/products/{self.product.slug}/reviews/",
-            {**payload, "order_number": other_product_order.number, "email": "wrong@example.com"},
-            format="json",
+        ineligible_tokens = (
+            product_review_token(incomplete_order, self.product),
+            product_review_token(unpaid_order, self.product),
+            product_review_token(other_product_order, self.product),
         )
 
-        self.assertEqual(incomplete_response.status_code, 400)
-        self.assertEqual(mismatched_product_response.status_code, 400)
-        self.assertEqual(mismatched_email_response.status_code, 400)
+        for token in ineligible_tokens:
+            with self.subTest(token=token):
+                response = self.client.get(
+                    "/api/v1/reviews/access/",
+                    {"token": token},
+                )
+                self.assertEqual(response.status_code, 404)
+
+        legacy_post = self.client.post(
+            f"/api/v1/products/{self.product.slug}/reviews/",
+            {"rating": 4, "comment": "Good."},
+            format="json",
+        )
+        self.assertEqual(legacy_post.status_code, 405)
         self.assertEqual(CustomerReview.objects.count(), 0)
 
     def test_product_review_rating_must_be_between_one_and_five(self):
         order = self.create_completed_order(self.product)
+        token = product_review_token(order, self.product)
         payload = {
-            "order_number": order.number,
-            "email": "reviewer@example.com",
+            "token": token,
             "comment": "A test review.",
         }
 
         for rating in (0, 6):
             with self.subTest(rating=rating):
                 response = self.client.post(
-                    f"/api/v1/products/{self.product.slug}/reviews/",
+                    "/api/v1/reviews/access/",
                     {**payload, "rating": rating},
                     format="json",
                 )
@@ -3069,26 +3110,37 @@ class CustomerReviewApiTests(TestCase):
 
     def test_checked_out_guest_can_rate_their_cottage_once(self):
         reservation = self.create_completed_stay()
+        token = lodge_review_token(reservation)
         payload = {
-            "reservation_reference": reservation.reference,
-            "email": "stay@example.com",
+            "token": token,
             "rating": 4,
             "comment": "A peaceful stay.",
         }
 
+        access_response = self.client.get(
+            "/api/v1/reviews/access/",
+            {"token": token},
+        )
+        reservation_response = self.client.post(
+            "/api/v1/reservations/track/",
+            {"reference": reservation.reference, "email": reservation.email},
+            format="json",
+        )
         response = self.client.post(
-            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
+            "/api/v1/reviews/access/",
             payload,
             format="json",
         )
         duplicate_response = self.client.post(
-            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
+            "/api/v1/reviews/access/",
             payload,
             format="json",
         )
         list_response = self.client.get(f"/api/v1/lodges/{self.lodge.slug}/reviews/")
         lodge_response = self.client.get("/api/v1/lodges/")
 
+        self.assertEqual(access_response.status_code, 200)
+        self.assertEqual(access_response.data["kind"], "lodge")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["reviewer_name"], "Cottage Guest")
         self.assertEqual(duplicate_response.status_code, 400)
@@ -3097,31 +3149,39 @@ class CustomerReviewApiTests(TestCase):
             item for item in lodge_response.data if item["slug"] == self.lodge.slug
         )
         self.assertEqual(rated_lodge["review_count"], 1)
+        self.assertEqual(reservation_response.status_code, 200)
+        self.assertIn("/customer-review?token=", reservation_response.data["review_url"])
         self.assertEqual(CustomerReview.objects.count(), 1)
 
-    def test_cottage_review_requires_matching_checked_out_stay(self):
+    def test_cottage_review_link_requires_checked_out_and_fully_paid_stay(self):
         pending_stay = self.create_completed_stay(status=LodgeReservation.Status.PENDING)
-        other_lodge = Lodge.objects.create(name="Other Review Cottage", capacity=2)
-        different_lodge_stay = self.create_completed_stay(lodge=other_lodge)
-        payload = {"email": "stay@example.com", "rating": 5, "comment": "Wonderful."}
-
-        pending_response = self.client.post(
-            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
-            {**payload, "reservation_reference": pending_stay.reference},
-            format="json",
-        )
-        different_lodge_response = self.client.post(
-            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
-            {**payload, "reservation_reference": different_lodge_stay.reference},
-            format="json",
-        )
-        wrong_email_response = self.client.post(
-            f"/api/v1/lodges/{self.lodge.slug}/reviews/",
-            {**payload, "reservation_reference": different_lodge_stay.reference, "email": "wrong@example.com"},
-            format="json",
-        )
-
-        self.assertEqual(pending_response.status_code, 400)
-        self.assertEqual(different_lodge_response.status_code, 400)
-        self.assertEqual(wrong_email_response.status_code, 400)
+        unpaid_stay = self.create_completed_stay(paid=False)
+        for reservation in (pending_stay, unpaid_stay):
+            with self.subTest(reference=reservation.reference):
+                token = lodge_review_token(reservation)
+                response = self.client.get(
+                    "/api/v1/reviews/access/",
+                    {"token": token},
+                )
+                self.assertEqual(response.status_code, 404)
         self.assertEqual(CustomerReview.objects.count(), 0)
+
+    def test_completed_paid_email_notifications_include_private_review_links(self):
+        order = self.create_completed_order(self.product)
+        reservation = self.create_completed_stay()
+
+        with patch("core.email_notifications._send_email") as send_email:
+            notify_order_updated(
+                order,
+                Order.Status.READY,
+                Order.PaymentStatus.PAID,
+            )
+        order_email_text = send_email.call_args_list[0].args[1]
+        self.assertIn("/customer-review?token=", order_email_text)
+        self.assertIn("Resort Pancakes", order_email_text)
+
+        with patch("core.email_notifications._send_email") as send_email:
+            notify_reservation_status(reservation)
+        reservation_email_text = send_email.call_args_list[0].args[1]
+        self.assertIn("/customer-review?token=", reservation_email_text)
+        self.assertIn("Share your experience from your completed, paid stay", reservation_email_text)

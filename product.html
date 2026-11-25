@@ -26,13 +26,6 @@
                 .cj-review-stars{color:#a57516;letter-spacing:1px}
                 .cj-review-date{color:#78837f;font-size:12px}
                 .cj-review-comment{margin:8px 0 0;color:#4f5b57;line-height:1.55;white-space:pre-line}
-                .cj-review-form{display:grid;gap:12px;max-width:620px}
-                .cj-review-form h3{margin:0;font-size:18px}
-                .cj-review-field{display:grid;gap:6px;color:#53645c;font-size:13px;font-weight:700}
-                .cj-review-field input,.cj-review-field select,.cj-review-field textarea{width:100%;padding:11px;border:1px solid #dfe4e1;border-radius:6px;font:inherit;color:#203b38}
-                .cj-review-field textarea{min-height:90px;resize:vertical}
-                .cj-review-submit{min-height:44px;padding:0 18px;border:0;border-radius:6px;background:#008b92;color:#fff;font-weight:800;cursor:pointer}
-                .cj-review-submit:disabled{opacity:.6;cursor:wait}
                 .cj-option-title{font-weight:800;margin:20px 0 10px}.cj-options{display:flex;flex-wrap:wrap;gap:8px}
                 .cj-option{border:1px solid #ddd;border-radius:24px;background:#fff;padding:10px 15px;cursor:pointer}
                 .cj-option.active{border-color:var(--cj-dark);background:var(--cj-dark);color:#fff}
@@ -240,15 +233,6 @@
                         <h2 id="cjReviewsTitle">Customer reviews</h2>
                         <p class="cj-review-status" id="cjReviewStatus" role="status" aria-live="polite">Loading reviews…</p>
                         <div class="cj-review-list" id="cjReviewList"></div>
-                        <form class="cj-review-form" id="cjReviewForm">
-                            <h3>Rate this item</h3>
-                            <p class="cj-review-status">Reviews are available to customers with a delivered order that included this item. Enter the order number and email used for that order.</p>
-                            <label class="cj-review-field">Order number<input name="order_number" required maxlength="20" autocomplete="off"></label>
-                            <label class="cj-review-field">Order email<input name="email" type="email" required maxlength="254" autocomplete="email"></label>
-                            <label class="cj-review-field">Rating<select name="rating" required><option value="">Choose a rating</option><option value="5">5 — Excellent</option><option value="4">4 — Very good</option><option value="3">3 — Good</option><option value="2">2 — Fair</option><option value="1">1 — Poor</option></select></label>
-                            <label class="cj-review-field">Your review<textarea name="comment" required maxlength="2000"></textarea></label>
-                            <button class="cj-review-submit" type="submit">Submit review</button>
-                        </form>
                     </section>
                 </div>
             </main>
@@ -536,33 +520,6 @@
                             showReviewStatus(error.message||'Could not load reviews. Please try again.',true);
                         }
                     }
-                    document.getElementById('cjReviewForm').addEventListener('submit',async function(event){
-                        event.preventDefault();
-                        var form=event.currentTarget,button=form.querySelector('button[type="submit"]');
-                        var productSlug=new URLSearchParams(window.location.search).get('id');
-                        if(!productSlug||button.disabled)return;
-                        button.disabled=true;
-                        showReviewStatus('Submitting your review…');
-                        try{
-                            var response=await fetch(apiBase+'/products/'+encodeURIComponent(productSlug)+'/reviews/',{
-                                method:'POST',
-                                headers:{Accept:'application/json','Content-Type':'application/json'},
-                                body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))
-                            });
-                            var data=await response.json();
-                            if(!response.ok){
-                                var message=data.detail||Object.values(data).flat().join(' ');
-                                throw new Error(message||'Could not submit your review.');
-                            }
-                            form.reset();
-                            showReviewStatus('Thank you. Your review has been published.');
-                            await loadProductReviews({slug:productSlug});
-                        }catch(error){
-                            showReviewStatus(error.message||'Could not submit your review. Please try again.',true);
-                        }finally{
-                            button.disabled=false;
-                        }
-                    });
                     var productId=new URLSearchParams(window.location.search).get('id');
                     fetch(apiBase+'/products/',{headers:{Accept:'application/json'}}).then(function(response){
                         if(!response.ok)throw new Error('The menu service returned HTTP '+response.status+'.');

@@ -179,6 +179,10 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER).strip
 SUPPORT_TICKET_EMAIL = os.environ.get(
     "SUPPORT_TICKET_EMAIL", "kalitusinature@gmail.com"
 ).strip()
+CUSTOMER_REVIEW_PAGE_URL = os.environ.get(
+    "CUSTOMER_REVIEW_PAGE_URL",
+    "https://kalitusi-nature-resort.odoo.com/customer-review",
+).strip()
 STAFF_NOTIFICATION_EMAIL = (
     os.environ.get("STAFF_NOTIFICATION_EMAIL", "").strip()
     or os.environ.get("RESERVATION_NOTIFICATION_EMAIL", "").strip()

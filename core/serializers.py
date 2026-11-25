@@ -14,6 +14,7 @@ from .models import (
     Payment,
     Product,
 )
+from .review_tokens import order_review_links, reservation_review_url
 from .reservation_rules import validate_lodge_stay
 
 
@@ -322,6 +323,7 @@ class OrderTrackingSerializer(serializers.ModelSerializer):
     amount_paid_ugx = serializers.SerializerMethodField()
     balance_ugx = serializers.SerializerMethodField()
     receipts = serializers.SerializerMethodField()
+    review_links = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -341,6 +343,7 @@ class OrderTrackingSerializer(serializers.ModelSerializer):
             "updated_at",
             "items",
             "receipts",
+            "review_links",
         )
 
     def get_amount_paid_ugx(self, order):
@@ -366,6 +369,9 @@ class OrderTrackingSerializer(serializers.ModelSerializer):
             many=True,
         ).data
 
+    def get_review_links(self, order):
+        return order_review_links(order)
+
 
 class ReservationReceiptSerializer(serializers.ModelSerializer):
     lodge_name = serializers.CharField(source="lodge.name", read_only=True)
@@ -390,6 +396,7 @@ class ReservationTrackingSerializer(serializers.ModelSerializer):
     balance_ugx = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
     receipts = serializers.SerializerMethodField()
+    review_url = serializers.SerializerMethodField()
 
     class Meta:
         model = LodgeReservation
@@ -408,6 +415,7 @@ class ReservationTrackingSerializer(serializers.ModelSerializer):
             "balance_ugx",
             "payment_status",
             "receipts",
+            "review_url",
         )
 
     def get_amount_paid_ugx(self, reservation):
@@ -438,3 +446,6 @@ class ReservationTrackingSerializer(serializers.ModelSerializer):
             ],
             many=True,
         ).data
+
+    def get_review_url(self, reservation):
+        return reservation_review_url(reservation)
