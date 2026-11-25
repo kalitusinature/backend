@@ -1128,7 +1128,7 @@ class PaymentReceiptApiTests(TestCase):
         self.assertIn("Rate 5 out of 5 stars", invitation_html)
         self.assertIn("&amp;rating=5", invitation_html)
 
-    def test_final_reservation_payment_sends_separate_clickable_review_email(self):
+    def test_reservation_payment_does_not_send_review_invitation(self):
         self.reservation.status = LodgeReservation.Status.COMPLETED
         self.reservation.total_due_ugx = 25000
         self.reservation.save(update_fields=["status", "total_due_ugx"])
@@ -1141,14 +1141,9 @@ class PaymentReceiptApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(len(mail.outbox), 2)
-        self.assertTrue(response.data["review_email_sent"])
-        self.assertNotIn("/customer-review?token=", mail.outbox[0].body)
-        invitation = mail.outbox[1]
-        self.assertIn("Rate your Kalitusi stay", invitation.subject)
-        invitation_html = invitation.alternatives[0].content
-        self.assertIn("Receipt Cottage", invitation_html)
-        self.assertIn("&amp;rating=5", invitation_html)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIsNone(response.data["review_email_sent"])
+        self.assertNotIn("Rate your Kalitusi stay", mail.outbox[0].subject)
 
     def test_duplicate_transaction_reference_is_rejected_without_second_receipt(self):
         first = self._record_payment()
@@ -1541,6 +1536,42 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
                 previous_status = status_value
                 mail.outbox.clear()
 
+    def test_order_cancellation_email_includes_reason_and_refund_apology(self):
+        order = Order.objects.create(
+            guest_name="Order Guest",
+            phone="+256700000000",
+            email="guest@example.com",
+            order_type=Order.OrderType.DINE_IN,
+            location="Table 56",
+            status=Order.Status.CANCELLED,
+            cancellation_reason="Kitchen <maintenance> & closure.",
+        )
+
+        notify_order_updated(
+            order,
+            Order.Status.NEW,
+            Order.PaymentStatus.UNPAID,
+        )
+
+        customer_email = mail.outbox[0]
+        self.assertEqual(customer_email.to, ["guest@example.com"])
+        self.assertIn("Dear Order Guest,", customer_email.body)
+        self.assertIn(
+            "Reason for cancellation: Kitchen <maintenance> & closure.",
+            customer_email.body,
+        )
+        self.assertIn(
+            "unable to fulfill your order as planned.",
+            customer_email.body,
+        )
+        self.assertIn("arrange a full refund", customer_email.body)
+        self.assertIn("Customer Service Team", customer_email.body)
+        cancellation_html = customer_email.alternatives[0].content
+        self.assertIn(
+            "Reason for cancellation: Kitchen &lt;maintenance&gt; &amp; closure.",
+            cancellation_html,
+        )
+
     def test_reservation_creation_and_confirmation_email_customer_and_staff(self):
         lodge = Lodge.objects.create(
             name="Email Cottage",
@@ -1630,7 +1661,15 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
         for status_value, heading, status_label in transitions:
             with self.subTest(status=status_value):
                 reservation.status = status_value
-                reservation.save(update_fields=["status"])
+                if status_value == LodgeReservation.Status.CANCELLED:
+                    reservation.cancellation_reason = (
+                        "Unexpected closure & maintenance."
+                    )
+                    reservation.save(
+                        update_fields=["status", "cancellation_reason"]
+                    )
+                else:
+                    reservation.save(update_fields=["status"])
                 notify_reservation_status(reservation)
 
                 customer_email = mail.outbox[0]
@@ -1641,6 +1680,35 @@ class TransactionalEmailAndPasswordResetTests(TestCase):
                     customer_email.body,
                 )
                 self.assertIn("<table", customer_email.alternatives[0].content)
+                if status_value == LodgeReservation.Status.CANCELLED:
+                    self.assertIn(
+                        "Dear Reservation Guest,",
+                        customer_email.body,
+                    )
+                    self.assertIn(
+                        "We sincerely apologize to inform you that, due to "
+                        "unforeseen operational circumstances",
+                        customer_email.body,
+                    )
+                    self.assertIn(
+                        "Reason for cancellation: Unexpected closure & "
+                        "maintenance.",
+                        customer_email.body,
+                    )
+                    self.assertIn(
+                        "arrange a full refund through the appropriate payment "
+                        "method.",
+                        customer_email.body,
+                    )
+                    self.assertIn(
+                        "Reason for cancellation: Unexpected closure &amp; "
+                        "maintenance.",
+                        customer_email.alternatives[0].content,
+                    )
+                    self.assertIn(
+                        "Reservations Team",
+                        customer_email.body,
+                    )
                 mail.outbox.clear()
 
     def test_staff_account_creation_alerts_operations_without_sending_password(self):
@@ -2692,6 +2760,83 @@ class StaffApiTests(TestCase):
         self.assertEqual(response.data["note"], "Ground-floor room requested")
         self.assertEqual(response.data["status"], LodgeReservation.Status.CONFIRMED)
 
+    def test_confirmation_books_dates_and_cancellation_releases_them(self):
+        self.login_as_staff()
+        check_in = timezone.localdate() + timedelta(days=30)
+        check_out = check_in + timedelta(days=2)
+        reservation = LodgeReservation.objects.create(
+            lodge=self.lodge,
+            guest_name="Calendar Guest",
+            phone="+256700000001",
+            check_in=check_in,
+            check_out=check_out,
+        )
+        availability_url = (
+            f"/api/v1/lodges/{self.lodge.slug}/availability/"
+        )
+        availability_params = {
+            "month": check_in.strftime("%Y-%m"),
+            "nights": 2,
+            "guests": 2,
+        }
+
+        pending_availability = self.client.get(
+            availability_url, availability_params
+        )
+        self.assertEqual(pending_availability.status_code, 200)
+        self.assertIn(
+            check_in.isoformat(),
+            pending_availability.data["available_dates"],
+        )
+        self.assertNotIn(
+            check_in.isoformat(),
+            pending_availability.data["booked_dates"],
+        )
+
+        reservation_url = f"/api/v1/staff/reservations/{reservation.pk}/"
+        confirmed = self.client.patch(
+            reservation_url,
+            {"status": LodgeReservation.Status.CONFIRMED},
+            format="json",
+        )
+        self.assertEqual(confirmed.status_code, 200)
+
+        confirmed_availability = self.client.get(
+            availability_url, availability_params
+        )
+        self.assertEqual(confirmed_availability.status_code, 200)
+        self.assertIn(
+            check_in.isoformat(),
+            confirmed_availability.data["booked_dates"],
+        )
+        self.assertNotIn(
+            check_in.isoformat(),
+            confirmed_availability.data["available_dates"],
+        )
+
+        cancelled = self.client.patch(
+            reservation_url,
+            {
+                "status": LodgeReservation.Status.CANCELLED,
+                "cancellation_reason": "Operational circumstances",
+            },
+            format="json",
+        )
+        self.assertEqual(cancelled.status_code, 200)
+
+        cancelled_availability = self.client.get(
+            availability_url, availability_params
+        )
+        self.assertEqual(cancelled_availability.status_code, 200)
+        self.assertIn(
+            check_in.isoformat(),
+            cancelled_availability.data["available_dates"],
+        )
+        self.assertNotIn(
+            check_in.isoformat(),
+            cancelled_availability.data["booked_dates"],
+        )
+
     def test_checked_in_stays_allow_past_arrival_and_block_overlaps(self):
         self.login_as_staff()
         today = date.today()
@@ -3154,7 +3299,7 @@ class CustomerReviewApiTests(TestCase):
         self.assertEqual(CustomerReview.objects.count(), 0)
 
     def test_checked_out_guest_can_rate_their_cottage_once(self):
-        reservation = self.create_completed_stay()
+        reservation = self.create_completed_stay(paid=False)
         token = lodge_review_token(reservation)
         payload = {
             "token": token,
@@ -3198,10 +3343,17 @@ class CustomerReviewApiTests(TestCase):
         self.assertIn("/customer-review?token=", reservation_response.data["review_url"])
         self.assertEqual(CustomerReview.objects.count(), 1)
 
-    def test_cottage_review_link_requires_checked_out_and_fully_paid_stay(self):
-        pending_stay = self.create_completed_stay(status=LodgeReservation.Status.PENDING)
+    def test_cottage_review_link_requires_checkout_but_not_payment(self):
+        pending_stay = self.create_completed_stay(
+            status=LodgeReservation.Status.PENDING,
+            paid=False,
+        )
         unpaid_stay = self.create_completed_stay(paid=False)
-        for reservation in (pending_stay, unpaid_stay):
+        zero_due_stay = self.create_completed_stay(paid=False)
+        zero_due_stay.total_due_ugx = 0
+        zero_due_stay.save(update_fields=["total_due_ugx"])
+
+        for reservation in (pending_stay,):
             with self.subTest(reference=reservation.reference):
                 token = lodge_review_token(reservation)
                 response = self.client.get(
@@ -3209,11 +3361,21 @@ class CustomerReviewApiTests(TestCase):
                     {"token": token},
                 )
                 self.assertEqual(response.status_code, 404)
+
+        for reservation in (unpaid_stay, zero_due_stay):
+            with self.subTest(reference=reservation.reference):
+                token = lodge_review_token(reservation)
+                response = self.client.get(
+                    "/api/v1/reviews/access/",
+                    {"token": token},
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.data["can_review"])
         self.assertEqual(CustomerReview.objects.count(), 0)
 
-    def test_completed_paid_reviews_get_separate_clickable_emails(self):
+    def test_checked_out_unpaid_stay_gets_separate_clickable_review_email(self):
         order = self.create_completed_order(self.product)
-        reservation = self.create_completed_stay()
+        reservation = self.create_completed_stay(paid=False)
 
         with patch("core.email_notifications._send_email") as send_email:
             notify_order_updated(
@@ -3251,9 +3413,12 @@ class CustomerReviewApiTests(TestCase):
             reservation_invitation.kwargs["html_message"],
         )
 
-    def test_incomplete_or_unpaid_visits_do_not_get_review_invitations(self):
+    def test_unpaid_order_and_not_checked_out_stay_do_not_get_review_invitations(self):
         order = self.create_completed_order(self.product, paid=False)
-        reservation = self.create_completed_stay(paid=False)
+        reservation = self.create_completed_stay(
+            status=LodgeReservation.Status.PENDING,
+            paid=False,
+        )
 
         with patch("core.email_notifications._send_email") as send_email:
             notify_order_updated(
@@ -3271,7 +3436,7 @@ class CustomerReviewApiTests(TestCase):
         with patch("core.email_notifications._send_email") as send_email:
             notify_reservation_status(
                 reservation,
-                LodgeReservation.Status.CHECKED_IN,
+                None,
             )
         self.assertFalse(
             any(

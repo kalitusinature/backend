@@ -18,7 +18,6 @@ from rest_framework.views import APIView
 from .email_notifications import (
     send_order_review_invitation_email,
     send_payment_receipt_email,
-    send_reservation_review_invitation_email,
 )
 from .models import LodgeReservation, Order, Payment, PaymentReceipt
 from .payment_receipts import create_payment_receipt
@@ -248,9 +247,7 @@ class StaffPaymentCreate(StaffApiMixin, APIView):
         if payment.order_id:
             review_email_sent = send_order_review_invitation_email(payment.order)
         else:
-            review_email_sent = send_reservation_review_invitation_email(
-                payment.reservation
-            )
+            review_email_sent = None
         payment = (
             Payment.objects.select_related(
                 "order",

@@ -2,13 +2,11 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.core import signing
-from django.db.models import Sum
 
 from .models import (
     CustomerReview,
     LodgeReservation,
     Order,
-    Payment,
     Product,
 )
 
@@ -24,27 +22,7 @@ def order_is_review_eligible(order):
 
 
 def reservation_is_review_eligible(reservation):
-    if (
-        reservation.status != LodgeReservation.Status.COMPLETED
-        or reservation.total_due_ugx <= 0
-    ):
-        return False
-
-    prefetched = getattr(reservation, "_prefetched_objects_cache", {})
-    if "payments" in prefetched:
-        paid_total = sum(
-            payment.amount_ugx
-            for payment in prefetched["payments"]
-            if payment.status == Payment.Status.VERIFIED
-        )
-    else:
-        paid_total = (
-            reservation.payments.filter(status=Payment.Status.VERIFIED).aggregate(
-                total=Sum("amount_ugx")
-            )["total"]
-            or 0
-        )
-    return paid_total >= reservation.total_due_ugx
+    return reservation.status == LodgeReservation.Status.COMPLETED
 
 
 def product_review_token(order, product):

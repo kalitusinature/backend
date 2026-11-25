@@ -70,12 +70,6 @@ ORDER_STATUS_EMAIL_COPY: dict[str, tuple[str, str, str, str]] = {
         "We hope you enjoyed your experience at Kalitusi Nature Resort.",
         "Thank you for choosing Kalitusi. We look forward to serving you again.",
     ),
-    Order.Status.CANCELLED: (
-        "Your Order Has Been Cancelled",
-        "Your order at Kalitusi Nature Resort has been cancelled.",
-        "If you have questions about this change, please contact the resort team.",
-        "Our team can help with any questions about your order.",
-    ),
 }
 RESERVATION_STATUS_EMAIL_COPY: dict[str, dict[str, str]] = {
     LodgeReservation.Status.PENDING: {
@@ -129,18 +123,6 @@ RESERVATION_STATUS_EMAIL_COPY: dict[str, dict[str, str]] = {
         "next_step": (
             "Please contact our reservations team if you would like help with "
             "alternative dates or accommodation."
-        ),
-        "notice": "",
-        "closing": "Thank you for considering Kalitusi Nature Resort.",
-    },
-    LodgeReservation.Status.CANCELLED: {
-        "heading": "Your Reservation Has Been Cancelled",
-        "intro": "Your reservation at Kalitusi Nature Resort has been cancelled.",
-        "detail": "The latest reservation details are included below.",
-        "next_heading": "Need Help?",
-        "next_step": (
-            "If you need help with a future booking, our reservations team is "
-            "here to assist."
         ),
         "notice": "",
         "closing": "Thank you for considering Kalitusi Nature Resort.",
@@ -685,8 +667,8 @@ def send_reservation_review_invitation_email(
         email=reservation.email,
         reference=f"reservation-review-{reservation.reference}",
         intro=(
-            f"Your checked-out and fully paid stay {reservation.reference} "
-            "is eligible for a review."
+            f"Your checked-out stay {reservation.reference} is eligible "
+            "for a review."
         ),
         review_items=review_items,
     )
@@ -777,6 +759,58 @@ def _order_status_label(status: str) -> str:
     return Order.Status(status).label
 
 
+def _order_cancellation_customer_email(
+    order: Order,
+    order_html: str,
+) -> tuple[str, str, str]:
+    heading = "Your Order Has Been Cancelled"
+    greeting = f"Dear {order.guest_name},"
+    reason = order.cancellation_reason.strip() or "Not provided."
+    paragraphs = [
+        "We sincerely apologize to inform you that, due to unforeseen "
+        "operational circumstances, we are unfortunately unable to fulfill "
+        "your order as planned.",
+        f"Reason for cancellation: {reason}",
+        "We deeply regret any inconvenience or disappointment this may cause, "
+        "especially considering the plans you may already have made around "
+        "your order. This was not an easy decision, and we sincerely apologize "
+        "for the disruption.",
+        "Please accept our heartfelt apologies for this inconvenience. We "
+        "truly appreciate your understanding and the trust you placed in us "
+        "when placing your order.",
+        "If you have already made any payment, please be assured that we will "
+        "arrange a full refund through the appropriate payment method.",
+        "We sincerely hope to have another opportunity to serve you and "
+        "provide the experience you deserve.",
+        "Once again, we are very sorry for the inconvenience.",
+    ]
+    signature = "Kind regards,\n\nCustomer Service Team\nKalitusi Nature"
+    body = "\n\n".join(
+        [
+            heading,
+            greeting,
+            *paragraphs,
+            _order_summary_text(order),
+            signature,
+        ]
+    )
+    content_html = "".join(
+        f'<p style="line-height:1.6;">{escape(paragraph)}</p>'
+        for paragraph in paragraphs
+    ) + order_html
+    closing_html = (
+        '<tr><td style="padding-top:24px;color:#64736c;'
+        'font-size:13px;line-height:1.7;">'
+        "Kind regards,<br><br><strong>Customer Service Team</strong><br>"
+        "<strong>Kalitusi Nature</strong></td></tr>"
+    )
+    return (
+        heading,
+        body,
+        _email_layout(heading, greeting, content_html, closing_html=closing_html),
+    )
+
+
 def _reservation_email_html(reservation: LodgeReservation) -> str:
     lodge_image = _image_html(
         reservation.lodge.image_url,
@@ -825,6 +859,59 @@ def _reservation_summary_text(reservation: LodgeReservation) -> str:
 def _reservation_customer_email(
     reservation: LodgeReservation,
 ) -> tuple[str, str, str]:
+    if reservation.status == LodgeReservation.Status.CANCELLED:
+        heading = "Your Reservation Has Been Cancelled"
+        greeting = f"Dear {reservation.guest_name},"
+        reason = reservation.cancellation_reason.strip() or "Not provided."
+        paragraphs = [
+            "We sincerely apologize to inform you that, due to unforeseen "
+            "operational circumstances, we are unfortunately unable to proceed "
+            "with your reservation as initially confirmed.",
+            f"Reason for cancellation: {reason}",
+            "We deeply regret any inconvenience or disappointment this may "
+            "cause, especially considering the plans you may have already made "
+            "in preparation for your visit. This was not an easy decision, and "
+            "we sincerely apologize for the disruption.",
+            "Please accept our heartfelt apologies for this inconvenience. We "
+            "truly appreciate your understanding and the trust you placed in "
+            "us when making your reservation.",
+            "If you have already made any payment, please be assured that we "
+            "will arrange a full refund through the appropriate payment method.",
+            "We sincerely hope to have another opportunity to welcome you and "
+            "provide you with the experience you deserve.",
+            "Once again, we are very sorry for the inconvenience.",
+        ]
+        signature = "Kind regards,\n\nReservations Team\nKalitusi Nature"
+        body = "\n\n".join(
+            [
+                heading,
+                greeting,
+                *paragraphs,
+                _reservation_summary_text(reservation),
+                signature,
+            ]
+        )
+        content_html = "".join(
+            f'<p style="line-height:1.6;">{escape(paragraph)}</p>'
+            for paragraph in paragraphs
+        ) + _reservation_email_html(reservation)
+        closing_html = (
+            '<tr><td style="padding-top:24px;color:#64736c;'
+            'font-size:13px;line-height:1.7;">'
+            "Kind regards,<br><br><strong>Reservations Team</strong><br>"
+            "<strong>Kalitusi Nature</strong></td></tr>"
+        )
+        return (
+            heading,
+            body,
+            _email_layout(
+                heading,
+                greeting,
+                content_html,
+                closing_html=closing_html,
+            ),
+        )
+
     copy = RESERVATION_STATUS_EMAIL_COPY[reservation.status]
     heading = copy["heading"]
     next_heading = copy["next_heading"]
@@ -982,7 +1069,22 @@ def notify_order_updated(
         f"Total: UGX {order.total_ugx:,}"
     )
     order_html = _order_email_html(order)
-    if order.email:
+    if (
+        order.email
+        and order.status == Order.Status.CANCELLED
+        and order.status != previous_status
+    ):
+        heading, customer_message, customer_html = (
+            _order_cancellation_customer_email(order, order_html)
+        )
+        _send_email(
+            f"{heading} - {order.number}",
+            customer_message,
+            [order.email],
+            order.number,
+            html_message=customer_html,
+        )
+    elif order.email:
         if order.status != previous_status:
             heading, intro, detail, next_step = ORDER_STATUS_EMAIL_COPY.get(
                 order.status,

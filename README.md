@@ -120,7 +120,7 @@ The standalone Odoo page templates in this repository, including `cottages.html`
 
 New requests are `pending`; a `201` response includes a unique reservation reference and booking status. Email is required. The reservation page provides a calendar range picker for check-in and check-out. The server validates stay dates, lodge capacity and policies, blockouts, and confirmed/in-house overlaps. Pending requests remain visible to staff but do not appear as booked or block availability; staff checks for conflicts when confirming. Customers and the operations inbox receive reservation emails when requests are created and when staff changes a reservation status.
 
-The public form does not set reservation prices; a new reservation's total due is UGX 0. In the staff Reservations page, use **Edit details** to set the total before **Record payment** appears. Staff records each received payment with its transaction or counter receipt reference. The separate review invitation is sent when the stay is checked out and verified payments cover the total due.
+The public form does not set reservation prices; a new reservation's total due is UGX 0. In the staff Reservations page, use **Edit details** to set the total before **Record payment** appears. Staff records each received payment with its transaction or counter receipt reference. The separate reservation review invitation is sent after check-out, regardless of payment.
 
 The customer reservation form is the Odoo `/reservation` page. The Odoo cottages page's **Book Now** links open that page and pass the lodge slug in the `lodge` query parameter. The reservation page uses the shared Odoo header and sends availability and reservation requests to the production API at `https://api.kalitusi.com/api/v1`. Its **Back to cottages** links return to `/cottages`. Publish the updated `cottages.html` and `reservation.html` templates in Odoo.
 
@@ -128,8 +128,8 @@ The customer reservation form is the Odoo `/reservation` page. The Odoo cottages
 
 `/staff/` is for authenticated staff accounts. It shows recent orders and reservations, supports status changes, and links to catalog management:
 
-- Orders: open order details, confirm, prepare, mark ready/delivered, cancel, or record a verified full/partial payment using its transaction or counter receipt reference. Order statuses can only move forward through the service flow; delivered orders retain the backend `completed` status.
-- Reservations: create manually, search/filter, paginate, set the total due, edit details, record verified payments, confirm, decline, cancel, complete, or delete inactive records. Day/week/month calendar views show the status of each stay.
+- Orders: open order details, confirm, prepare, mark ready/delivered, cancel with a required reason sent to the customer, or record a verified full/partial payment using its transaction or counter receipt reference. Order statuses can only move forward through the service flow; delivered orders retain the backend `completed` status.
+- Reservations: create manually, search/filter, paginate, set the total due, edit details, record verified payments, confirm, decline, cancel with a required reason sent in the customer apology email, complete, or delete inactive records. Day/week/month calendar views show the status of each stay.
 - Payment receipts: search and filter verified payments, view/print or download PDFs, resend customer copies, and review the original transaction reference.
 - Products: create and maintain food/drink items, UGX price, uploaded Cloudinary image, availability, and featured state.
 - Categories: create menu sections and control order/visibility.
@@ -173,12 +173,12 @@ Customer receipt lookups are `POST /orders/receipts/` and `POST /reservations/tr
 Product and lodge review summaries are public at
 `GET /products/<slug>/reviews/` and `GET /lodges/<slug>/reviews/`. Review
 submissions use `GET, POST /reviews/access/` with a signed link token; links are
-issued only for completed, fully paid orders or checked-out, fully paid stays.
+issued only for completed, fully paid orders or checked-out stays.
 Set `CUSTOMER_REVIEW_PAGE_URL` only if you need to override the published
 customer-review page URL. The default is
 `https://www.kalitusi.com/customer-review`. A separate review
 invitation email is sent as soon as an order is both completed and fully paid,
-or a stay is both checked out and fully paid. Clicking an email star opens the
+or a stay is checked out. Clicking an email star opens the
 private review page with that rating preselected; customers can add a comment
 and submit there without signing in. Verified order or reservation pages also
 provide eligible private links.
@@ -213,7 +213,7 @@ or lodge images when available, alongside a plain-text alternative. Verified
 payment confirmation emails attach the generated PDF receipt. Customer order
 updates use distinct messages for confirmation, preparation, readiness, and
 completion. Review links are included only after an order is completed and paid
-or a stay is checked out and fully paid.
+or a stay is checked out.
 
 The admin login includes a password-reset flow for active staff accounts. A
 reset link is sent only to the email address saved on the staff account; set

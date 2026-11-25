@@ -142,7 +142,7 @@
                             title.textContent='Review '+data.name;
                             intro.textContent=data.kind==='product'
                                 ?'Thank you for your completed and paid order. Share feedback on this item.'
-                                :'Thank you for your checked-out and paid stay. Share feedback on this cottage.';
+                                :'Thank you for your checked-out stay. Share feedback on this cottage.';
                             renderReviews(data.reviews);
                             if(data.review_count){
                                 showStatus(Number(data.average_rating).toFixed(1)+' out of 5 from '+data.review_count+' review'+(data.review_count===1?'':'s')+'.');
