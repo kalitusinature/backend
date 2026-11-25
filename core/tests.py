@@ -2978,7 +2978,7 @@ class SupportTicketApiTests(TestCase):
 
 
 @override_settings(
-    CUSTOMER_REVIEW_PAGE_URL="https://kalitusi.com/customer-review"
+    CUSTOMER_REVIEW_PAGE_URL="https://www.kalitusi.com/customer-review"
 )
 class CustomerReviewApiTests(TestCase):
     def setUp(self):
@@ -3100,7 +3100,7 @@ class CustomerReviewApiTests(TestCase):
         self.assertEqual(len(order_response.data["review_links"]), 1)
         self.assertTrue(
             order_response.data["review_links"][0]["url"].startswith(
-                "https://kalitusi.com/customer-review?token="
+                "https://www.kalitusi.com/customer-review?token="
             )
         )
         self.assertEqual(CustomerReview.objects.count(), 1)

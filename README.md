@@ -176,7 +176,7 @@ submissions use `GET, POST /reviews/access/` with a signed link token; links are
 issued only for completed, fully paid orders or checked-out, fully paid stays.
 Set `CUSTOMER_REVIEW_PAGE_URL` only if you need to override the published
 customer-review page URL. The default is
-`https://kalitusi.com/customer-review`. A separate review
+`https://www.kalitusi.com/customer-review`. A separate review
 invitation email is sent as soon as an order is both completed and fully paid,
 or a stay is both checked out and fully paid. Clicking an email star opens the
 private review page with that rating preselected; customers can add a comment
