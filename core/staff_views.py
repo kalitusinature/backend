@@ -92,7 +92,7 @@ def update_reservation_status(request, reservation_id):
     reservation.save(update_fields=["status"])
     if status_value != previous_status:
         transaction.on_commit(
-            lambda: notify_reservation_status(reservation),
+            lambda: notify_reservation_status(reservation, previous_status),
             robust=True,
         )
     messages.success(request, f"Reservation {reservation.reference} updated.")

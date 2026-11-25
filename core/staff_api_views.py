@@ -789,7 +789,7 @@ class StaffReservationUpdate(StaffApiMixin, generics.RetrieveUpdateDestroyAPIVie
         updated = serializer.save()
         if updated.status != previous_status:
             transaction.on_commit(
-                lambda: notify_reservation_status(updated),
+                lambda: notify_reservation_status(updated, previous_status),
                 robust=True,
             )
 

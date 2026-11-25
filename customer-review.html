@@ -20,7 +20,15 @@
                 .cj-review-form[hidden]{display:none}
                 .cj-review-form h2{margin:0;font-size:21px}
                 .cj-review-field{display:grid;gap:6px;color:#53645c;font-size:13px;font-weight:700}
-                .cj-review-field select,.cj-review-field textarea{width:100%;padding:11px;border:1px solid #dfe4e1;border-radius:7px;font:inherit;color:#203b38;background:#fff}
+                .cj-review-field textarea{width:100%;padding:11px;border:1px solid #dfe4e1;border-radius:7px;font:inherit;color:#203b38;background:#fff}
+                .cj-review-rating{display:grid;gap:6px;margin:0;padding:0;border:0}
+                .cj-review-rating legend{padding:0;color:#53645c;font-size:13px;font-weight:700}
+                .cj-review-rating-stars{position:relative;display:flex;justify-content:flex-start;width:max-content}
+                .cj-review-rating-stars input{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;clip-path:inset(50%)}
+                .cj-review-rating-stars label{display:grid;place-items:center;min-width:44px;min-height:44px;color:#c5cfca;font-size:34px;line-height:1;cursor:pointer;transition:color .15s ease}
+                .cj-review-rating-stars label.active,.cj-review-rating-stars label:hover{color:#d39c2c}
+                .cj-review-rating-stars input:focus-visible+label{outline:2px solid #008b92;outline-offset:2px;border-radius:4px}
+                .cj-review-rating-value{min-height:18px;color:#65756e;font-size:12px}
                 .cj-review-field textarea{min-height:110px;resize:vertical}
                 .cj-review-submit{min-height:46px;padding:0 18px;border:0;border-radius:7px;background:#008b92;color:#fff;font-weight:800;cursor:pointer}
                 .cj-review-submit:disabled{opacity:.6;cursor:wait}
@@ -38,16 +46,22 @@
                         <div class="cj-review-list" id="cjReviewList"></div>
                         <form class="cj-review-form" id="cjReviewForm" hidden="hidden">
                             <h2>Rate your experience</h2>
-                            <label class="cj-review-field">Rating
-                                <select name="rating" required="required">
-                                    <option value="">Choose a rating</option>
-                                    <option value="5">5 — Excellent</option>
-                                    <option value="4">4 — Very good</option>
-                                    <option value="3">3 — Good</option>
-                                    <option value="2">2 — Fair</option>
-                                    <option value="1">1 — Poor</option>
-                                </select>
-                            </label>
+                            <fieldset class="cj-review-rating">
+                                <legend>Rating</legend>
+                                <div class="cj-review-rating-stars" role="radiogroup" aria-label="Rating from 1 to 5 stars">
+                                    <input id="cjReviewRating1" type="radio" name="rating" value="1" required="required" aria-label="1 out of 5 stars"/>
+                                    <label for="cjReviewRating1" aria-hidden="true">★</label>
+                                    <input id="cjReviewRating2" type="radio" name="rating" value="2" aria-label="2 out of 5 stars"/>
+                                    <label for="cjReviewRating2" aria-hidden="true">★</label>
+                                    <input id="cjReviewRating3" type="radio" name="rating" value="3" aria-label="3 out of 5 stars"/>
+                                    <label for="cjReviewRating3" aria-hidden="true">★</label>
+                                    <input id="cjReviewRating4" type="radio" name="rating" value="4" aria-label="4 out of 5 stars"/>
+                                    <label for="cjReviewRating4" aria-hidden="true">★</label>
+                                    <input id="cjReviewRating5" type="radio" name="rating" value="5" aria-label="5 out of 5 stars"/>
+                                    <label for="cjReviewRating5" aria-hidden="true">★</label>
+                                </div>
+                                <output class="cj-review-rating-value" id="cjReviewRatingValue" aria-live="polite">Choose a rating</output>
+                            </fieldset>
                             <label class="cj-review-field">Your review
                                 <textarea name="comment" maxlength="2000" required="required"></textarea>
                             </label>
@@ -70,17 +84,26 @@
                     document.head.appendChild(referrer);
 
                     var apiBase=(window.CJ_API_BASE_URL||'https://api.kalitusi.com/api/v1').replace(/\/+$/,'');
-                    var token=new URLSearchParams(window.location.search).get('token')||'';
+                    var query=new URLSearchParams(window.location.search);
+                    var token=query.get('token')||'';
+                    var initialRating=query.get('rating')||'';
                     var title=document.getElementById('cjReviewTitle');
                     var intro=document.getElementById('cjReviewIntro');
                     var status=document.getElementById('cjReviewStatus');
                     var form=document.getElementById('cjReviewForm');
                     var formStatus=document.getElementById('cjReviewFormStatus');
                     var list=document.getElementById('cjReviewList');
+                    var ratingValue=document.getElementById('cjReviewRatingValue');
+                    var ratingStars=form.querySelector('.cj-review-rating-stars');
 
                     function showStatus(message,isError){
                         status.textContent=message;
                         status.classList.toggle('error',Boolean(isError));
+                    }
+                    function updateRatingStars(rating){
+                        ratingStars.querySelectorAll('label').forEach(function(label,index){
+                            label.classList.toggle('active',index<Number(rating));
+                        });
                     }
                     function renderReviews(reviews){
                         list.replaceChildren();
@@ -127,12 +150,35 @@
                                 showStatus('No reviews yet.');
                             }
                             form.hidden=!data.can_review;
+                            if(data.can_review&&/^[1-5]$/.test(initialRating)){
+                                document.getElementById('cjReviewRating'+initialRating).checked=true;
+                                ratingValue.textContent=initialRating+' out of 5 stars';
+                                updateRatingStars(initialRating);
+                            }
                             if(!data.can_review)showStatus('A review has already been submitted for this completed visit.');
                         }catch(error){
                             form.hidden=true;
                             showStatus(error.message||'This review link is invalid or no longer eligible.',true);
                         }
                     }
+                    form.addEventListener('change',function(event){
+                        if(event.target.name==='rating'){
+                            ratingValue.textContent=event.target.value+' out of 5 stars';
+                            updateRatingStars(event.target.value);
+                        }
+                    });
+                    ratingStars.addEventListener('pointerover',function(event){
+                        var label=event.target.closest('label');
+                        if(label)updateRatingStars(label.htmlFor.replace('cjReviewRating',''));
+                    });
+                    ratingStars.addEventListener('pointerleave',function(){
+                        var selected=form.querySelector('input[name="rating"]:checked');
+                        updateRatingStars(selected?selected.value:0);
+                    });
+                    form.addEventListener('reset',function(){
+                        ratingValue.textContent='Choose a rating';
+                        updateRatingStars(0);
+                    });
                     form.addEventListener('submit',async function(event){
                         event.preventDefault();
                         var button=form.querySelector('button[type="submit"]');

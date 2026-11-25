@@ -1106,6 +1106,46 @@ class PaymentReceiptApiTests(TestCase):
         self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
         self.assertEqual(PaymentReceipt.objects.filter(payment__order=self.order).count(), 2)
 
+    def test_final_order_payment_sends_separate_clickable_review_email(self):
+        self.order.status = Order.Status.COMPLETED
+        self.order.save(update_fields=["status"])
+
+        response = self._record_payment(
+            amount_ugx=20000,
+            transaction_reference="POS-COMPLETED-ORDER",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertNotIn("/customer-review?token=", mail.outbox[0].body)
+        invitation = mail.outbox[1]
+        self.assertIn("Rate your Kalitusi order", invitation.subject)
+        self.assertIn("No account sign-in is required", invitation.body)
+        invitation_html = invitation.alternatives[0].content
+        self.assertIn("Rate 5 out of 5 stars", invitation_html)
+        self.assertIn("&amp;rating=5", invitation_html)
+
+    def test_final_reservation_payment_sends_separate_clickable_review_email(self):
+        self.reservation.status = LodgeReservation.Status.COMPLETED
+        self.reservation.total_due_ugx = 25000
+        self.reservation.save(update_fields=["status", "total_due_ugx"])
+
+        response = self._record_payment(
+            order_id=None,
+            reservation_id=self.reservation.id,
+            amount_ugx=25000,
+            transaction_reference="POS-COMPLETED-STAY",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertNotIn("/customer-review?token=", mail.outbox[0].body)
+        invitation = mail.outbox[1]
+        self.assertIn("Rate your Kalitusi stay", invitation.subject)
+        invitation_html = invitation.alternatives[0].content
+        self.assertIn("Receipt Cottage", invitation_html)
+        self.assertIn("&amp;rating=5", invitation_html)
+
     def test_duplicate_transaction_reference_is_rejected_without_second_receipt(self):
         first = self._record_payment()
         duplicate = self._record_payment(
@@ -3166,7 +3206,7 @@ class CustomerReviewApiTests(TestCase):
                 self.assertEqual(response.status_code, 404)
         self.assertEqual(CustomerReview.objects.count(), 0)
 
-    def test_completed_paid_email_notifications_include_private_review_links(self):
+    def test_completed_paid_reviews_get_separate_clickable_emails(self):
         order = self.create_completed_order(self.product)
         reservation = self.create_completed_stay()
 
@@ -3176,12 +3216,61 @@ class CustomerReviewApiTests(TestCase):
                 Order.Status.READY,
                 Order.PaymentStatus.PAID,
             )
-        order_email_text = send_email.call_args_list[0].args[1]
-        self.assertIn("/customer-review?token=", order_email_text)
-        self.assertIn("Resort Pancakes", order_email_text)
+        order_invitation = next(
+            call
+            for call in send_email.call_args_list
+            if call.args[0].startswith("Rate your Kalitusi order -")
+        )
+        self.assertIn("Resort Pancakes", order_invitation.args[1])
+        self.assertIn("1 star:", order_invitation.args[1])
+        self.assertIn("&rating=5", order_invitation.args[1])
+        self.assertIn(
+            "&amp;rating=5",
+            order_invitation.kwargs["html_message"],
+        )
 
         with patch("core.email_notifications._send_email") as send_email:
-            notify_reservation_status(reservation)
-        reservation_email_text = send_email.call_args_list[0].args[1]
-        self.assertIn("/customer-review?token=", reservation_email_text)
-        self.assertIn("Share your experience from your completed, paid stay", reservation_email_text)
+            notify_reservation_status(
+                reservation,
+                LodgeReservation.Status.CHECKED_IN,
+            )
+        reservation_invitation = next(
+            call
+            for call in send_email.call_args_list
+            if call.args[0].startswith("Rate your Kalitusi stay -")
+        )
+        self.assertIn("Review Cottage", reservation_invitation.args[1])
+        self.assertIn("&rating=5", reservation_invitation.args[1])
+        self.assertIn(
+            "&amp;rating=5",
+            reservation_invitation.kwargs["html_message"],
+        )
+
+    def test_incomplete_or_unpaid_visits_do_not_get_review_invitations(self):
+        order = self.create_completed_order(self.product, paid=False)
+        reservation = self.create_completed_stay(paid=False)
+
+        with patch("core.email_notifications._send_email") as send_email:
+            notify_order_updated(
+                order,
+                Order.Status.READY,
+                Order.PaymentStatus.UNPAID,
+            )
+        self.assertFalse(
+            any(
+                call.args[0].startswith("Rate your Kalitusi order -")
+                for call in send_email.call_args_list
+            )
+        )
+
+        with patch("core.email_notifications._send_email") as send_email:
+            notify_reservation_status(
+                reservation,
+                LodgeReservation.Status.CHECKED_IN,
+            )
+        self.assertFalse(
+            any(
+                call.args[0].startswith("Rate your Kalitusi stay -")
+                for call in send_email.call_args_list
+            )
+        )

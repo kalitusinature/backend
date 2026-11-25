@@ -1,4 +1,4 @@
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.core import signing
@@ -67,13 +67,18 @@ def lodge_review_token(reservation):
     )
 
 
-def review_page_url(token):
-    page_url = settings.CUSTOMER_REVIEW_PAGE_URL.rstrip("?&")
-    separator = "&" if "?" in page_url else "?"
-    return f"{page_url}{separator}{urlencode({'token': token})}"
+def review_page_url(token, *, rating=None):
+    params = {"token": token}
+    if rating is not None:
+        params["rating"] = rating
+    page_url = urlsplit(settings.CUSTOMER_REVIEW_PAGE_URL)
+    query = "&".join(
+        value for value in (page_url.query, urlencode(params)) if value
+    )
+    return urlunsplit(page_url._replace(query=query))
 
 
-def order_review_links(order):
+def _unreviewed_order_products(order):
     if not order_is_review_eligible(order):
         return []
 
@@ -83,7 +88,7 @@ def order_review_links(order):
             flat=True,
         )
     )
-    links = []
+    products = []
     seen_product_ids = set()
     for item in order.items.select_related("product").all():
         product = item.product
@@ -94,22 +99,62 @@ def order_review_links(order):
         ):
             continue
         seen_product_ids.add(product.pk)
+        products.append(product)
+    return products
+
+
+def order_review_links(order):
+    return [
+        {
+            "product_name": product.name,
+            "url": review_page_url(product_review_token(order, product)),
+        }
+        for product in _unreviewed_order_products(order)
+    ]
+
+
+def order_review_invitation_links(order):
+    links = []
+    for product in _unreviewed_order_products(order):
+        token = product_review_token(order, product)
         links.append(
             {
                 "product_name": product.name,
-                "url": review_page_url(product_review_token(order, product)),
+                "url": review_page_url(token),
+                "rating_urls": {
+                    rating: review_page_url(token, rating=rating)
+                    for rating in range(1, 6)
+                },
             }
         )
     return links
 
 
-def reservation_review_url(reservation):
+def _eligible_reservation_review_token(reservation):
     if (
         not reservation_is_review_eligible(reservation)
         or CustomerReview.objects.filter(reservation=reservation).exists()
     ):
         return None
-    return review_page_url(lodge_review_token(reservation))
+    return lodge_review_token(reservation)
+
+
+def reservation_review_invitation_links(reservation):
+    token = _eligible_reservation_review_token(reservation)
+    if not token:
+        return None
+    return {
+        "url": review_page_url(token),
+        "rating_urls": {
+            rating: review_page_url(token, rating=rating)
+            for rating in range(1, 6)
+        },
+    }
+
+
+def reservation_review_url(reservation):
+    token = _eligible_reservation_review_token(reservation)
+    return review_page_url(token) if token else None
 
 
 def resolve_review_link(token, *, for_update=False):

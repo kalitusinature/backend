@@ -15,7 +15,11 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from .email_notifications import send_payment_receipt_email
+from .email_notifications import (
+    send_order_review_invitation_email,
+    send_payment_receipt_email,
+    send_reservation_review_invitation_email,
+)
 from .models import LodgeReservation, Order, Payment, PaymentReceipt
 from .payment_receipts import create_payment_receipt
 from .serializers import (
@@ -241,6 +245,10 @@ class StaffPaymentCreate(StaffApiMixin, APIView):
             raise
 
         email_sent = send_payment_receipt_email(payment)
+        if payment.order_id:
+            send_order_review_invitation_email(payment.order)
+        else:
+            send_reservation_review_invitation_email(payment.reservation)
         payment = (
             Payment.objects.select_related(
                 "order",
