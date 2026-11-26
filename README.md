@@ -147,6 +147,34 @@ The payment confirmation email includes the PDF attachment through either Resend
 
 The receipt PDFs use the backend-bundled logo in `core/static/core/Kalitusi_Nature_Resort_Sunset_Logo.png` and the public WhatsApp number `+256 772 957 573`; no address or tax identifier is configured. `RECEIPT_VERIFY_BASE_URL` can override the default public verification endpoint.
 
+### Clearing test activity
+
+The `clear_transactional_data` management command defaults to a dry run. It
+reports the target database and record counts without deleting anything:
+
+```powershell
+python manage.py clear_transactional_data --database default
+```
+
+The command clears all orders and order items, reservations, payments and
+receipts, customer reviews, guest carts, email verifications, chats/messages,
+and support tickets in the selected database. It preserves staff accounts and
+their profiles, tokens and push subscriptions, as well as products, categories,
+lodges, lodge blockouts, and other setup data. It cannot identify which records
+are test records, so confirmation deletes every record in those activity
+tables—not just test records. Back up the database and stop incoming writes
+before running it.
+
+To delete, pass `--confirm` and the exact database name printed by the dry run.
+For databases configured with a host, also pass its exact printed host:
+
+```powershell
+python manage.py clear_transactional_data --database default --confirm --expected-database "<exact displayed name>" --expected-host "<exact displayed host>"
+```
+
+Run this only after verifying the target and counts. This command was not run
+against any database as part of this change.
+
 ## React admin portal
 
 The React admin portal is a separate GitHub Pages app. Its API base URL is
